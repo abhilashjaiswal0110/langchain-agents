@@ -436,13 +436,24 @@
 <body>
     <div class="container">
         <header class="header">
-            <h1>IT Support Agent</h1>
+            <h1>Enterprise AI Agents</h1>
             <div class="agent-selector">
                 <label>Agent:</label>
                 <select id="agentSelect">
                     <option value="">Select an agent...</option>
-                    <option value="it_helpdesk">IT Helpdesk</option>
-                    <option value="servicenow">ServiceNow ITSM</option>
+                    <optgroup label="IT Support">
+                        <option value="it_helpdesk">IT Helpdesk</option>
+                        <option value="servicenow">ServiceNow ITSM</option>
+                        <option value="hitl_support">HITL IT Support</option>
+                    </optgroup>
+                    <optgroup label="Enterprise Agents">
+                        <option value="research">AI Research Agent</option>
+                        <option value="content">Content Generation</option>
+                        <option value="data_analyst">Data Analyst</option>
+                        <option value="document">Document Generator</option>
+                        <option value="multilingual_rag">Multilingual RAG</option>
+                        <option value="code_assistant">Code Assistant</option>
+                    </optgroup>
                 </select>
                 <span id="statusBadge" class="status-badge disconnected">
                     <span class="status-dot red"></span>
@@ -464,9 +475,9 @@
 
                 <div class="messages" id="messages">
                     <div class="welcome-screen" id="welcomeScreen">
-                        <h2>Welcome to IT Support</h2>
-                        <p>Select an agent to start your support session</p>
-                        <div class="agent-cards">
+                        <h2>Welcome to Enterprise AI Agents</h2>
+                        <p>Select an agent to start your session</p>
+                        <div class="agent-cards" style="flex-wrap: wrap; justify-content: center;">
                             <div class="agent-card" onclick="startSession('it_helpdesk')">
                                 <h3>IT Helpdesk</h3>
                                 <p>Password resets, software help, network issues</p>
@@ -474,6 +485,30 @@
                             <div class="agent-card" onclick="startSession('servicenow')">
                                 <h3>ServiceNow</h3>
                                 <p>Ticket management, change requests, CMDB</p>
+                            </div>
+                            <div class="agent-card" onclick="startEnterpriseAgent('research')">
+                                <h3>Research Agent</h3>
+                                <p>Web research, information synthesis</p>
+                            </div>
+                            <div class="agent-card" onclick="startEnterpriseAgent('content')">
+                                <h3>Content Gen</h3>
+                                <p>LinkedIn, X, blog content creation</p>
+                            </div>
+                            <div class="agent-card" onclick="startEnterpriseAgent('data_analyst')">
+                                <h3>Data Analyst</h3>
+                                <p>Excel/CSV analysis and insights</p>
+                            </div>
+                            <div class="agent-card" onclick="startEnterpriseAgent('document')">
+                                <h3>Document Gen</h3>
+                                <p>SOP, WLI, Policy documents</p>
+                            </div>
+                            <div class="agent-card" onclick="startEnterpriseAgent('multilingual_rag')">
+                                <h3>RAG Agent</h3>
+                                <p>Multilingual document Q&A</p>
+                            </div>
+                            <div class="agent-card" onclick="startEnterpriseAgent('code_assistant')">
+                                <h3>Code Assistant</h3>
+                                <p>Code modernization & security</p>
                             </div>
                         </div>
                     </div>
@@ -497,7 +532,7 @@
             <div class="side-panel">
                 <div class="panel-card">
                     <h3>Quick Actions</h3>
-                    <div class="quick-actions">
+                    <div class="quick-actions" id="quickActions">
                         <div class="quick-action" onclick="sendQuickAction('I need to reset my password')">
                             Reset Password
                         </div>
@@ -556,6 +591,57 @@
         // State
         let sessionId = null;
         let currentAgent = null;
+        let isEnterpriseAgent = false;
+
+        // Enterprise agent endpoints
+        const enterpriseEndpoints = {
+            'research': '/api/enterprise/research/invoke',
+            'content': '/api/enterprise/content/invoke',
+            'data_analyst': '/api/enterprise/data-analyst/invoke',
+            'document': '/api/enterprise/documents/invoke',
+            'multilingual_rag': '/api/enterprise/rag/invoke',
+            'hitl_support': '/api/enterprise/support/invoke',
+            'code_assistant': '/api/enterprise/code/invoke'
+        };
+
+        // Quick actions for each agent type
+        const agentQuickActions = {
+            'it_helpdesk': [
+                { text: 'Reset Password', action: 'I need to reset my password' },
+                { text: 'VPN Issues', action: 'My VPN is not connecting' },
+                { text: 'Software Request', action: 'I need to install software' }
+            ],
+            'research': [
+                { text: 'AI Trends', action: 'What are the latest trends in AI?' },
+                { text: 'LangGraph Info', action: 'Tell me about LangGraph framework' },
+                { text: 'Best Practices', action: 'What are best practices for building AI agents?' }
+            ],
+            'content': [
+                { text: 'LinkedIn Post', action: 'Write a LinkedIn post about AI automation' },
+                { text: 'Blog Article', action: 'Create a blog post about enterprise AI' },
+                { text: 'Tweet Thread', action: 'Write a tweet thread about LLM agents' }
+            ],
+            'data_analyst': [
+                { text: 'Data Summary', action: 'Summarize the uploaded data' },
+                { text: 'Find Trends', action: 'Identify trends in the data' },
+                { text: 'Generate Insights', action: 'Generate key insights from the data' }
+            ],
+            'document': [
+                { text: 'Create SOP', action: 'Generate an SOP for password reset procedure' },
+                { text: 'Create WLI', action: 'Create a WLI for server maintenance' },
+                { text: 'Create Policy', action: 'Generate an IT security policy' }
+            ],
+            'multilingual_rag': [
+                { text: 'Summarize Doc', action: 'Summarize the uploaded document' },
+                { text: 'Find Info', action: 'Find relevant information in the documents' },
+                { text: 'Key Points', action: 'List the key points from all documents' }
+            ],
+            'code_assistant': [
+                { text: 'Analyze Code', action: 'Analyze this code for issues' },
+                { text: 'Security Check', action: 'Check for security vulnerabilities' },
+                { text: 'Modernize', action: 'Suggest modernization improvements' }
+            ]
+        };
 
         // Elements
         const messagesEl = document.getElementById('messages');
@@ -566,13 +652,26 @@
         const statusBadge = document.getElementById('statusBadge');
         const sessionInfo = document.getElementById('sessionInfo');
         const typingIndicator = document.getElementById('typingIndicator');
+        const quickActionsEl = document.getElementById('quickActions');
 
         // Event Listeners
         agentSelect.addEventListener('change', (e) => {
             if (e.target.value) {
-                startSession(e.target.value);
+                if (enterpriseEndpoints[e.target.value]) {
+                    startEnterpriseAgent(e.target.value);
+                } else {
+                    startSession(e.target.value);
+                }
             }
         });
+
+        // Update quick actions based on agent type
+        function updateQuickActions(agentType) {
+            const actions = agentQuickActions[agentType] || agentQuickActions['it_helpdesk'];
+            quickActionsEl.innerHTML = actions.map(a =>
+                `<div class="quick-action" onclick="sendQuickAction('${a.action}')">${a.text}</div>`
+            ).join('');
+        }
 
         // Start Session
         async function startSession(agentType) {
@@ -611,10 +710,48 @@
             }
         }
 
+        // Start Enterprise Agent Session
+        async function startEnterpriseAgent(agentType) {
+            // Generate a session ID for enterprise agents
+            sessionId = 'enterprise-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+            currentAgent = agentType;
+            isEnterpriseAgent = true;
+
+            // Update UI
+            welcomeScreen.style.display = 'none';
+            messageInput.disabled = false;
+            sendButton.disabled = false;
+            agentSelect.value = agentType;
+
+            statusBadge.className = 'status-badge connected';
+            statusBadge.innerHTML = '<span class="status-dot green"></span> Connected';
+
+            sessionInfo.textContent = `Session: ${sessionId.slice(0, 15)}... | Agent: ${agentType}`;
+
+            // Update quick actions for this agent
+            updateQuickActions(agentType);
+
+            // Add welcome message
+            const welcomeMessages = {
+                'research': 'Hello! I\'m your AI Research Agent. I can help you search the web and synthesize information. What would you like me to research?',
+                'content': 'Welcome! I\'m your Content Generation Agent. I can create content for LinkedIn, X (Twitter), or blog posts. What topic would you like me to write about?',
+                'data_analyst': 'Hi! I\'m your Data Analyst Agent. Upload an Excel or CSV file and I\'ll help you analyze it and generate insights.',
+                'document': 'Hello! I\'m your Document Generator Agent. I can create SOP, WLI, or Policy documents. What document would you like me to generate?',
+                'multilingual_rag': 'Welcome! I\'m your Multilingual RAG Agent. Upload documents and ask me questions in any language.',
+                'hitl_support': 'Hello! I\'m your IT Support Agent with human oversight. I can help with IT issues - sensitive actions will require approval.',
+                'code_assistant': 'Hi! I\'m your Code Assistant Agent. I can analyze code for modernization opportunities and security issues. Share your code to get started.'
+            };
+            addMessage(welcomeMessages[agentType] || 'Hello! How can I help you today?', 'assistant');
+        }
+
         // Send Message
         async function sendMessage() {
             const message = messageInput.value.trim();
-            if (!message || !sessionId) return;
+            if (!message) return;
+            if (!sessionId && !isEnterpriseAgent) {
+                alert('Please start a session first');
+                return;
+            }
 
             // Add user message to UI
             addMessage(message, 'user');
@@ -625,30 +762,80 @@
             sendButton.disabled = true;
 
             try {
-                const response = await fetch('/api/conversation/chat', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        session_id: sessionId,
-                        message: message
-                    })
-                });
+                let response, data;
 
-                const data = await response.json();
+                if (isEnterpriseAgent && enterpriseEndpoints[currentAgent]) {
+                    // Use enterprise agent endpoint
+                    const endpoint = enterpriseEndpoints[currentAgent];
+                    const requestBody = buildEnterpriseRequest(currentAgent, message);
 
-                typingIndicator.classList.remove('visible');
-                sendButton.disabled = false;
+                    response = await fetch(endpoint, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(requestBody)
+                    });
+                    data = await response.json();
 
-                if (data.response) {
-                    addMessage(data.response, 'assistant');
-                } else if (data.error) {
-                    addMessage('Error: ' + data.error, 'assistant');
+                    typingIndicator.classList.remove('visible');
+                    sendButton.disabled = false;
+
+                    if (data.success && data.response) {
+                        addMessage(data.response, 'assistant');
+                    } else if (data.error) {
+                        addMessage('Error: ' + data.error, 'assistant');
+                    } else {
+                        addMessage('No response received. The agent may not be available.', 'assistant');
+                    }
+                } else {
+                    // Use conversation API for IT support agents
+                    response = await fetch('/api/conversation/chat', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            session_id: sessionId,
+                            message: message
+                        })
+                    });
+                    data = await response.json();
+
+                    typingIndicator.classList.remove('visible');
+                    sendButton.disabled = false;
+
+                    if (data.response) {
+                        addMessage(data.response, 'assistant');
+                    } else if (data.error) {
+                        addMessage('Error: ' + data.error, 'assistant');
+                    }
                 }
             } catch (error) {
                 typingIndicator.classList.remove('visible');
                 sendButton.disabled = false;
                 console.error('Error:', error);
                 addMessage('Error connecting to server. Please try again.', 'assistant');
+            }
+        }
+
+        // Build request body for enterprise agents
+        function buildEnterpriseRequest(agentType, message) {
+            const base = { session_id: sessionId };
+
+            switch(agentType) {
+                case 'research':
+                    return { ...base, query: message };
+                case 'content':
+                    return { ...base, topic: message, platform: 'linkedin' };
+                case 'data_analyst':
+                    return { ...base, message: message };
+                case 'document':
+                    return { ...base, doc_type: 'sop', title: message, description: message };
+                case 'multilingual_rag':
+                    return { ...base, query: message };
+                case 'hitl_support':
+                    return { ...base, message: message };
+                case 'code_assistant':
+                    return { ...base, code: message, action: 'analyze' };
+                default:
+                    return { ...base, message: message };
             }
         }
 
