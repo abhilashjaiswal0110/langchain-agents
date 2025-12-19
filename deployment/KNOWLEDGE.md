@@ -2,7 +2,7 @@
 
 > **Purpose**: This document serves as the authoritative knowledge source for AI agents working on this repository. It contains architectural decisions, implementation patterns, and guidelines that must be followed when making changes or enhancements.
 
-**Last Updated**: 2025-12-15 (v2.0 - IT Support Agents)
+**Last Updated**: 2025-12-19 (v3.0 - Documentation Consolidation)
 
 ---
 
@@ -17,13 +17,14 @@
 7. [API Endpoints](#api-endpoints)
 8. [Web UI & CLI](#web-ui--cli)
 9. [External Integrations](#external-integrations)
-10. [Dependencies](#dependencies)
-11. [Development Patterns](#development-patterns)
-12. [Testing Strategy](#testing-strategy)
-13. [Deployment](#deployment)
-14. [Common Tasks](#common-tasks)
-15. [Troubleshooting](#troubleshooting)
-16. [Change Log](#change-log)
+10. [Enterprise Agents](#enterprise-agents)
+11. [Dependencies](#dependencies)
+12. [Development Patterns](#development-patterns)
+13. [Testing Strategy](#testing-strategy)
+14. [Deployment](#deployment)
+15. [Common Tasks](#common-tasks)
+16. [Troubleshooting](#troubleshooting)
+17. [Change Log](#change-log)
 
 ---
 
@@ -741,6 +742,119 @@ def lambda_handler(event, context):
 
 ---
 
+## Enterprise Agents
+
+### Overview
+
+In addition to the IT Support Agents, the platform includes 7 enterprise-grade agents for various business use cases:
+
+| Agent | Purpose | HITL | Key Features |
+|-------|---------|------|--------------|
+| ResearchAgent | Web research | No | Tavily search, source citations |
+| ContentCreationAgent | Marketing content | Yes | Draft approval, revision cycles |
+| DataAnalystAgent | Data analysis | No | CSV/Excel processing, visualizations |
+| DocumentGenerationAgent | Doc creation | No | SOP, WLI, Policy templates |
+| MultilingualRAGAgent | Multi-language Q&A | No | 10+ languages, translation |
+| HITLITSupportAgent | IT tickets | Yes | Priority routing, approvals |
+| CodeAssistantAgent | Code help | No | Review, generation, debugging |
+
+### BaseAgent Pattern
+
+All enterprise agents extend `BaseAgent`:
+
+```python
+from app.agents.base import BaseAgent, AgentState
+
+class MyAgent(BaseAgent):
+    name = "my_agent"
+    description = "Agent description"
+
+    def _build_graph(self) -> StateGraph:
+        workflow = StateGraph(AgentState)
+        workflow.add_node("process", self._process_node)
+        workflow.set_entry_point("process")
+        workflow.add_edge("process", END)
+        return workflow.compile()
+
+    def _process_node(self, state: AgentState) -> dict:
+        # Process logic
+        return {"messages": [...], "metadata": {...}}
+```
+
+### Evaluation Framework
+
+**3 Evaluators:**
+1. **ResponseQualityEvaluator** - Coherence, relevance, completeness
+2. **TaskCompletionEvaluator** - Task success rate
+3. **FactualAccuracyEvaluator** - Factual correctness
+
+**Usage:**
+```python
+from app.agents.evals import (
+    evaluate_agent_response,
+    create_evaluation_summary,
+    get_dataset
+)
+
+# Single evaluation
+result = evaluate_agent_response(
+    response="Agent output",
+    query="User query",
+    expected_output="Expected result"
+)
+
+# Batch evaluation
+dataset = get_dataset("research")
+results = []
+for case in dataset.test_cases:
+    result = evaluate_agent_response(response, case.input, case.expected_output)
+    results.append(result)
+summary = create_evaluation_summary(results)
+```
+
+### Human-in-the-Loop Pattern
+
+Used in ContentCreationAgent and HITLITSupportAgent:
+
+```python
+from langgraph.types import interrupt
+
+def _approval_node(self, state: AgentState) -> dict:
+    # Request human approval
+    approval = interrupt({
+        "type": "approval_request",
+        "content": state["draft_content"],
+        "options": ["approve", "reject", "revise"]
+    })
+
+    if approval["decision"] == "approve":
+        return {"status": "approved"}
+    elif approval["decision"] == "revise":
+        return {"feedback": approval["feedback"]}
+    else:
+        return {"status": "rejected"}
+```
+
+### Enterprise Agent API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/enterprise/agents` | GET | List all available agents |
+| `/api/enterprise/{agent}/invoke` | POST | Invoke agent |
+| `/api/enterprise/{agent}/stream` | POST | Stream agent response |
+
+Where `{agent}` is: `research`, `content`, `data-analyst`, `document`, `multilingual-rag`, `hitl-support`, `code-assistant`
+
+### Enterprise Webhook Endpoints
+
+| Endpoint | Method | Platform |
+|----------|--------|----------|
+| `/api/webhooks/copilot-studio` | POST | Microsoft Copilot Studio |
+| `/api/webhooks/azure-ai` | POST | Azure AI Agent |
+| `/api/webhooks/aws-lex` | POST | AWS Lex |
+
+---
+
 ## Dependencies
 
 ### Core Dependencies
@@ -1012,6 +1126,23 @@ from langgraph.prebuilt import create_react_agent
 
 ## Change Log
 
+### 2025-12-19 - Documentation Consolidation (v3.0)
+
+**Changed**:
+- Merged root `CLAUDE.md` and `.claude/CLAUDE.md` into single unified document
+- Consolidated development guidelines into `.claude/CLAUDE.md`
+- Updated knowledge base version and references
+
+**Documentation Structure**:
+- `.claude/CLAUDE.md`: Enterprise development standards and project guidelines
+- `deployment/KNOWLEDGE.md`: This file - detailed architecture and implementation guide
+- `README.md`: Project overview and quick start
+
+**Reference**:
+- Development guidelines: [.claude/CLAUDE.md](../.claude/CLAUDE.md)
+
+---
+
 ### 2025-12-15 - IT Support Agents (v2.0)
 
 **Added**:
@@ -1064,9 +1195,15 @@ from langgraph.prebuilt import create_react_agent
 
 ## Guidelines for AI Agents
 
+### Essential Reading
+
+Before making any changes, review these documents:
+1. **This file** (`deployment/KNOWLEDGE.md`) - Architecture and implementation details
+2. **Development Standards** ([.claude/CLAUDE.md](../.claude/CLAUDE.md)) - Code quality, security, and git workflow standards
+
 ### When Making Changes
 
-1. **Read this file first** before making any changes
+1. **Read both documentation files** before making any changes
 2. **Follow existing patterns** in the codebase
 3. **Update KNOWLEDGE.md** when adding new features
 4. **Run tests** before committing
