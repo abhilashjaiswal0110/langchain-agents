@@ -9,13 +9,13 @@ RUN pip install uv
 
 WORKDIR /build
 
-# Copy dependency files
-COPY pyproject.toml ./
+# Copy dependency files and README (required by pyproject.toml)
+COPY pyproject.toml README.md ./
 
 # Create virtual environment and install dependencies
 RUN uv venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
-RUN uv pip install --no-cache -e .
+RUN uv pip install --no-cache .
 
 # Production stage
 FROM python:3.11-slim as production
