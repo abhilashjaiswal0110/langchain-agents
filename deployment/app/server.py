@@ -12,12 +12,14 @@ from pathlib import Path
 from typing import Literal
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
+from fastapi.security import APIKeyHeader
 from fastapi.staticfiles import StaticFiles
 from langserve import add_routes
 from pydantic import BaseModel
+from starlette.middleware.base import BaseHTTPMiddleware
 
 # Load environment variables from .env file
 load_dotenv()
@@ -55,6 +57,46 @@ def setup_langsmith_tracing() -> bool:
 
 # Initialize tracing early
 tracing_enabled = setup_langsmith_tracing()
+
+# ============================================================================
+# API Key Security (for ngrok/external exposure)
+# ============================================================================
+
+API_KEY_ENABLED = os.getenv("API_KEY_ENABLED", "false").lower() == "true"
+API_KEY = os.getenv("API_KEY", "")
+API_KEY_HEADER = "X-API-Key"
+
+# Paths that don't require authentication
+PUBLIC_PATHS = {"/", "/docs", "/redoc", "/openapi.json", "/health", "/ready"}
+
+
+class APIKeyMiddleware(BaseHTTPMiddleware):
+    """Middleware to validate API key for protected endpoints."""
+
+    async def dispatch(self, request: Request, call_next):
+        # Skip if API key auth is disabled
+        if not API_KEY_ENABLED:
+            return await call_next(request)
+
+        # Skip public paths
+        if request.url.path in PUBLIC_PATHS:
+            return await call_next(request)
+
+        # Skip static files and chat UI
+        if request.url.path.startswith("/static") or request.url.path == "/chat":
+            return await call_next(request)
+
+        # Validate API key
+        api_key = request.headers.get(API_KEY_HEADER)
+        if not api_key or api_key != API_KEY:
+            return HTMLResponse(
+                content='{"detail": "Invalid or missing API key"}',
+                status_code=401,
+                media_type="application/json",
+            )
+
+        return await call_next(request)
+
 
 # ============================================================================
 # Chain Loading
@@ -373,11 +415,14 @@ LangSmith tracing for full observability.
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure appropriately for production
+    allow_origins=os.getenv("CORS_ORIGINS", "*").split(","),
     allow_credentials=True,
     allow_methods=["*"],
-    allow_headers=["*"],
+    allow_headers=["*", API_KEY_HEADER],
 )
+
+# Add API key authentication middleware
+app.add_middleware(APIKeyMiddleware)
 
 
 # ============================================================================
@@ -1014,12 +1059,14 @@ async def webhook_chat(payload: WebhookPayload) -> IntegrationResponse:
 # 3rd Party Platform Webhook Endpoints
 # ============================================================================
 
-async def _invoke_enterprise_agent(agent_type: str, query: str) -> tuple[bool, str | None]:
+def _invoke_enterprise_agent(agent_type: str, query: str) -> tuple[bool, str | None]:
     """Helper to invoke an enterprise agent by type.
 
     Returns:
         Tuple of (success, response_or_error)
     """
+    from langchain_core.messages import AIMessage
+
     agent_map = {
         "research": research_agent,
         "content": content_agent,
@@ -1035,8 +1082,23 @@ async def _invoke_enterprise_agent(agent_type: str, query: str) -> tuple[bool, s
         return False, f"Agent '{agent_type}' not available or not loaded"
 
     try:
-        result = await agent.ainvoke({"query": query})
-        response = result.get("response", result.get("output", str(result)))
+        # Use invoke (synchronous)
+        result = agent.invoke(message=query)
+
+        # Extract response - handle both dict and Pydantic model
+        messages = []
+        if hasattr(result, "messages"):
+            messages = result.messages
+        elif isinstance(result, dict):
+            messages = result.get("messages", [])
+
+        # Find last AI message
+        response = ""
+        for msg in reversed(messages):
+            if isinstance(msg, AIMessage):
+                response = msg.content
+                break
+
         return True, response
     except Exception as e:
         return False, str(e)
@@ -1062,7 +1124,7 @@ async def copilot_studio_webhook(request: CopilotStudioRequest) -> ThirdPartyRes
         )
 
     session_id = request.session_id or f"copilot-{request.conversation_id or 'default'}"
-    success, response = await _invoke_enterprise_agent(request.agent_type, request.query)
+    success, response = _invoke_enterprise_agent(request.agent_type, request.query)
 
     return ThirdPartyResponse(
         success=success,
@@ -1098,7 +1160,7 @@ async def azure_ai_webhook(request: AzureAIRequest) -> ThirdPartyResponse:
         )
 
     session_id = request.session_id or f"azure-{request.deployment_id or 'default'}"
-    success, response = await _invoke_enterprise_agent(request.agent_type, request.query)
+    success, response = _invoke_enterprise_agent(request.agent_type, request.query)
 
     return ThirdPartyResponse(
         success=success,
@@ -1134,7 +1196,7 @@ async def aws_lex_webhook(request: AWSLexRequest) -> ThirdPartyResponse:
         )
 
     session_id = request.session_id or f"lex-{request.bot_id or 'default'}"
-    success, response = await _invoke_enterprise_agent(request.agent_type, request.query)
+    success, response = _invoke_enterprise_agent(request.agent_type, request.query)
 
     return ThirdPartyResponse(
         success=success,
@@ -1218,16 +1280,32 @@ async def research_agent_invoke(request: ResearchAgentRequest) -> EnterpriseAgen
         )
 
     try:
+        from langchain_core.messages import AIMessage
+
         result = research_agent.research(
             query=request.query,
             session_id=request.session_id,
         )
+
+        # Extract response - handle both dict and Pydantic model
+        messages = []
+        if hasattr(result, "messages"):
+            messages = result.messages
+        elif isinstance(result, dict):
+            messages = result.get("messages", [])
+
+        # Find last AI message
+        response_text = ""
+        for msg in reversed(messages):
+            if isinstance(msg, AIMessage):
+                response_text = msg.content
+                break
+
         return EnterpriseAgentResponse(
             success=True,
-            response=result.get("output", ""),
-            session_id=result.get("session_id"),
+            response=response_text,
+            session_id=request.session_id,
             agent_type="research",
-            tool_calls=result.get("tool_calls"),
         )
     except Exception as e:
         return EnterpriseAgentResponse(
