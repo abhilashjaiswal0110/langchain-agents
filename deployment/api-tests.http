@@ -1,0 +1,224 @@
+### LangChain Platform - VSCode REST Client Tests
+### =============================================
+### Use this file with the REST Client extension in VSCode
+### Extension: humao.rest-client
+
+### Configuration - Update these variables
+@baseUrl = https://unappositely-unvested-chieko.ngrok-free.dev
+@apiKey = lcp-secure-key-2024-demo
+
+### =============================================
+### Health & Status Endpoints (No Auth Required)
+### =============================================
+
+### Health Check
+GET {{baseUrl}}/health
+
+###
+
+### Readiness Check
+GET {{baseUrl}}/ready
+
+###
+
+### List Enterprise Agents (Requires Auth)
+GET {{baseUrl}}/api/enterprise/agents
+X-API-Key: {{apiKey}}
+
+###
+
+### List IT Support Agents (Requires Auth)
+GET {{baseUrl}}/api/agents
+X-API-Key: {{apiKey}}
+
+### =============================================
+### Enterprise Agent Endpoints
+### =============================================
+
+### Research Agent - Invoke
+POST {{baseUrl}}/api/enterprise/research/invoke
+Content-Type: application/json
+X-API-Key: {{apiKey}}
+
+{
+  "query": "What are the latest trends in AI agents and LangChain?",
+  "session_id": "vscode-test-001"
+}
+
+###
+
+### Content Agent - Generate LinkedIn Post
+POST {{baseUrl}}/api/enterprise/content/invoke
+Content-Type: application/json
+X-API-Key: {{apiKey}}
+
+{
+  "topic": "The future of AI in enterprise IT",
+  "platform": "linkedin",
+  "tone": "professional",
+  "audience": "IT leaders"
+}
+
+###
+
+### Document Agent - Generate SOP
+POST {{baseUrl}}/api/enterprise/documents/invoke
+Content-Type: application/json
+X-API-Key: {{apiKey}}
+
+{
+  "doc_type": "sop",
+  "title": "Password Reset Procedure",
+  "description": "Standard operating procedure for resetting user passwords in Active Directory",
+  "sections": ["Prerequisites", "Steps", "Verification", "Troubleshooting"]
+}
+
+###
+
+### Code Assistant - Analyze Code
+POST {{baseUrl}}/api/enterprise/code/invoke
+Content-Type: application/json
+X-API-Key: {{apiKey}}
+
+{
+  "code": "def get_user(id):\n    query = f\"SELECT * FROM users WHERE id = {id}\"\n    return db.execute(query)",
+  "language": "python",
+  "action": "analyze",
+  "include_security": true
+}
+
+###
+
+### HITL Support Agent - Invoke
+POST {{baseUrl}}/api/enterprise/support/invoke
+Content-Type: application/json
+X-API-Key: {{apiKey}}
+
+{
+  "message": "I need to reset my password but I'm locked out of my account",
+  "user_id": "user-12345"
+}
+
+### =============================================
+### 3rd Party Platform Webhooks
+### =============================================
+
+### Copilot Studio Webhook
+POST {{baseUrl}}/api/webhooks/copilot-studio
+Content-Type: application/json
+X-API-Key: {{apiKey}}
+
+{
+  "query": "What is LangChain and how can I use it?",
+  "agent_type": "research",
+  "conversation_id": "copilot-conv-001",
+  "channel": "teams"
+}
+
+###
+
+### Azure AI Webhook
+POST {{baseUrl}}/api/webhooks/azure-ai
+Content-Type: application/json
+X-API-Key: {{apiKey}}
+
+{
+  "query": "Help me create a password reset ticket",
+  "agent_type": "hitl-support",
+  "deployment_id": "azure-deployment-001"
+}
+
+###
+
+### AWS Lex Webhook
+POST {{baseUrl}}/api/webhooks/aws-lex
+Content-Type: application/json
+X-API-Key: {{apiKey}}
+
+{
+  "query": "Search for network related incidents",
+  "agent_type": "research",
+  "bot_id": "lex-bot-001",
+  "locale_id": "en_US"
+}
+
+### =============================================
+### IT Support Conversation API
+### =============================================
+
+### Start IT Helpdesk Conversation
+POST {{baseUrl}}/api/conversation/start
+Content-Type: application/json
+X-API-Key: {{apiKey}}
+
+{
+  "agent_type": "it_helpdesk",
+  "user_id": "vscode-user-001",
+  "metadata": {"source": "vscode-rest-client"}
+}
+
+###
+
+### Chat in Conversation (replace session_id with actual value)
+POST {{baseUrl}}/api/conversation/chat
+Content-Type: application/json
+X-API-Key: {{apiKey}}
+
+{
+  "session_id": "REPLACE_WITH_SESSION_ID",
+  "message": "I need help resetting my password"
+}
+
+###
+
+### Start ServiceNow Conversation
+POST {{baseUrl}}/api/conversation/start
+Content-Type: application/json
+X-API-Key: {{apiKey}}
+
+{
+  "agent_type": "servicenow",
+  "user_id": "vscode-user-002"
+}
+
+### =============================================
+### Generic Webhook (IT Support)
+### =============================================
+
+### Start conversation via webhook
+POST {{baseUrl}}/api/webhook/chat
+Content-Type: application/json
+X-API-Key: {{apiKey}}
+
+{
+  "event_type": "conversation.start",
+  "agent_type": "it_helpdesk",
+  "user_id": "webhook-user-001",
+  "metadata": {"source": "external-system"}
+}
+
+###
+
+### Send message via webhook (replace session_id)
+POST {{baseUrl}}/api/webhook/chat
+Content-Type: application/json
+X-API-Key: {{apiKey}}
+
+{
+  "event_type": "conversation.message",
+  "session_id": "REPLACE_WITH_SESSION_ID",
+  "message": "What is the status of my ticket TKT-001?"
+}
+
+### =============================================
+### Security Test - Should Return 401
+### =============================================
+
+### Test without API key (should fail)
+GET {{baseUrl}}/api/enterprise/agents
+
+###
+
+### Test with wrong API key (should fail)
+GET {{baseUrl}}/api/enterprise/agents
+X-API-Key: wrong-key
