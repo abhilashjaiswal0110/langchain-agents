@@ -117,12 +117,12 @@ class BaseAgent(ABC):
         """Initialize the language model based on configuration."""
         provider = self.config.model_provider
 
-        # Auto-detect available provider
+        # Auto-detect available provider (prefer OpenAI for broader compatibility)
         if provider == "auto":
-            if os.getenv("ANTHROPIC_API_KEY"):
-                provider = "anthropic"
-            elif os.getenv("OPENAI_API_KEY"):
+            if os.getenv("OPENAI_API_KEY"):
                 provider = "openai"
+            elif os.getenv("ANTHROPIC_API_KEY"):
+                provider = "anthropic"
             else:
                 raise ValueError(
                     "No API key found. Set OPENAI_API_KEY or ANTHROPIC_API_KEY"
@@ -333,16 +333,21 @@ def create_react_agent_graph(
         Configured StateGraph
     """
 
-    def call_model(state: dict) -> dict:
+    def call_model(state) -> dict:
         """Call the LLM with current messages."""
         system_prompt = SystemMessage(content=agent._get_system_prompt())
-        messages = [system_prompt] + state["messages"]
+        # Handle both Pydantic model and dict state
+        msgs = list(state.messages) if hasattr(state, "messages") else state.get("messages", [])
+        messages = [system_prompt] + msgs
         response = agent.llm_with_tools.invoke(messages)
         return {"messages": [response]}
 
-    def should_continue(state: dict) -> str:
+    def should_continue(state) -> str:
         """Determine if we should continue to tools or end."""
-        messages = state["messages"]
+        # Handle both Pydantic model and dict state
+        messages = list(state.messages) if hasattr(state, "messages") else state.get("messages", [])
+        if not messages:
+            return "end"
         last_message = messages[-1]
         if hasattr(last_message, "tool_calls") and last_message.tool_calls:
             return "tools"

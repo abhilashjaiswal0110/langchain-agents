@@ -266,19 +266,21 @@ Be thorough but concise. Quality over quantity."""
     def _build_graph(self) -> StateGraph:
         """Build the research agent's workflow graph."""
 
-        def call_model(state: dict) -> dict:
+        def call_model(state: ResearchState) -> dict:
             """Call the LLM to process the current state."""
             system_prompt = SystemMessage(content=self._get_system_prompt())
-            messages = [system_prompt] + state["messages"]
+            # Use attribute access for Pydantic model
+            messages = [system_prompt] + list(state.messages)
             response = self.llm_with_tools.invoke(messages)
             return {"messages": [response]}
 
-        def should_continue(state: dict) -> str:
+        def should_continue(state: ResearchState) -> str:
             """Determine if we should continue with tools or end."""
-            messages = state["messages"]
-            last_message = messages[-1]
+            # Use attribute access for Pydantic model
+            messages = list(state.messages)
+            last_message = messages[-1] if messages else None
 
-            if hasattr(last_message, "tool_calls") and last_message.tool_calls:
+            if last_message and hasattr(last_message, "tool_calls") and last_message.tool_calls:
                 return "tools"
             return "end"
 

@@ -506,16 +506,18 @@ For SQL queries, the table name is always 'df'."""
     def _build_graph(self) -> StateGraph:
         """Build the data analyst agent's workflow graph."""
 
-        def call_model(state: dict) -> dict:
+        def call_model(state: DataAnalystState) -> dict:
             """Call the LLM to process the current state."""
             system_prompt = SystemMessage(content=self._get_system_prompt())
-            messages = [system_prompt] + state["messages"]
+            messages = [system_prompt] + list(state.messages)
             response = self.llm_with_tools.invoke(messages)
             return {"messages": [response]}
 
-        def should_continue(state: dict) -> str:
+        def should_continue(state: DataAnalystState) -> str:
             """Determine if we should continue with tools or end."""
-            messages = state["messages"]
+            messages = list(state.messages)
+            if not messages:
+                return "end"
             last_message = messages[-1]
 
             if hasattr(last_message, "tool_calls") and last_message.tool_calls:

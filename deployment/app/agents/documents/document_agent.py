@@ -373,14 +373,16 @@ Always validate documents before finalizing."""
     def _build_graph(self) -> StateGraph:
         """Build the document agent's workflow graph."""
 
-        def call_model(state: dict) -> dict:
+        def call_model(state: DocumentState) -> dict:
             system_prompt = SystemMessage(content=self._get_system_prompt())
-            messages = [system_prompt] + state["messages"]
+            messages = [system_prompt] + list(state.messages)
             response = self.llm_with_tools.invoke(messages)
             return {"messages": [response]}
 
-        def should_continue(state: dict) -> str:
-            messages = state["messages"]
+        def should_continue(state: DocumentState) -> str:
+            messages = list(state.messages)
+            if not messages:
+                return "end"
             last_message = messages[-1]
             if hasattr(last_message, "tool_calls") and last_message.tool_calls:
                 return "tools"

@@ -324,22 +324,24 @@ Always prioritize security over convenience."""
     def _build_graph(self) -> StateGraph:
         """Build the HITL support agent's workflow graph."""
 
-        def triage_issue(state: dict) -> dict:
+        def triage_issue(state: ITSupportState) -> dict:
             """Initial triage of the issue."""
             system_prompt = SystemMessage(content=self._get_system_prompt())
-            messages = [system_prompt] + state["messages"]
+            messages = [system_prompt] + list(state.messages)
             response = self.llm_with_tools.invoke(messages)
             return {"messages": [response]}
 
-        def approval_gate(state: dict) -> dict:
+        def approval_gate(state: ITSupportState) -> dict:
             """Human approval checkpoint."""
             # Check if we need approval
-            if not state.get("requires_approval"):
-                return state
+            requires_approval = getattr(state, "requires_approval", False)
+            if not requires_approval:
+                return {}
 
+            ticket_id = getattr(state, "ticket_id", None)
             approval = interrupt({
                 "type": "approval_request",
-                "ticket_id": state.get("ticket_id"),
+                "ticket_id": ticket_id,
                 "action": "Sensitive action requires supervisor approval",
                 "prompt": "Please approve or deny this action. "
                          "Reply 'approve' or 'deny' with optional notes."
@@ -357,8 +359,8 @@ Always prioritize security over convenience."""
                     "messages": [AIMessage(content=f"Action denied: {approval}")],
                 }
 
-        def should_continue(state: dict) -> str:
-            messages = state["messages"]
+        def should_continue(state: ITSupportState) -> str:
+            messages = list(state.messages)
             if not messages:
                 return "triage"
 
@@ -374,8 +376,10 @@ Always prioritize security over convenience."""
 
             return "end"
 
-        def check_approval_needed(state: dict) -> str:
-            if state.get("requires_approval") and not state.get("approved_by"):
+        def check_approval_needed(state: ITSupportState) -> str:
+            requires_approval = getattr(state, "requires_approval", False)
+            approved_by = getattr(state, "approved_by", None)
+            if requires_approval and not approved_by:
                 return "approval"
             return "continue"
 

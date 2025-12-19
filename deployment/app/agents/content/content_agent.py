@@ -330,26 +330,31 @@ When presenting drafts, always:
     def _build_graph(self) -> StateGraph:
         """Build the content agent's workflow graph with HITL."""
 
-        def plan_content(state: dict) -> dict:
+        def plan_content(state: ContentState) -> dict:
             """Plan the content structure."""
             system_prompt = SystemMessage(content=self._get_system_prompt())
 
-            planning_prompt = f"""Please create an outline for content about: {state.get('topic', 'the given topic')}
+            topic = getattr(state, 'topic', 'the given topic') or 'the given topic'
+            platform = getattr(state, 'platform', 'general') or 'general'
+            tone = getattr(state, 'tone', 'professional') or 'professional'
+            target_audience = getattr(state, 'target_audience', 'general audience') or 'general audience'
 
-Platform: {state.get('platform', 'general')}
-Tone: {state.get('tone', 'professional')}
-Target Audience: {state.get('target_audience', 'general audience')}
+            planning_prompt = f"""Please create an outline for content about: {topic}
+
+Platform: {platform}
+Tone: {tone}
+Target Audience: {target_audience}
 
 Use the create_outline tool to structure the content, then explain your approach."""
 
-            messages = [system_prompt] + state["messages"]
-            if state.get("topic") and not any("outline" in str(m) for m in messages):
+            messages = [system_prompt] + list(state.messages)
+            if topic and not any("outline" in str(m) for m in messages):
                 messages.append(HumanMessage(content=planning_prompt))
 
             response = self.llm_with_tools.invoke(messages)
             return {"messages": [response], "status": "planning"}
 
-        def draft_content(state: dict) -> dict:
+        def draft_content(state: ContentState) -> dict:
             """Generate the content draft."""
             system_prompt = SystemMessage(content=self._get_system_prompt())
 
@@ -362,39 +367,41 @@ Make sure to:
 
 Present the complete draft."""
 
-            messages = [system_prompt] + state["messages"]
+            messages = [system_prompt] + list(state.messages)
             messages.append(HumanMessage(content=drafting_prompt))
 
             response = self.llm_with_tools.invoke(messages)
             return {"messages": [response], "status": "drafting"}
 
-        def human_review(state: dict) -> dict:
+        def human_review(state: ContentState) -> dict:
             """Pause for human review of the draft."""
             # Get the last AI message as the draft
             last_ai_msg = None
-            for msg in reversed(state["messages"]):
+            for msg in reversed(list(state.messages)):
                 if isinstance(msg, AIMessage):
                     last_ai_msg = msg.content
                     break
+
+            platform = getattr(state, 'platform', None)
 
             # Interrupt for human feedback
             feedback = interrupt({
                 "type": "content_review",
                 "draft": last_ai_msg,
-                "platform": state.get("platform"),
+                "platform": platform,
                 "prompt": "Please review the draft and provide feedback. "
                          "Type 'approve' to finalize or provide revision notes."
             })
 
             return {"feedback": feedback, "status": "review"}
 
-        def process_feedback(state: dict) -> dict:
+        def process_feedback(state: ContentState) -> dict:
             """Process human feedback and revise if needed."""
-            feedback = state.get("feedback", "")
+            feedback = getattr(state, 'feedback', '') or ''
 
             if feedback.lower().strip() in ["approve", "approved", "ok", "good", "lgtm"]:
                 # Extract final content from last AI message
-                for msg in reversed(state["messages"]):
+                for msg in reversed(list(state.messages)):
                     if isinstance(msg, AIMessage):
                         return {
                             "final_content": msg.content,
@@ -409,19 +416,20 @@ Present the complete draft."""
 
 Please revise the content to address the feedback while maintaining quality."""
 
-            messages = [system_prompt] + state["messages"]
+            messages = [system_prompt] + list(state.messages)
             messages.append(HumanMessage(content=revision_prompt))
 
             response = self.llm_with_tools.invoke(messages)
+            revision_count = getattr(state, 'revision_count', 0) or 0
             return {
                 "messages": [response],
                 "status": "revising",
-                "revision_count": state.get("revision_count", 0) + 1
+                "revision_count": revision_count + 1
             }
 
-        def should_continue_planning(state: dict) -> str:
+        def should_continue_planning(state: ContentState) -> str:
             """Check if planning is complete."""
-            messages = state["messages"]
+            messages = list(state.messages)
             if not messages:
                 return "plan"
 
@@ -434,9 +442,9 @@ Please revise the content to address the feedback while maintaining quality."""
                 return "draft"
             return "plan"
 
-        def should_continue_drafting(state: dict) -> str:
+        def should_continue_drafting(state: ContentState) -> str:
             """Check if drafting is complete."""
-            messages = state["messages"]
+            messages = list(state.messages)
             if not messages:
                 return "draft"
 
@@ -446,9 +454,9 @@ Please revise the content to address the feedback while maintaining quality."""
 
             return "review"
 
-        def check_approval(state: dict) -> str:
+        def check_approval(state: ContentState) -> str:
             """Check if content is approved."""
-            if state.get("status") == "approved":
+            if getattr(state, 'status', None) == "approved":
                 return "end"
             return "draft"  # Back to drafting for revision
 
