@@ -1,8 +1,8 @@
 # Project Architecture Blueprint
 
-> **Document Version**: 1.0.0  
-> **Last Updated**: December 19, 2025  
-> **Status**: Production-Ready  
+> **Document Version**: 1.0.0
+> **Last Updated**: December 19, 2025
+> **Status**: Production-Ready
 > **Classification**: Internal Use
 
 ---
@@ -243,18 +243,18 @@ class BaseAgentState(BaseModel):
 ```python
 class BaseAgent(ABC):
     """Abstract base with common functionality"""
-    
+
     @abstractmethod
     def _build_graph(self) -> StateGraph:
         """Subclasses define workflow graph"""
-        
+
     @abstractmethod
     def _get_system_prompt(self) -> str:
         """Subclasses define system prompt"""
-        
+
     def invoke(self, message: str, **kwargs) -> dict:
         """Execute agent synchronously"""
-        
+
     async def astream(self, message: str, **kwargs) -> AsyncIterator:
         """Stream agent execution"""
 ```
@@ -269,10 +269,10 @@ class BaseAgent(ABC):
 ```python
 def tool_error_handler(func: F) -> F:
     """Decorator for graceful tool error handling"""
-    
+
 def sanitize_output(output: str) -> str:
     """Remove potentially sensitive information"""
-    
+
 def chunk_text(text: str, chunk_size: int = 1000) -> list[str]:
     """Split text into manageable chunks"""
 ```
@@ -318,11 +318,11 @@ class BaseAgent(ABC):
         # Template method
         if self._compiled_graph is None:
             self.compile()  # Step 1
-        
+
         input_state = self._build_input(message, **kwargs)  # Step 2
         result = self._compiled_graph.invoke(input_state)   # Step 3
         return result
-    
+
     @abstractmethod
     def _build_graph(self) -> StateGraph:
         # Subclass defines workflow
@@ -339,14 +339,14 @@ class BaseAgent(ABC):
 ```python
 def _init_llm(self) -> None:
     provider = self.config.model_provider
-    
+
     if provider == "auto":
         # Auto-detection logic
         if os.getenv("OPENAI_API_KEY"):
             provider = "openai"
         elif os.getenv("ANTHROPIC_API_KEY"):
             provider = "anthropic"
-    
+
     if provider == "openai":
         self._llm = ChatOpenAI(...)  # OpenAI factory
     elif provider == "anthropic":
@@ -363,18 +363,18 @@ def _init_llm(self) -> None:
 ```python
 def _build_graph(self) -> StateGraph:
     graph = StateGraph(AgentState)
-    
+
     # States as nodes
     graph.add_node("agent", self._call_model)
     graph.add_node("tools", ToolNode(self._tools))
-    
+
     # Transitions as edges
     graph.add_conditional_edges(
         "agent",
         self._should_continue,  # State transition logic
         {"tools": "tools", "end": END}
     )
-    
+
     return graph
 ```
 
@@ -806,23 +806,23 @@ def my_custom_tool(param: str) -> str:
 # 3. Implement Agent Class
 class MyAgent(BaseAgent):
     """Agent description."""
-    
+
     def __init__(self, config: AgentConfig | None = None):
         super().__init__(config)
         self.register_tools([my_custom_tool])
-    
+
     def _get_system_prompt(self) -> str:
         return """System prompt defining agent behavior."""
-    
+
     def _build_graph(self) -> StateGraph:
         """Build workflow graph."""
-        
+
         def call_model(state: MyAgentState) -> dict:
             system = SystemMessage(content=self._get_system_prompt())
             messages = [system] + list(state.messages)
             response = self.llm_with_tools.invoke(messages)
             return {"messages": [response]}
-        
+
         def should_continue(state: MyAgentState) -> str:
             messages = list(state.messages)
             if not messages:
@@ -831,7 +831,7 @@ class MyAgent(BaseAgent):
             if hasattr(last, "tool_calls") and last.tool_calls:
                 return "tools"
             return "end"
-        
+
         graph = StateGraph(MyAgentState)
         graph.add_node("agent", call_model)
         graph.add_node("tools", ToolNode(self._tools))
@@ -842,7 +842,7 @@ class MyAgent(BaseAgent):
         )
         graph.add_edge("tools", "agent")
         graph.add_edge(START, "agent")
-        
+
         return graph
 ```
 
@@ -883,17 +883,17 @@ from langgraph.types import interrupt
 
 def _approval_node(self, state: AgentState) -> dict:
     """Request human approval."""
-    
+
     # Extract content needing approval
     draft = extract_draft_from_state(state)
-    
+
     # Interrupt execution for human input
     feedback = interrupt({
         "type": "approval_request",
         "draft": draft,
         "options": ["approve", "reject", "revise"]
     })
-    
+
     # Process feedback
     if feedback["decision"] == "approve":
         return {"status": "approved"}
@@ -966,12 +966,12 @@ def my_custom_tool(
     param3: Literal["option1", "option2"] = "option1"
 ) -> str:
     """Detailed description for LLM.
-    
+
     Args:
         param1: Parameter description
         param2: Optional parameter with default
         param3: Enum-style parameter
-        
+
     Returns:
         Description of return value
     """
@@ -1005,16 +1005,16 @@ async def new_platform_webhook(
     # Validate request
     if request.agent_type not in AGENT_TYPES:
         raise HTTPException(400, "Invalid agent_type")
-    
+
     # Generate session ID
     session_id = request.session_id or f"new-platform-{request.platform_id}"
-    
+
     # Invoke agent
     success, response = _invoke_enterprise_agent(
         request.agent_type,
         request.query
     )
-    
+
     # Return standardized response
     return ThirdPartyResponse(
         success=success,
@@ -1452,5 +1452,5 @@ The architecture is designed for production use while maintaining flexibility fo
 - Keep synchronized with implementation
 - Solicit feedback from development team
 
-**Last Reviewed**: December 19, 2025  
+**Last Reviewed**: December 19, 2025
 **Next Review**: March 19, 2026
