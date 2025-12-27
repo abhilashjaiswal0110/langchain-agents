@@ -649,5 +649,5 @@ You are integrated with the ServiceNow instance and can perform real-time operat
         }
 
 
-# Global instance
-servicenow_agent = ServiceNowAgent(model_provider="auto")
+# NOTE: Global instance removed to avoid instantiation before .env is loaded
+# Instances are now created lazily by ConversationManager

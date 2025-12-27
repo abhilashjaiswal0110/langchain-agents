@@ -12,7 +12,7 @@ This module provides a comprehensive suite of AI agents for IT operations:
 Following the 4-role Enterprise Development Standards from CLAUDE.md.
 """
 
-# Existing agents
+# IT Support agents (classes only - no global instances)
 from app.agents.it_helpdesk import ITHelpdeskAgent
 from app.agents.servicenow_agent import ServiceNowAgent
 from app.agents.conversation_manager import ConversationManager

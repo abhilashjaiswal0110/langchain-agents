@@ -637,5 +637,5 @@ Remember: Your goal is to resolve issues efficiently while providing excellent u
         return []
 
 
-# Global instance
-it_helpdesk_agent = ITHelpdeskAgent(model_provider="auto")
+# NOTE: Global instance removed to avoid instantiation before .env is loaded
+# Instances are now created lazily by ConversationManager
