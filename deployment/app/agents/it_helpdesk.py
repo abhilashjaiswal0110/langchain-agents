@@ -481,10 +481,11 @@ Remember: Your goal is to resolve issues efficiently while providing excellent u
         has_anthropic = bool(os.getenv("ANTHROPIC_API_KEY"))
 
         if provider == "auto":
-            if has_anthropic:
-                provider = "anthropic"
-            elif has_openai:
+            # Prefer OpenAI for consistency across all agents
+            if has_openai:
                 provider = "openai"
+            elif has_anthropic:
+                provider = "anthropic"
             else:
                 raise ValueError("No LLM API key found. Set OPENAI_API_KEY or ANTHROPIC_API_KEY.")
 

@@ -546,10 +546,11 @@ You are integrated with the ServiceNow instance and can perform real-time operat
         has_anthropic = bool(os.getenv("ANTHROPIC_API_KEY"))
 
         if provider == "auto":
-            if has_anthropic:
-                provider = "anthropic"
-            elif has_openai:
+            # Prefer OpenAI for consistency across all agents
+            if has_openai:
                 provider = "openai"
+            elif has_anthropic:
+                provider = "anthropic"
             else:
                 raise ValueError("No LLM API key found.")
 

@@ -1458,16 +1458,17 @@ async def document_agent_invoke(request: DocumentAgentRequest) -> EnterpriseAgen
         )
 
     try:
-        result = document_agent.generate(
+        result = document_agent.create_document(
             doc_type=request.doc_type,
             title=request.title,
-            description=request.description,
-            sections=request.sections,
+            department=getattr(request, 'department', ''),
+            purpose=request.description,
+            additional_context=str(getattr(request, 'sections', [])),
             session_id=request.session_id,
         )
         return EnterpriseAgentResponse(
             success=True,
-            response=result.get("output", ""),
+            response=result.get("document", result.get("output", "")),
             session_id=result.get("session_id"),
             agent_type="document",
             tool_calls=result.get("tool_calls"),
