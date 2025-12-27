@@ -1086,14 +1086,74 @@ def my_function():
 
 ## Troubleshooting
 
+### CRITICAL FIXES (2025-12-19)
+
+**Issue: "Failed to start session: Unknown error" (IT Support Agents)**
+
+**Root Cause**: Global agent instantiation before environment variables loaded
+- Files `it_helpdesk.py` and `servicenow_agent.py` created agents at module import
+- Import happened before `.env` loaded in `server.py`
+- Agents couldn't find `OPENAI_API_KEY` or `ANTHROPIC_API_KEY`
+
+**Fix Applied**:
+- Removed global instantiations from both files (lines 641, 653)
+- Agents now created lazily by `ConversationManager._load_agents()`
+
+**Files Changed**:
+- `app/agents/it_helpdesk.py`
+- `app/agents/servicenow_agent.py`
+- `app/agents/__init__.py`
+
+---
+
+**Issue: "No response received" (Enterprise Agents)**
+
+**Root Cause**: API key middleware blocking local requests
+- `API_KEY_ENABLED=true` blocked all `/api/*` endpoints
+- Chat UI couldn't communicate with backend
+
+**Fix Applied**:
+- Set `API_KEY_ENABLED=false` in `.env` for local development
+
+**File Changed**: `.env`
+
+---
+
+**Issue: "Invalid or missing API key" after changing .env**
+
+**Cause**: Uvicorn hot reload doesn't reload environment variables
+
+**Solution**:
+1. **STOP server completely** (CTRL+C or kill process)
+2. Restart: `python -m app.server`
+3. Don't rely on hot reload for `.env` changes!
+
+---
+
+### Testing
+
+**Run automated tests**:
+```bash
+# PowerShell
+.\test-agents.ps1
+
+# Or manually
+curl http://localhost:8000/health
+```
+
+**Detailed fix documentation**: See [../FIXES.md](../FIXES.md)
+
+---
+
 ### Issue: Chains not loading
 
 **Symptom**: `chains_loaded: false` in health check
 
 **Solutions**:
-1. Verify `OPENAI_API_KEY` is set in `.env`
+1. Verify `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` is set in `.env`
 2. Check `.env` file is in deployment directory
 3. Restart server after changing `.env`
+4. No spaces or newlines in key values
 
 ### Issue: Import errors with agents
 
@@ -1122,9 +1182,48 @@ from langgraph.prebuilt import create_react_agent
 2. Verify `.env` file exists
 3. Ensure port 8000 is not in use
 
+### Issue: Web UI not responding
+
+**Solutions**:
+1. Hard refresh browser (CTRL+SHIFT+R)
+2. Clear browser cache
+3. Check browser console (F12) for errors
+4. Try incognito/private mode
+5. Verify server: `curl http://localhost:8000/health`
+
 ---
 
 ## Change Log
+
+### 2025-12-19 - Critical Bug Fixes (v3.1)
+
+**Fixed**:
+- **IT Support Agents**: Removed global instantiation causing "Failed to start session" error
+  - Modified: `app/agents/it_helpdesk.py`, `app/agents/servicenow_agent.py`
+  - Agents now created lazily after environment variables load
+- **Enterprise Agents**: Disabled API key protection for local development
+  - Modified: `.env` - Set `API_KEY_ENABLED=false`
+  - Resolves "No response received" error in chat UI
+- **Environment Loading**: Fixed import order to ensure `.env` loads before agents
+
+**Added**:
+- Comprehensive fix documentation: [../FIXES.md](../FIXES.md)
+- Automated test script: [../test-agents.ps1](../test-agents.ps1)
+- Enhanced troubleshooting section with root cause analysis
+
+**Files Changed**:
+- `deployment/app/agents/it_helpdesk.py` (line 641)
+- `deployment/app/agents/servicenow_agent.py` (line 653)
+- `deployment/app/agents/__init__.py` (line 15)
+- `deployment/.env` (lines 76-80)
+
+**Impact**:
+- ✅ All agents now load successfully on server startup
+- ✅ IT Support conversation sessions start without errors
+- ✅ Enterprise agents respond correctly via API and Web UI
+- ✅ Local development no longer requires API key configuration
+
+---
 
 ### 2025-12-19 - Documentation Consolidation (v3.0)
 
