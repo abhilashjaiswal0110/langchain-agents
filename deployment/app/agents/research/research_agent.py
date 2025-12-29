@@ -226,42 +226,49 @@ class ResearchAgent(BaseAgent):
             synthesize_findings,
         ])
 
+    def compile(self) -> None:
+        """Compile the research agent's graph with increased recursion limit.
+
+        Overrides base compile to add recursion_limit configuration.
+        Research workflows require more steps than the default 25.
+        """
+        from langgraph.checkpoint.memory import MemorySaver
+
+        self._graph = self._build_graph()
+
+        checkpointer = self.config.checkpointer or MemorySaver()
+        self._compiled_graph = self._graph.compile(checkpointer=checkpointer)
+
+        # Store increased recursion limit for deep research workflows
+        # Research agents often need many tool calls (search, analyze, synthesize)
+        # Set high limit to handle complex multi-step research workflows
+        self._recursion_limit = 200
+
     def _get_system_prompt(self) -> str:
         """Get the research agent's system prompt."""
-        return """You are an expert AI Research Agent specializing in comprehensive
-information gathering and analysis. Your role is to help users research topics
-thoroughly and produce well-structured summaries.
+        return """You are an expert AI Research Agent. Research topics and provide clear summaries.
 
-## Your Capabilities:
-1. **Web Search**: Search for relevant information using web_search tool
-2. **Analysis**: Extract key points from content using extract_key_points
-3. **Source Tracking**: Track sources with add_source for citations
-4. **Synthesis**: Combine findings into coherent summaries using synthesize_findings
+## IMPORTANT: Efficiency Guidelines
+- Use MAXIMUM 2-3 web searches per query
+- After gathering information, provide your final answer immediately
+- Do NOT keep searching for more information - be decisive
+- If you have enough information, synthesize and respond
+
+## Tools Available:
+1. **web_search**: Search the web (use sparingly - max 2-3 searches)
+2. **synthesize_findings**: Combine findings into a summary
 
 ## Research Process:
-1. Understand the research question and identify key aspects to investigate
-2. Search for information on each aspect
-3. Extract and analyze key points from sources
-4. Track all sources for proper citation
-5. Synthesize findings into a comprehensive summary
-
-## Guidelines:
-- Always cite sources with URLs when presenting information
-- Distinguish between facts and opinions
-- Note any conflicting information found
-- Highlight areas where information is limited or uncertain
-- Present findings in a clear, organized manner
-- Use bullet points for readability when appropriate
+1. Perform 1-2 targeted web searches
+2. Synthesize the findings you have
+3. Provide your final answer with sources
 
 ## Output Format:
-When presenting research findings, use this structure:
-1. **Executive Summary**: Brief overview (2-3 sentences)
-2. **Key Findings**: Main points discovered
-3. **Detailed Analysis**: In-depth coverage of each aspect
-4. **Sources**: List of sources used
-5. **Limitations**: Any gaps or uncertainties
+- **Summary**: Brief overview (2-3 sentences)
+- **Key Points**: Main findings (3-5 bullet points)
+- **Sources**: URLs of sources used
 
-Be thorough but concise. Quality over quantity."""
+Be concise and efficient. Provide your answer quickly."""
 
     def _build_graph(self) -> StateGraph:
         """Build the research agent's workflow graph."""
@@ -302,6 +309,43 @@ Be thorough but concise. Quality over quantity."""
 
         return graph
 
+    def invoke(
+        self,
+        message: str,
+        session_id: str | None = None,
+        user_id: str | None = None,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        """Invoke the Research Agent with increased recursion limit.
+
+        Overrides base invoke to pass recursion_limit at invoke time.
+        Research workflows require more steps than typical agents.
+        """
+        if self._compiled_graph is None:
+            self.compile()
+
+        # Build input state
+        from langchain_core.messages import HumanMessage
+        input_state = {
+            "messages": [HumanMessage(content=message)],
+            "session_id": session_id,
+            "user_id": user_id,
+            **kwargs,
+        }
+
+        # Get recursion limit (default to 100 for research workflows)
+        recursion_limit = getattr(self, '_recursion_limit', 100)
+
+        # Configure with thread for checkpointing and increased recursion limit
+        config = {
+            "configurable": {"thread_id": session_id or "default"},
+            "recursion_limit": recursion_limit,
+        }
+
+        # Invoke graph with increased recursion limit
+        result = self._compiled_graph.invoke(input_state, config=config)
+        return result
+
     @traceable(name="research_invoke")
     def research(
         self,
@@ -332,6 +376,7 @@ Be thorough but concise. Quality over quantity."""
             f"Research depth: {depth}. {depth_instructions[depth]}"
         )
 
+        # Use our custom invoke with increased recursion limit
         return self.invoke(
             message=enhanced_query,
             session_id=session_id,
