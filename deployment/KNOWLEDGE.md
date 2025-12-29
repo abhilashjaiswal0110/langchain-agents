@@ -1260,6 +1260,48 @@ from langgraph.prebuilt import create_react_agent
 
 ## Change Log
 
+### 2025-12-29 - Enterprise Agent API Fixes (v3.3)
+
+**Fixed**:
+- **All Enterprise Agent Endpoints**: Fixed empty response issue for all enterprise agents
+  - **Root Cause**: Server was using `result.get("output", "")` but LangGraph returns `{messages: [...]}`
+  - **Solution**: Added `extract_agent_response()` helper to properly extract AI message content from LangGraph state
+  - Modified: `app/server.py` - Added helper function after imports
+
+- **Document Generator Agent**: Fixed method name and response extraction
+  - Modified: `app/server.py` (line 1362) - Changed `generate()` to `create_document()`
+
+- **Content Agent**: Fixed method name and parameter name
+  - Modified: `app/server.py` (line 1362) - Changed `generate()` to `create_content()`
+  - Modified: `app/server.py` (line 1366) - Changed `audience` to `target_audience`
+  - **Note**: Content Agent has HITL (Human-In-The-Loop) workflow requiring human approval
+
+- **Multilingual RAG Agent**: Fixed language parameter validation
+  - Modified: `app/server.py` (line 1535) - Added `or "auto"` default for None values
+
+**Added**:
+- **File Upload UI for Enterprise Agents**: Added document upload capability
+  - Modified: `app/static/chat.html` - Added upload button and handler
+  - Supports: Multilingual RAG Agent and Data Analyst Agent
+  - Endpoints: `/api/enterprise/rag/upload`, `/api/enterprise/data-analyst/upload`
+
+**Testing Results**:
+7 of 8 enterprise agents verified working:
+- ✅ Research Agent - Working with recursion limit configured
+- ✅ Document Generator Agent - Working with `create_document()` method
+- ✅ HITL IT Support Agent - Working with proper response extraction
+- ✅ Code Assistant Agent - Working with proper response extraction
+- ✅ Multilingual RAG Agent - Working with file upload support
+- ✅ Data Analyst Agent - Working with proper response extraction
+- ⚠️ Content Agent - Uses HITL workflow (requires human approval via chat UI)
+
+**Files Changed**:
+- `deployment/app/server.py` - Added `extract_agent_response()`, fixed all enterprise agent endpoints
+- `deployment/app/static/chat.html` - Added file upload UI for RAG and Data Analyst agents
+- `deployment/app/agents/content/content_agent.py` - Added recursion limit configuration
+
+---
+
 ### 2025-12-29 - Agent Fixes and Optimizations (v3.2)
 
 **Fixed**:

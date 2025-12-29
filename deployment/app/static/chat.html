@@ -300,6 +300,36 @@
             cursor: not-allowed;
         }
 
+        .input-area #uploadButton {
+            padding: 12px 16px;
+            font-size: 18px;
+            min-width: auto;
+        }
+
+        .input-area #uploadButton:not(:disabled) {
+            background: var(--success);
+        }
+
+        .input-area #uploadButton:hover:not(:disabled) {
+            background: #45a049;
+        }
+
+        .upload-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            background: var(--success);
+            color: white;
+            border-radius: 16px;
+            font-size: 12px;
+            margin-bottom: 10px;
+        }
+
+        .upload-status.error {
+            background: var(--error);
+        }
+
         /* Side Panel */
         .side-panel {
             width: 300px;
@@ -524,6 +554,8 @@
                 </div>
 
                 <div class="input-area">
+                    <input type="file" id="fileInput" style="display:none" onchange="handleFileUpload(event)">
+                    <button id="uploadButton" onclick="document.getElementById('fileInput').click()" disabled style="display:none" title="Upload Document">📎</button>
                     <input type="text" id="messageInput" placeholder="Type your message..." disabled onkeypress="handleKeyPress(event)">
                     <button id="sendButton" onclick="sendMessage()" disabled>Send</button>
                 </div>
@@ -648,7 +680,16 @@
         const welcomeScreen = document.getElementById('welcomeScreen');
         const messageInput = document.getElementById('messageInput');
         const sendButton = document.getElementById('sendButton');
+        const uploadButton = document.getElementById('uploadButton');
+        const fileInput = document.getElementById('fileInput');
         const agentSelect = document.getElementById('agentSelect');
+
+        // Agents that support file upload
+        const uploadAgents = ['multilingual_rag', 'data_analyst'];
+        const uploadEndpoints = {
+            'multilingual_rag': '/api/enterprise/rag/upload',
+            'data_analyst': '/api/enterprise/data-analyst/upload'
+        };
         const statusBadge = document.getElementById('statusBadge');
         const sessionInfo = document.getElementById('sessionInfo');
         const typingIndicator = document.getElementById('typingIndicator');
@@ -731,13 +772,28 @@
             // Update quick actions for this agent
             updateQuickActions(agentType);
 
+            // Show/hide upload button based on agent type
+            if (uploadAgents.includes(agentType)) {
+                uploadButton.style.display = 'block';
+                uploadButton.disabled = false;
+                // Set accepted file types based on agent
+                if (agentType === 'multilingual_rag') {
+                    fileInput.accept = '.pdf,.txt,.docx,.doc,.md';
+                } else if (agentType === 'data_analyst') {
+                    fileInput.accept = '.xlsx,.xls,.csv';
+                }
+            } else {
+                uploadButton.style.display = 'none';
+                uploadButton.disabled = true;
+            }
+
             // Add welcome message
             const welcomeMessages = {
                 'research': 'Hello! I\'m your AI Research Agent. I can help you search the web and synthesize information. What would you like me to research?',
                 'content': 'Welcome! I\'m your Content Generation Agent. I can create content for LinkedIn, X (Twitter), or blog posts. What topic would you like me to write about?',
-                'data_analyst': 'Hi! I\'m your Data Analyst Agent. Upload an Excel or CSV file and I\'ll help you analyze it and generate insights.',
+                'data_analyst': 'Hi! I\'m your Data Analyst Agent. Click the 📎 button to upload an Excel or CSV file, and I\'ll help you analyze it and generate insights.',
                 'document': 'Hello! I\'m your Document Generator Agent. I can create SOP, WLI, or Policy documents. What document would you like me to generate?',
-                'multilingual_rag': 'Welcome! I\'m your Multilingual RAG Agent. Upload documents and ask me questions in any language.',
+                'multilingual_rag': 'Welcome! I\'m your Multilingual RAG Agent. Click the 📎 button to upload documents (PDF, Word, TXT, MD), then ask me questions in any language.',
                 'hitl_support': 'Hello! I\'m your IT Support Agent with human oversight. I can help with IT issues - sensitive actions will require approval.',
                 'code_assistant': 'Hi! I\'m your Code Assistant Agent. I can analyze code for modernization opportunities and security issues. Share your code to get started.'
             };
@@ -902,6 +958,57 @@
             // Clear UI except welcome
             const messages = messagesEl.querySelectorAll('.message');
             messages.forEach(m => m.remove());
+        }
+
+        // Handle File Upload
+        async function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            if (!currentAgent || !uploadAgents.includes(currentAgent)) {
+                alert('File upload is not supported for this agent.');
+                return;
+            }
+
+            const endpoint = uploadEndpoints[currentAgent];
+            if (!endpoint) {
+                alert('Upload endpoint not found for this agent.');
+                return;
+            }
+
+            // Show upload status
+            addMessage(`📤 Uploading: ${file.name}...`, 'user');
+            typingIndicator.classList.add('visible');
+            uploadButton.disabled = true;
+
+            try {
+                const formData = new FormData();
+                formData.append('file', file);
+
+                const response = await fetch(endpoint, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                typingIndicator.classList.remove('visible');
+                uploadButton.disabled = false;
+
+                if (response.ok) {
+                    addMessage(`✅ File uploaded successfully: ${file.name}\n\n${data.message || 'Document processed and ready for queries.'}`, 'assistant');
+                } else {
+                    addMessage(`❌ Upload failed: ${data.detail || 'Unknown error'}`, 'assistant');
+                }
+            } catch (error) {
+                typingIndicator.classList.remove('visible');
+                uploadButton.disabled = false;
+                console.error('Upload error:', error);
+                addMessage(`❌ Upload failed: ${error.message}`, 'assistant');
+            }
+
+            // Clear file input for next upload
+            event.target.value = '';
         }
 
         // Handle Enter Key

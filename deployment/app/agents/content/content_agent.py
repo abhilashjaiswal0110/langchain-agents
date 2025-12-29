@@ -263,6 +263,10 @@ class ContentAgent(BaseAgent):
         """Initialize the Content Agent."""
         super().__init__(config)
 
+        # Set increased recursion limit for content workflows with HITL
+        # Content agents need many steps (plan, draft, review, revise)
+        self._recursion_limit = 200
+
         # Register content tools
         self.register_tools([
             create_outline,
@@ -275,6 +279,12 @@ class ContentAgent(BaseAgent):
         """Get the content agent's system prompt."""
         return """You are an expert Content Generation Agent specializing in creating
 engaging, platform-optimized content for social media and blogs.
+
+## IMPORTANT: Efficiency Guidelines
+- Use MAXIMUM 2-3 tool calls total
+- After creating outline and draft, present the final content immediately
+- Do NOT keep refining - be decisive with your first draft
+- If you have enough context, create and present the content
 
 ## Your Capabilities:
 1. **Outline Creation**: Structure content effectively using create_outline
@@ -497,6 +507,65 @@ Please revise the content to address the feedback while maintaining quality."""
         )
 
         return graph
+
+    def compile(self) -> None:
+        """Compile the content agent's graph with increased recursion limit.
+
+        Overrides base compile to add recursion_limit configuration.
+        Content creation workflows with HITL require more steps than default.
+        """
+        from langgraph.checkpoint.memory import MemorySaver
+
+        self._graph = self._build_graph()
+
+        checkpointer = self.config.checkpointer or MemorySaver()
+        self._compiled_graph = self._graph.compile(
+            checkpointer=checkpointer,
+            interrupt_before=["review"],  # For HITL review
+        )
+
+        # Store increased recursion limit for content workflows
+        # Content agents with HITL need many steps (plan, draft, review, revise)
+        self._recursion_limit = 200
+
+    def invoke(
+        self,
+        message: str,
+        session_id: str | None = None,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        """Invoke the Content Agent with increased recursion limit.
+
+        Overrides base invoke to pass recursion_limit at invoke time.
+        Content workflows with HITL require more steps than typical agents.
+        """
+        if self._compiled_graph is None:
+            self.compile()
+
+        # Build input state with content-specific fields
+        from langchain_core.messages import HumanMessage
+        input_state = {
+            "messages": [HumanMessage(content=message)],
+            "session_id": session_id,
+            "topic": kwargs.get("topic"),
+            "platform": kwargs.get("platform", "linkedin"),
+            "tone": kwargs.get("tone", "professional"),
+            "target_audience": kwargs.get("target_audience", ""),
+            "status": "planning",  # Valid status: planning, drafting, review, revising, approved
+        }
+
+        # Get recursion limit (default to 100 for content workflows)
+        recursion_limit = getattr(self, '_recursion_limit', 100)
+
+        # Configure with thread for checkpointing and increased recursion limit
+        config = {
+            "configurable": {"thread_id": session_id or "default"},
+            "recursion_limit": recursion_limit,
+        }
+
+        # Invoke graph with increased recursion limit
+        result = self._compiled_graph.invoke(input_state, config=config)
+        return result
 
     @traceable(name="content_create")
     def create_content(

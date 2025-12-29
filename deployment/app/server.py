@@ -24,6 +24,45 @@ from starlette.middleware.base import BaseHTTPMiddleware
 # Load environment variables from .env file
 load_dotenv()
 
+# Import AIMessage for response extraction
+from langchain_core.messages import AIMessage
+
+
+# ============================================================================
+# Agent Response Helper
+# ============================================================================
+
+def extract_agent_response(result: dict) -> str:
+    """Extract the AI response from agent result state.
+
+    LangGraph agents return state with 'messages' array containing the conversation.
+    This helper extracts the last AI message content as the response.
+
+    Args:
+        result: Agent invoke result (state dict or Pydantic model)
+
+    Returns:
+        The last AI message content, or empty string if not found
+    """
+    # Handle both dict and Pydantic model
+    messages = []
+    if hasattr(result, "messages"):
+        messages = result.messages
+    elif isinstance(result, dict):
+        messages = result.get("messages", [])
+
+    # Find last AI message
+    for msg in reversed(messages):
+        if isinstance(msg, AIMessage):
+            return msg.content
+
+    # Fallback to output key if present (for non-LangGraph agents)
+    if isinstance(result, dict):
+        return result.get("output", result.get("document", ""))
+
+    return ""
+
+
 # ============================================================================
 # LangSmith Tracing Configuration
 # ============================================================================
@@ -1280,31 +1319,16 @@ async def research_agent_invoke(request: ResearchAgentRequest) -> EnterpriseAgen
         )
 
     try:
-        from langchain_core.messages import AIMessage
-
         result = research_agent.research(
             query=request.query,
             session_id=request.session_id,
         )
-
-        # Extract response - handle both dict and Pydantic model
-        messages = []
-        if hasattr(result, "messages"):
-            messages = result.messages
-        elif isinstance(result, dict):
-            messages = result.get("messages", [])
-
-        # Find last AI message
-        response_text = ""
-        for msg in reversed(messages):
-            if isinstance(msg, AIMessage):
-                response_text = msg.content
-                break
-
+        # Extract response from LangGraph state messages
+        response_text = extract_agent_response(result)
         return EnterpriseAgentResponse(
             success=True,
             response=response_text,
-            session_id=request.session_id,
+            session_id=result.get("session_id") if isinstance(result, dict) else getattr(result, "session_id", None),
             agent_type="research",
         )
     except Exception as e:
@@ -1335,19 +1359,24 @@ async def content_agent_invoke(request: ContentAgentRequest) -> EnterpriseAgentR
         )
 
     try:
-        result = content_agent.generate(
+        # Ensure increased recursion limit for content workflows
+        content_agent._recursion_limit = 200
+
+        result = content_agent.create_content(
             topic=request.topic,
             platform=request.platform,
             tone=request.tone,
-            audience=request.audience,
+            target_audience=request.audience,
             session_id=request.session_id,
         )
+        # Extract response from LangGraph state messages
+        response_text = extract_agent_response(result)
         return EnterpriseAgentResponse(
             success=True,
-            response=result.get("output", ""),
-            session_id=result.get("session_id"),
+            response=response_text,
+            session_id=result.get("session_id") if isinstance(result, dict) else getattr(result, "session_id", None),
             agent_type="content",
-            tool_calls=result.get("tool_calls"),
+            tool_calls=result.get("tool_calls") if isinstance(result, dict) else None,
         )
     except Exception as e:
         return EnterpriseAgentResponse(
@@ -1380,12 +1409,14 @@ async def data_analyst_invoke(request: DataAnalystRequest) -> EnterpriseAgentRes
             message=request.message,
             session_id=request.session_id,
         )
+        # Extract response from LangGraph state messages
+        response_text = extract_agent_response(result)
         return EnterpriseAgentResponse(
             success=True,
-            response=result.get("output", ""),
-            session_id=result.get("session_id"),
+            response=response_text,
+            session_id=result.get("session_id") if isinstance(result, dict) else getattr(result, "session_id", None),
             agent_type="data_analyst",
-            tool_calls=result.get("tool_calls"),
+            tool_calls=result.get("tool_calls") if isinstance(result, dict) else None,
         )
     except Exception as e:
         return EnterpriseAgentResponse(
@@ -1466,12 +1497,14 @@ async def document_agent_invoke(request: DocumentAgentRequest) -> EnterpriseAgen
             additional_context=str(getattr(request, 'sections', [])),
             session_id=request.session_id,
         )
+        # Extract response from LangGraph state messages
+        response_text = extract_agent_response(result)
         return EnterpriseAgentResponse(
             success=True,
-            response=result.get("document", result.get("output", "")),
-            session_id=result.get("session_id"),
+            response=response_text,
+            session_id=result.get("session_id") if isinstance(result, dict) else getattr(result, "session_id", None),
             agent_type="document",
-            tool_calls=result.get("tool_calls"),
+            tool_calls=result.get("tool_calls") if isinstance(result, dict) else None,
         )
     except Exception as e:
         return EnterpriseAgentResponse(
@@ -1502,15 +1535,17 @@ async def rag_agent_invoke(request: RAGAgentRequest) -> EnterpriseAgentResponse:
     try:
         result = multilingual_rag_agent.query(
             question=request.query,
-            language=request.language,
+            language=request.language or "auto",  # Default to "auto" if None
             session_id=request.session_id,
         )
+        # Extract response from LangGraph state messages
+        response_text = extract_agent_response(result)
         return EnterpriseAgentResponse(
             success=True,
-            response=result.get("output", ""),
-            session_id=result.get("session_id"),
+            response=response_text,
+            session_id=result.get("session_id") if isinstance(result, dict) else getattr(result, "session_id", None),
             agent_type="multilingual_rag",
-            tool_calls=result.get("tool_calls"),
+            tool_calls=result.get("tool_calls") if isinstance(result, dict) else None,
         )
     except Exception as e:
         return EnterpriseAgentResponse(
@@ -1581,12 +1616,14 @@ async def hitl_support_invoke(request: HITLSupportRequest) -> EnterpriseAgentRes
             session_id=request.session_id,
             user_id=request.user_id,
         )
+        # Extract response from LangGraph state messages
+        response_text = extract_agent_response(result)
         return EnterpriseAgentResponse(
             success=True,
-            response=result.get("output", ""),
-            session_id=result.get("session_id"),
+            response=response_text,
+            session_id=result.get("session_id") if isinstance(result, dict) else getattr(result, "session_id", None),
             agent_type="hitl_support",
-            tool_calls=result.get("tool_calls"),
+            tool_calls=result.get("tool_calls") if isinstance(result, dict) else None,
         )
     except Exception as e:
         return EnterpriseAgentResponse(
@@ -1657,12 +1694,14 @@ async def code_assistant_invoke(request: CodeAssistantRequest) -> EnterpriseAgen
                 session_id=request.session_id,
             )
 
+        # Extract response from LangGraph state messages
+        response_text = extract_agent_response(result)
         return EnterpriseAgentResponse(
             success=True,
-            response=result.get("output", ""),
-            session_id=result.get("session_id"),
+            response=response_text,
+            session_id=result.get("session_id") if isinstance(result, dict) else getattr(result, "session_id", None),
             agent_type="code_assistant",
-            tool_calls=result.get("tool_calls"),
+            tool_calls=result.get("tool_calls") if isinstance(result, dict) else None,
         )
     except Exception as e:
         return EnterpriseAgentResponse(
