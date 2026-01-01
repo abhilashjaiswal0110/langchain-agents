@@ -2,7 +2,7 @@
 
 > **Purpose**: This document serves as the authoritative knowledge source for AI agents working on this repository. It contains architectural decisions, implementation patterns, and guidelines that must be followed when making changes or enhancements.
 
-**Last Updated**: 2026-01-01 (v3.6 - DeepSearch Enhancement)
+**Last Updated**: 2026-01-01 (v3.7 - Enhanced Governance & Security)
 
 ---
 
@@ -890,6 +890,9 @@ The governance framework provides enterprise-grade security, compliance, and ope
 | Audit Logger | Compliance | JSON Lines, privacy hashing, async |
 | Rate Limiter | Protection | Token bucket, Redis support, per-user/agent |
 | Approval Workflow | HITL | Multi-level (L1-L3), callbacks, expiry |
+| PII Detector | Privacy | Regex + Presidio, masking, blocking |
+| Cost Tracker | Budgeting | Token usage, pricing, budget alerts |
+| Anomaly Detector | Security | Rate/error/content anomalies, auto-block |
 | Middleware | Integration | FastAPI middleware stack |
 
 ### Role-Based Access Control (RBAC)
@@ -1002,17 +1005,194 @@ admin_ctx = UserContext(user_id="admin", role=Role.ADMIN)
 response = manager.approve(request.id, admin_ctx, reason="Verified identity")
 ```
 
+### PII Detection
+
+**Purpose:** Detect and mask Personally Identifiable Information in agent inputs/outputs
+
+**Supported PII Types:**
+| Type | Examples | Severity |
+|------|----------|----------|
+| Email | user@example.com | HIGH |
+| Phone | 555-123-4567 | HIGH |
+| Credit Card | 4111111111111111 | CRITICAL |
+| SSN | 123-45-6789 | CRITICAL |
+| API Key | sk-xxxx... | CRITICAL |
+| IP Address | 192.168.1.1 | MEDIUM |
+| Password | password: xxx | CRITICAL |
+
+**Usage:**
+```python
+from app.governance import (
+    PIIDetector, detect_pii, mask_pii, check_for_pii,
+    PIIType, PIISeverity, PIIConfig,
+)
+
+# Simple detection
+matches = detect_pii("Contact john@email.com or 555-123-4567")
+
+# Masking
+masked = mask_pii("My email is john@email.com")
+# Returns: "My email is [EMAIL_REDACTED]"
+
+# Check for critical PII (blocks credit cards, SSN, API keys)
+if check_for_pii("Card: 4111111111111111"):
+    raise Exception("Cannot process sensitive data")
+
+# Custom detector configuration
+config = PIIConfig(
+    enabled=True,
+    use_presidio=True,  # Use Presidio if available
+    block_on_pii=False,
+    allowed_pii_types={PIIType.EMAIL},  # Allow emails through
+)
+detector = PIIDetector(config)
+
+# Add custom pattern
+detector.add_custom_pattern("employee_id", r"EMP-\d{6}", PIISeverity.MEDIUM)
+```
+
+**Presidio Integration:** When `presidio-analyzer` is installed, the detector uses Presidio for enhanced NER-based detection of names, addresses, and other entities.
+
+### Cost Tracking
+
+**Purpose:** Track token usage and costs for budget management and analytics
+
+**Supported Models:**
+| Provider | Model | Input $/1K | Output $/1K |
+|----------|-------|------------|-------------|
+| OpenAI | gpt-4o | 0.005 | 0.015 |
+| OpenAI | gpt-4o-mini | 0.00015 | 0.0006 |
+| Anthropic | claude-3-5-sonnet | 0.003 | 0.015 |
+| Anthropic | claude-3-opus | 0.015 | 0.075 |
+| Anthropic | claude-3-haiku | 0.00025 | 0.00125 |
+
+**Usage:**
+```python
+from app.governance import (
+    CostTracker, track_usage, get_usage_summary,
+    CostConfig, BudgetConfig, ModelPricing,
+)
+
+# Track usage
+usage = track_usage(
+    model="gpt-4o-mini",
+    input_tokens=1000,
+    output_tokens=500,
+    user_id="user123",
+    agent_type="research",
+)
+print(f"Cost: ${usage.cost:.6f}")
+
+# Get usage summary
+summary = get_usage_summary(user_id="user123")
+print(f"Total cost: ${summary.total_cost:.4f}")
+print(f"By model: {summary.by_model}")
+
+# Budget configuration
+config = CostConfig(
+    budget=BudgetConfig(
+        daily_limit=100.0,
+        monthly_limit=2000.0,
+        per_user_daily=10.0,
+        alert_threshold=0.8,  # Alert at 80%
+    ),
+    alert_callback=lambda t, c, l: print(f"Budget alert: {t}"),
+)
+tracker = CostTracker(config)
+
+# Check budget
+if tracker.check_budget(user_id="user123", period="daily"):
+    # Within budget
+    pass
+
+# Add custom model pricing
+tracker.add_pricing(ModelPricing(
+    model_name="custom-model",
+    provider=ModelProvider.CUSTOM,
+    input_price_per_1k=0.01,
+    output_price_per_1k=0.02,
+))
+```
+
+### Anomaly Detection
+
+**Purpose:** Detect unusual patterns that may indicate security threats or abuse
+
+**Anomaly Types:**
+| Category | Type | Description |
+|----------|------|-------------|
+| Rate | HIGH_REQUEST_RATE | Too many requests in window |
+| Rate | BURST_ACTIVITY | Spike in requests per second |
+| Rate | OFF_HOURS_ACTIVITY | Unusual activity timing |
+| Error | HIGH_ERROR_RATE | Excessive failures |
+| Error | REPEATED_FAILURES | Consecutive failures |
+| Error | AUTH_FAILURES | Multiple auth failures |
+| Content | LARGE_INPUT | Oversized input |
+| Content | PROMPT_INJECTION | Injection attempt patterns |
+| Performance | HIGH_LATENCY | Slow responses |
+
+**Usage:**
+```python
+from app.governance import (
+    AnomalyDetector, record_event, check_for_anomalies,
+    AnomalyConfig, RateConfig, AnomalySeverity,
+)
+
+# Record events
+anomalies = record_event(
+    user_id="user123",
+    agent_type="research",
+    event_type="request",
+    success=True,
+    metadata={
+        "input_length": 500,
+        "response_time_ms": 1200,
+    },
+)
+
+# Check for recent anomalies
+anomalies = check_for_anomalies(user_id="user123")
+for anomaly in anomalies:
+    print(f"{anomaly.anomaly_type}: {anomaly.description}")
+
+# Get user risk score
+detector = get_anomaly_detector()
+risk = detector.get_user_risk_score("user123")  # 0.0 to 1.0
+
+# Add custom detection rule
+detector.add_rule(
+    "slow_response",
+    lambda e: e.metadata.get("response_time_ms", 0) > 5000,
+    AnomalySeverity.MEDIUM,
+    "Response time exceeds 5 seconds",
+)
+
+# Configuration with auto-blocking
+config = AnomalyConfig(
+    rate_config=RateConfig(
+        max_requests_per_window=100,
+        burst_threshold=10,
+    ),
+    auto_block=True,  # Auto-block on critical anomalies
+    alert_callback=lambda a: print(f"Anomaly: {a.anomaly_type}"),
+)
+```
+
 ### FastAPI Middleware Integration
 
 ```python
 from app.governance import setup_governance_middleware
 
-# Add full governance stack
+# Add full governance stack with Phase 3 components
 setup_governance_middleware(
     app,
     enable_rbac=True,
     enable_rate_limit=True,
     enable_audit=True,
+    enable_pii=True,           # NEW: PII detection
+    enable_anomaly=True,       # NEW: Anomaly detection
+    block_on_pii=False,        # Block requests with critical PII
+    block_on_anomaly=False,    # Block on critical anomalies
     exclude_paths=["/health", "/ready", "/docs"],
 )
 
@@ -1053,6 +1233,24 @@ RATE_LIMIT_DEFAULT=100
 APPROVAL_WORKFLOW_ENABLED=true
 APPROVAL_AUTO_APPROVE_L1=false
 APPROVAL_EXPIRY_HOURS=24
+
+# PII Detection (Phase 3)
+PII_DETECTION_ENABLED=true
+PII_USE_PRESIDIO=true
+PII_BLOCK_ON_CRITICAL=false
+
+# Cost Tracking (Phase 3)
+COST_TRACKING_ENABLED=true
+COST_DAILY_LIMIT=100.0
+COST_MONTHLY_LIMIT=2000.0
+COST_PER_USER_DAILY=10.0
+COST_ALERT_THRESHOLD=0.8
+
+# Anomaly Detection (Phase 3)
+ANOMALY_DETECTION_ENABLED=true
+ANOMALY_MAX_REQUESTS_PER_MINUTE=100
+ANOMALY_BURST_THRESHOLD=10
+ANOMALY_AUTO_BLOCK=false
 ```
 
 ---
@@ -1721,6 +1919,49 @@ from langgraph.prebuilt import create_react_agent
 ---
 
 ## Change Log
+
+### 2026-01-01 - Enhanced Governance & Security (v3.7)
+
+**Added**:
+- **PII Detection**: Privacy protection for agent inputs/outputs
+  - `app/governance/pii_detector.py` - Regex + Presidio-based PII detection
+  - Supports: email, phone, credit cards, SSN, API keys, passwords, IP addresses
+  - Masking with configurable redaction format
+  - Severity levels: LOW, MEDIUM, HIGH, CRITICAL
+
+- **Cost Tracking**: Token usage and budget management
+  - `app/governance/cost_tracker.py` - Multi-model pricing and tracking
+  - Pre-configured pricing for OpenAI and Anthropic models
+  - Daily/monthly budget limits with alerts
+  - Usage summaries by user, agent, and model
+
+- **Anomaly Detection**: Security threat and abuse detection
+  - `app/governance/anomaly_detector.py` - Pattern-based anomaly detection
+  - Rate anomalies: high request rate, burst activity, off-hours
+  - Error anomalies: high error rate, consecutive failures, auth failures
+  - Content anomalies: large input/output, prompt injection detection
+  - User risk scoring and auto-blocking
+
+- **Middleware Integration**: Extended governance middleware
+  - `PIIMiddleware` - Request PII scanning with optional blocking
+  - `AnomalyMiddleware` - Event recording and anomaly detection
+  - Updated `setup_governance_middleware()` with new options
+
+**Testing**:
+- 59 unit tests for Phase 3 components (all passing)
+- Tests cover PII detection, cost tracking, anomaly detection, and middleware integration
+
+**Files Added**:
+- `deployment/app/governance/pii_detector.py` - ~550 lines
+- `deployment/app/governance/cost_tracker.py` - ~500 lines
+- `deployment/app/governance/anomaly_detector.py` - ~650 lines
+- `deployment/tests/test_governance_phase3.py` - ~650 lines
+
+**Files Modified**:
+- `deployment/app/governance/__init__.py` - Added new exports
+- `deployment/app/governance/middleware.py` - Added PII and Anomaly middleware
+
+---
 
 ### 2026-01-01 - DeepSearch Enhancement (v3.6)
 

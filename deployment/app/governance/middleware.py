@@ -4,6 +4,8 @@ Provides:
 - Request authentication and RBAC
 - Rate limiting middleware
 - Audit logging middleware
+- PII detection and masking middleware
+- Anomaly detection middleware
 - Governance context injection
 - Error handling for governance exceptions
 """
@@ -386,6 +388,234 @@ class AuditMiddleware(BaseHTTPMiddleware):
         return None
 
 
+class PIIMiddleware(BaseHTTPMiddleware):
+    """Middleware for PII detection in requests."""
+
+    def __init__(
+        self,
+        app: ASGIApp,
+        exclude_paths: list[str] | None = None,
+        block_on_pii: bool = False,
+        mask_response: bool = False,
+    ) -> None:
+        """Initialize PII middleware.
+
+        Args:
+            app: ASGI application.
+            exclude_paths: Paths to exclude from PII detection.
+            block_on_pii: Whether to block requests with critical PII.
+            mask_response: Whether to mask PII in responses.
+        """
+        super().__init__(app)
+        self.exclude_paths = exclude_paths or ["/health", "/ready", "/docs"]
+        self.block_on_pii = block_on_pii
+        self.mask_response = mask_response
+
+    async def dispatch(
+        self,
+        request: Request,
+        call_next: Callable,
+    ) -> Response:
+        """Process request with PII detection.
+
+        Args:
+            request: Incoming request.
+            call_next: Next middleware/handler.
+
+        Returns:
+            Response from handler.
+        """
+        # Skip excluded paths
+        if request.url.path in self.exclude_paths:
+            return await call_next(request)
+
+        # Try to import PII detector (may not be initialized)
+        try:
+            from app.governance.pii_detector import (
+                PIIBlockedError,
+                PIISeverity,
+                PIIType,
+                check_for_pii,
+                get_pii_detector,
+            )
+
+            detector = get_pii_detector()
+
+            # Check request body for PII if blocking is enabled
+            if self.block_on_pii:
+                try:
+                    body = await request.body()
+                    if body:
+                        body_text = body.decode("utf-8", errors="ignore")
+                        result = detector.analyze(body_text)
+
+                        # Block on critical PII
+                        if result.severity == PIISeverity.CRITICAL:
+                            critical_types = {
+                                m.pii_type for m in result.matches
+                                if m.severity == PIISeverity.CRITICAL
+                            }
+                            raise PIIBlockedError(
+                                "Request contains sensitive PII",
+                                pii_types=critical_types,
+                                severity=PIISeverity.CRITICAL,
+                            )
+
+                        # Store for later use
+                        request.state._body = body
+                except UnicodeDecodeError:
+                    pass
+
+            return await call_next(request)
+
+        except Exception as e:
+            # Re-raise PII blocked errors
+            if "PIIBlockedError" in type(e).__name__:
+                raise
+            # Log but don't block on PII detector errors
+            import logging
+
+            logging.getLogger(__name__).warning(f"PII middleware error: {e}")
+            return await call_next(request)
+
+
+class AnomalyMiddleware(BaseHTTPMiddleware):
+    """Middleware for anomaly detection."""
+
+    def __init__(
+        self,
+        app: ASGIApp,
+        exclude_paths: list[str] | None = None,
+        block_on_critical: bool = False,
+    ) -> None:
+        """Initialize anomaly middleware.
+
+        Args:
+            app: ASGI application.
+            exclude_paths: Paths to exclude from anomaly detection.
+            block_on_critical: Whether to block on critical anomalies.
+        """
+        super().__init__(app)
+        self.exclude_paths = exclude_paths or ["/health", "/ready", "/docs"]
+        self.block_on_critical = block_on_critical
+
+    async def dispatch(
+        self,
+        request: Request,
+        call_next: Callable,
+    ) -> Response:
+        """Process request with anomaly detection.
+
+        Args:
+            request: Incoming request.
+            call_next: Next middleware/handler.
+
+        Returns:
+            Response from handler.
+        """
+        # Skip excluded paths
+        if request.url.path in self.exclude_paths:
+            return await call_next(request)
+
+        start_time = time.time()
+
+        # Get user context
+        gov_context = get_governance_context(request)
+        user_id = gov_context.user_context.user_id if gov_context else "anonymous"
+
+        try:
+            from app.governance.anomaly_detector import (
+                AnomalyBlockedError,
+                AnomalySeverity,
+                get_anomaly_detector,
+                record_event,
+            )
+
+            detector = get_anomaly_detector()
+
+            # Check if user is blocked
+            if self.block_on_critical and detector.is_blocked(user_id):
+                raise AnomalyBlockedError(
+                    f"User {user_id} is blocked due to anomalies",
+                    user_id=user_id,
+                    anomalies=detector.get_anomalies(user_id=user_id, limit=5),
+                )
+
+            # Process request
+            response = await call_next(request)
+
+            # Record event
+            duration_ms = int((time.time() - start_time) * 1000)
+            agent_type = self._extract_agent_type(request.url.path)
+
+            # Get content length if available
+            content_length = 0
+            if hasattr(response, "headers"):
+                content_length = int(response.headers.get("content-length", 0))
+
+            anomalies = record_event(
+                user_id=user_id,
+                agent_type=agent_type or "unknown",
+                event_type="request",
+                success=response.status_code < 400,
+                metadata={
+                    "response_time_ms": duration_ms,
+                    "status_code": response.status_code,
+                    "path": request.url.path,
+                    "method": request.method,
+                    "output_length": content_length,
+                },
+            )
+
+            # Block on critical anomalies (for future requests)
+            if self.block_on_critical:
+                for anomaly in anomalies:
+                    if anomaly.severity == AnomalySeverity.CRITICAL:
+                        import logging
+
+                        logging.getLogger(__name__).warning(
+                            f"Critical anomaly detected for user {user_id}: {anomaly.anomaly_type}"
+                        )
+
+            return response
+
+        except Exception as e:
+            # Re-raise anomaly blocked errors
+            if "AnomalyBlockedError" in type(e).__name__:
+                raise
+            # Log but don't block on anomaly detector errors
+            import logging
+
+            logging.getLogger(__name__).warning(f"Anomaly middleware error: {e}")
+            return await call_next(request)
+
+    def _extract_agent_type(self, path: str) -> str | None:
+        """Extract agent type from path.
+
+        Args:
+            path: Request path.
+
+        Returns:
+            Agent type or None.
+        """
+        agent_patterns = [
+            "/chat",
+            "/rag",
+            "/agent",
+            "/langgraph",
+            "/research",
+            "/servicenow",
+            "/helpdesk",
+            "/enterprise",
+        ]
+
+        for pattern in agent_patterns:
+            if pattern in path.lower():
+                return pattern.strip("/")
+
+        return None
+
+
 class GovernanceExceptionMiddleware(BaseHTTPMiddleware):
     """Middleware for handling governance exceptions."""
 
@@ -430,14 +660,57 @@ class GovernanceExceptionMiddleware(BaseHTTPMiddleware):
                 },
             )
 
+        except Exception as e:
+            # Handle PII and Anomaly blocked errors
+            error_type = type(e).__name__
+
+            if error_type == "PIIBlockedError":
+                return JSONResponse(
+                    status_code=400,
+                    content={
+                        "error": "Request blocked",
+                        "message": "Request contains sensitive information that cannot be processed",
+                        "severity": str(getattr(e, "severity", "critical")),
+                    },
+                )
+
+            if error_type == "AnomalyBlockedError":
+                return JSONResponse(
+                    status_code=403,
+                    content={
+                        "error": "Access blocked",
+                        "message": "Access has been blocked due to unusual activity",
+                        "user_id": getattr(e, "user_id", "unknown"),
+                    },
+                )
+
+            if error_type == "BudgetExceededError":
+                return JSONResponse(
+                    status_code=402,
+                    content={
+                        "error": "Budget exceeded",
+                        "message": str(e),
+                        "budget_type": getattr(e, "budget_type", "unknown"),
+                        "current": getattr(e, "current", 0),
+                        "limit": getattr(e, "limit", 0),
+                    },
+                )
+
+            # Re-raise unhandled exceptions
+            raise
+
 
 def setup_governance_middleware(
     app: FastAPI,
     enable_rbac: bool = True,
     enable_rate_limit: bool = True,
     enable_audit: bool = True,
+    enable_pii: bool = False,
+    enable_anomaly: bool = False,
     api_key_header: str = "X-API-Key",
     exclude_paths: list[str] | None = None,
+    block_on_pii: bool = False,
+    block_on_anomaly: bool = False,
 ) -> None:
     """Set up governance middleware stack on FastAPI app.
 
@@ -446,18 +719,38 @@ def setup_governance_middleware(
         enable_rbac: Whether to enable RBAC middleware.
         enable_rate_limit: Whether to enable rate limiting.
         enable_audit: Whether to enable audit logging.
+        enable_pii: Whether to enable PII detection.
+        enable_anomaly: Whether to enable anomaly detection.
         api_key_header: Header name for API key.
         exclude_paths: Paths to exclude from governance.
+        block_on_pii: Whether to block requests with critical PII.
+        block_on_anomaly: Whether to block on critical anomalies.
 
     Note:
         Middleware is applied in reverse order of addition.
-        Order will be: Exception -> Audit -> RateLimit -> RBAC
+        Order will be: Exception -> Anomaly -> PII -> Audit -> RateLimit -> RBAC
     """
     default_exclude = ["/health", "/ready", "/docs", "/openapi.json", "/redoc"]
     exclude = exclude_paths or default_exclude
 
     # Add exception handler first (will be outermost)
     app.add_middleware(GovernanceExceptionMiddleware)
+
+    # Add anomaly detection
+    if enable_anomaly:
+        app.add_middleware(
+            AnomalyMiddleware,
+            exclude_paths=exclude,
+            block_on_critical=block_on_anomaly,
+        )
+
+    # Add PII detection
+    if enable_pii:
+        app.add_middleware(
+            PIIMiddleware,
+            exclude_paths=exclude,
+            block_on_pii=block_on_pii,
+        )
 
     # Add audit logging
     if enable_audit:
