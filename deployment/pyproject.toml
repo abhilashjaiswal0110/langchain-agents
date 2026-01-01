@@ -43,6 +43,10 @@ dependencies = [
     "psycopg[binary,pool]>=3.2.0",
     # HuggingFace embeddings (fallback for semantic memory)
     "sentence-transformers>=3.0.0",
+    # Azure AD Authentication
+    "msal>=1.26.0",
+    "python-jose[cryptography]>=3.3.0",
+    "httpx>=0.27.0",
 ]
 
 [project.optional-dependencies]
