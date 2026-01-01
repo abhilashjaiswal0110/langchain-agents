@@ -2,7 +2,7 @@
 
 > **Purpose**: This document serves as the authoritative knowledge source for AI agents working on this repository. It contains architectural decisions, implementation patterns, and guidelines that must be followed when making changes or enhancements.
 
-**Last Updated**: 2025-12-29 (v3.2 - Agent Fixes and Optimizations)
+**Last Updated**: 2026-01-01 (v3.6 - DeepSearch Enhancement)
 
 ---
 
@@ -18,13 +18,16 @@
 8. [Web UI & CLI](#web-ui--cli)
 9. [External Integrations](#external-integrations)
 10. [Enterprise Agents](#enterprise-agents)
-11. [Dependencies](#dependencies)
-12. [Development Patterns](#development-patterns)
-13. [Testing Strategy](#testing-strategy)
-14. [Deployment](#deployment)
-15. [Common Tasks](#common-tasks)
-16. [Troubleshooting](#troubleshooting)
-17. [Change Log](#change-log)
+11. [Governance Framework](#governance-framework)
+12. [MCP Integration](#mcp-integration)
+13. [DeepSearch Research](#deepsearch-research)
+14. [Dependencies](#dependencies)
+15. [Development Patterns](#development-patterns)
+16. [Testing Strategy](#testing-strategy)
+17. [Deployment](#deployment)
+18. [Common Tasks](#common-tasks)
+19. [Troubleshooting](#troubleshooting)
+20. [Change Log](#change-log)
 
 ---
 
@@ -152,12 +155,32 @@ deployment/
 │   │   ├── agent.py             # LangGraph React agent
 │   │   ├── langgraph_agent.py   # LangGraph agent with custom tools
 │   │   └── doc_rag.py           # Document RAG with file upload
-│   ├── agents/                  # IT Support agents (NEW)
+│   ├── agents/                  # IT Support agents
 │   │   ├── __init__.py          # Exports all agents
 │   │   ├── it_helpdesk.py       # IT Helpdesk Agent
 │   │   ├── servicenow_agent.py  # ServiceNow ITSM Agent
-│   │   └── conversation_manager.py  # Session management
-│   └── static/                  # Static web files (NEW)
+│   │   ├── conversation_manager.py  # Session management
+│   │   └── research/            # DeepSearch research components (NEW)
+│   │       ├── __init__.py      # Module exports
+│   │       ├── research_agent.py    # Basic research agent
+│   │       ├── planner.py       # Query decomposition
+│   │       ├── source_manager.py    # Citation tracking
+│   │       ├── search_providers.py  # Multi-provider search
+│   │       └── deep_search_agent.py # Enhanced research agent
+│   ├── governance/              # Governance framework
+│   │   ├── __init__.py          # Module exports
+│   │   ├── rbac.py              # Role-based access control
+│   │   ├── audit_logger.py      # Compliance audit logging
+│   │   ├── rate_limiter.py      # Token bucket rate limiting
+│   │   ├── approval_workflow.py # Multi-level approval workflows
+│   │   └── middleware.py        # FastAPI middleware integration
+│   ├── mcp/                     # MCP integration (NEW)
+│   │   ├── __init__.py          # Module exports
+│   │   ├── server.py            # FastMCP server with tools
+│   │   ├── gateway.py           # Access control gateway
+│   │   ├── servicenow_client.py # Real ServiceNow REST API
+│   │   └── tools/               # Tool implementations
+│   └── static/                  # Static web files
 │       └── chat.html            # Web UI for demos
 ├── tests/                       # Test suite
 │   ├── __init__.py
@@ -855,6 +878,445 @@ Where `{agent}` is: `research`, `content`, `data-analyst`, `document`, `multilin
 
 ---
 
+## Governance Framework
+
+### Overview
+
+The governance framework provides enterprise-grade security, compliance, and operational controls for agent deployments:
+
+| Component | Purpose | Key Features |
+|-----------|---------|--------------|
+| RBAC | Access control | 5 roles, permissions, API key mapping |
+| Audit Logger | Compliance | JSON Lines, privacy hashing, async |
+| Rate Limiter | Protection | Token bucket, Redis support, per-user/agent |
+| Approval Workflow | HITL | Multi-level (L1-L3), callbacks, expiry |
+| Middleware | Integration | FastAPI middleware stack |
+
+### Role-Based Access Control (RBAC)
+
+**Roles:**
+| Role | Permissions | Use Case |
+|------|-------------|----------|
+| ADMIN | All (`*`) | System administrators |
+| OPERATOR | Invoke, approve L1/L2, audit read | IT operators |
+| USER | Invoke, read, list agents | Regular users |
+| VIEWER | Read, list agents, audit read | Auditors |
+| SERVICE | Invoke, read, list agents | API integrations |
+
+**Usage:**
+```python
+from app.governance import (
+    get_rbac_manager, check_permission, require_permission,
+    Permission, Role, UserContext
+)
+
+# Check permission
+if check_permission("sk-admin-token", Permission.SYSTEM_ADMIN):
+    # Admin action
+
+# Require permission (raises PermissionDeniedError)
+ctx = require_permission("sk-user-token", Permission.AGENT_INVOKE)
+
+# API key patterns for auto-role detection:
+# sk-admin-*   -> ADMIN
+# sk-operator-* -> OPERATOR
+# sk-service-* -> SERVICE
+```
+
+### Audit Logging
+
+**Format:** JSON Lines for easy parsing and compliance tools
+
+```python
+from app.governance import audit_agent_response, get_audit_logger
+
+# Log agent response
+entry = audit_agent_response(
+    user_id="user123",
+    agent_type="helpdesk",
+    input_text="Help me reset password",
+    output_text="I can help with that...",
+    duration_ms=1500,
+)
+
+# Query logs
+logger = get_audit_logger()
+entries = logger.query(user_id="user123", action=AuditAction.AGENT_INVOKE)
+
+# Export logs
+logger.export("/path/to/export.jsonl")
+```
+
+**Privacy:** Input/output are SHA-256 hashed by default. Set `log_inputs=True` / `log_outputs=True` in config to log full content.
+
+### Rate Limiting
+
+**Token Bucket Algorithm** with support for:
+- Per-user limits (default: 100/min)
+- Per-agent limits (default: 30/min)
+- Global limits (default: 1000/min)
+- Burst allowance (1.5x multiplier)
+
+```python
+from app.governance import check_rate_limit, require_rate_limit
+
+# Check rate limit
+result = await check_rate_limit(user_id="user123", agent_type="research")
+if not result.allowed:
+    print(f"Retry after {result.retry_after} seconds")
+
+# Require rate limit (raises RateLimitExceededError)
+await require_rate_limit("user123", "research")
+```
+
+**Backends:**
+- In-memory (default, single instance)
+- Redis (distributed, production)
+
+### Approval Workflows
+
+**Levels:**
+| Level | Actions | Approvers |
+|-------|---------|-----------|
+| L1 | Create incident, share docs | Operators, Admins |
+| L2 | Close incident, password reset, create change | Operators (L2), Admins |
+| L3 | System restart, access revoke, config change | Admins only |
+
+```python
+from app.governance import (
+    request_approval, get_approval_manager,
+    ActionType, ApprovalLevel
+)
+
+# Request approval
+request = await request_approval(
+    action_type=ActionType.PASSWORD_RESET,
+    requester_id="user123",
+    agent_type="helpdesk",
+    action_details={"username": "jsmith"},
+)
+
+# Approve/reject
+manager = get_approval_manager()
+admin_ctx = UserContext(user_id="admin", role=Role.ADMIN)
+response = manager.approve(request.id, admin_ctx, reason="Verified identity")
+```
+
+### FastAPI Middleware Integration
+
+```python
+from app.governance import setup_governance_middleware
+
+# Add full governance stack
+setup_governance_middleware(
+    app,
+    enable_rbac=True,
+    enable_rate_limit=True,
+    enable_audit=True,
+    exclude_paths=["/health", "/ready", "/docs"],
+)
+
+# Use in routes
+from app.governance import require_admin, require_agent_invoke
+
+@app.get("/admin/settings")
+async def admin_settings(user: UserContext = Depends(require_admin)):
+    return {"settings": "..."}
+
+@app.post("/agent/invoke")
+async def invoke(user: UserContext = Depends(require_agent_invoke)):
+    return {"result": "..."}
+```
+
+### Environment Variables
+
+```bash
+# RBAC
+RBAC_ENABLED=true
+RBAC_DEFAULT_ROLE=viewer
+RBAC_STRICT_MODE=false
+RBAC_ADMIN_API_KEYS=sk-admin-key1,sk-admin-key2
+
+# Audit
+AUDIT_ENABLED=true
+AUDIT_LOG_PATH=./logs/audit.jsonl
+AUDIT_LOG_INPUTS=false
+AUDIT_LOG_OUTPUTS=false
+
+# Rate Limiting
+RATE_LIMIT_ENABLED=true
+RATE_LIMIT_BACKEND=memory  # or "redis"
+RATE_LIMIT_REDIS_URL=redis://localhost:6379
+RATE_LIMIT_DEFAULT=100
+
+# Approval Workflow
+APPROVAL_WORKFLOW_ENABLED=true
+APPROVAL_AUTO_APPROVE_L1=false
+APPROVAL_EXPIRY_HOURS=24
+```
+
+---
+
+## MCP Integration
+
+### Overview
+
+The MCP (Model Context Protocol) integration exposes enterprise agents as tools that can be used by MCP-compatible clients like Claude Desktop, VS Code extensions, or other AI applications.
+
+| Component | Purpose | Key Features |
+|-----------|---------|--------------|
+| FastMCP Server | Tool exposure | 12 tools across 5 categories |
+| Gateway | Access control | Auth, rate limiting, audit |
+| ServiceNow Client | ITSM integration | Live + simulation modes |
+
+### Available Tools
+
+| Category | Tool | Description |
+|----------|------|-------------|
+| **Research** | `research_topic` | Web research with citations |
+| | `quick_search` | Fast simple searches |
+| **ServiceNow** | `create_incident` | Create new incidents |
+| | `search_incidents` | Search existing incidents |
+| | `get_incident` | Get incident details |
+| | `update_incident` | Update incident (notes, state) |
+| | `query_cmdb` | Query configuration items |
+| **Documents** | `generate_document` | Generate SOP/policy/WLI |
+| | `generate_sop` | Generate Standard Operating Procedure |
+| **IT Support** | `it_support_query` | General IT questions |
+| | `troubleshoot_issue` | Troubleshooting guidance |
+| **Code** | `review_code` | Code review |
+| | `explain_code` | Code explanation |
+
+### Running the MCP Server
+
+```bash
+# Standalone (stdio transport for Claude Desktop)
+python -m app.mcp.server
+
+# With HTTP transport
+MCP_TRANSPORT=http python -m app.mcp.server
+```
+
+### ServiceNow Client
+
+Supports both live API calls and simulation mode for development:
+
+```python
+from app.mcp import get_servicenow_client
+
+client = get_servicenow_client()
+
+# Create incident (simulation mode by default)
+result = await client.create_incident(
+    short_description="Password reset needed",
+    description="User forgot password",
+    priority="3",
+)
+
+# Search incidents
+incidents = await client.search_incidents("password", limit=10)
+
+# Query CMDB
+servers = await client.query_cmdb("cmdb_ci_server", "web-server")
+```
+
+### MCP Gateway
+
+Rate limiting and access control for MCP tools:
+
+```python
+from app.mcp import get_mcp_gateway, MCPClientInfo
+
+gateway = get_mcp_gateway()
+
+# Register authenticated client
+gateway.register_token("my-token", MCPClientInfo(
+    client_id="client1",
+    user_id="user123",
+    role="admin",
+))
+
+# Block specific tools
+gateway.config.blocked_tools = ["dangerous_tool"]
+
+# Get statistics
+stats = gateway.get_stats()
+```
+
+### Environment Variables
+
+```bash
+# MCP Server
+MCP_TRANSPORT=stdio  # or "http"
+MCP_GATEWAY_ENABLED=true
+MCP_REQUIRE_AUTH=false
+MCP_RATE_LIMIT_ENABLED=true
+MCP_RATE_LIMIT_PER_MINUTE=60
+
+# ServiceNow
+SERVICENOW_INSTANCE=dev12345
+SERVICENOW_USERNAME=admin
+SERVICENOW_PASSWORD=secret
+SERVICENOW_MODE=simulation  # or "live"
+```
+
+---
+
+## DeepSearch Research
+
+### Overview
+
+DeepSearch provides advanced research capabilities beyond the basic Research Agent:
+
+- **Query Decomposition**: Breaks complex queries into focused sub-queries
+- **Multi-Provider Search**: Supports Tavily, DuckDuckGo, and simulated search
+- **Source Credibility Scoring**: Automatic credibility assessment for sources
+- **Citation Management**: Tracks and exports citations in multiple formats
+- **Structured Research Reports**: Generates comprehensive research reports
+
+### Components
+
+| Component | Purpose |
+|-----------|---------|
+| `ResearchPlanner` | Decomposes queries into sub-queries with execution strategy |
+| `SourceManager` | Tracks sources with credibility scoring and citation formatting |
+| `SearchProviderManager` | Unified interface to multiple search providers |
+| `DeepSearchAgent` | Orchestrates the full research workflow |
+
+### Usage
+
+```python
+from app.agents.research import (
+    DeepSearchAgent,
+    ResearchDepth,
+    ResearchReport,
+)
+
+# Create agent
+agent = DeepSearchAgent()
+
+# Perform research
+report: ResearchReport = await agent.research(
+    query="What are the best practices for AI agent development?",
+    depth=ResearchDepth.COMPREHENSIVE,  # quick, standard, comprehensive
+    max_sources=10,
+)
+
+# Access results
+print(report.summary)
+print(report.findings)
+print(report.to_markdown())
+
+# Get high-credibility sources
+for source in report.get_high_credibility_sources():
+    print(f"{source.title}: {source.credibility_score}")
+```
+
+### Query Planner
+
+```python
+from app.agents.research import ResearchPlanner, QueryIntent
+
+planner = ResearchPlanner()
+
+# Classify query intent
+intent = planner.classify_intent("Compare React vs Vue")
+# Returns: QueryIntent.COMPARISON
+
+# Decompose into sub-queries
+plan = planner.decompose("What is the future of AI agents?", depth="standard")
+
+# Execute in order
+for batch in plan.get_execution_order():
+    for sub_query in batch:
+        print(f"Priority {sub_query.priority}: {sub_query.query}")
+```
+
+### Source Management
+
+```python
+from app.agents.research import (
+    SourceManager,
+    CitationFormat,
+    CredibilityLevel,
+)
+
+manager = SourceManager()
+
+# Add sources with auto-credibility scoring
+source = manager.add_source(
+    url="https://arxiv.org/paper/123",
+    title="Research Paper",
+    content_summary="Summary...",
+    author="Dr. Smith",
+)
+
+print(source.credibility)  # CredibilityLevel.HIGH
+print(source.credibility_score)  # 0.85
+
+# Export citations
+citations = manager.export_citations(CitationFormat.APA)
+```
+
+### Search Providers
+
+```python
+from app.agents.research import (
+    SearchProviderManager,
+    SearchProviderType,
+)
+
+manager = SearchProviderManager()
+
+# Search with automatic provider selection
+response = await manager.search("LangChain agents", max_results=5)
+
+# Or specify provider
+response = await manager.search(
+    "AI research",
+    provider_type=SearchProviderType.TAVILY,
+)
+
+# Parallel search
+responses = await manager.search_parallel(
+    queries=["query1", "query2", "query3"],
+    max_results_per_query=3,
+)
+```
+
+### Environment Variables
+
+```bash
+# Search Providers
+TAVILY_API_KEY=tvly-xxxxx      # For Tavily search (recommended)
+# DuckDuckGo requires no API key
+
+# Search defaults
+SEARCH_DEFAULT_PROVIDER=tavily  # or "duckduckgo", "simulated"
+SEARCH_MAX_RESULTS=10
+```
+
+### Credibility Scoring
+
+Sources are scored based on multiple factors:
+
+| Factor | Weight | Examples |
+|--------|--------|----------|
+| Domain reputation | 40% | .gov (0.95), .edu (0.9), arxiv.org (0.9) |
+| Source type | 30% | Academic paper (0.9), Documentation (0.85), Blog (0.5) |
+| Content quality | 20% | Has author, meaningful title, keywords |
+| Recency | 10% | Within 30 days (1.0), within 1 year (0.6) |
+
+### Execution Strategies
+
+| Strategy | Description |
+|----------|-------------|
+| `PARALLEL` | Execute all sub-queries simultaneously |
+| `SEQUENTIAL` | Execute sub-queries in priority order |
+| `HIERARCHICAL` | Execute based on dependencies (results feed next query) |
+
+---
+
 ## Dependencies
 
 ### Core Dependencies
@@ -1259,6 +1721,110 @@ from langgraph.prebuilt import create_react_agent
 ---
 
 ## Change Log
+
+### 2026-01-01 - DeepSearch Enhancement (v3.6)
+
+**Added**:
+- **DeepSearch Research System**: Advanced multi-step research capabilities
+  - `app/agents/research/planner.py` - Query decomposition with execution strategies
+  - `app/agents/research/source_manager.py` - Citation tracking with credibility scoring
+  - `app/agents/research/search_providers.py` - Multi-provider search abstraction
+  - `app/agents/research/deep_search_agent.py` - Enhanced research agent orchestration
+
+**Features**:
+- **Query Planning**: LLM-powered query decomposition into focused sub-queries
+- **Execution Strategies**: Parallel, sequential, and hierarchical execution modes
+- **Source Credibility**: Automatic scoring based on domain, type, content, and recency
+- **Citation Formats**: Support for APA, MLA, IEEE, Chicago, Markdown, and plain text
+- **Search Providers**: Tavily (AI-optimized), DuckDuckGo (no API key), Simulated (testing)
+- **Research Reports**: Structured reports with findings, sources, and markdown export
+
+**Key Classes**:
+- `ResearchPlanner` - Decomposes complex queries into sub-queries
+- `SourceManager` - Manages sources with credibility scoring
+- `SearchProviderManager` - Unified interface to multiple search backends
+- `DeepSearchAgent` - Full research workflow orchestration
+
+**Testing**:
+- 61 unit tests for DeepSearch module (all passing)
+- Tests cover planner, source manager, search providers, and agent integration
+- Integration tests with mocked LLM responses
+
+**Files Added**:
+- `deployment/app/agents/research/planner.py` - ~350 lines
+- `deployment/app/agents/research/source_manager.py` - ~550 lines
+- `deployment/app/agents/research/search_providers.py` - ~500 lines
+- `deployment/app/agents/research/deep_search_agent.py` - ~450 lines
+- `deployment/tests/test_deep_search.py` - ~700 lines
+
+---
+
+### 2025-12-31 - MCP Integration (v3.5)
+
+**Added**:
+- **MCP Server**: FastMCP server exposing enterprise agents as tools
+  - `app/mcp/server.py` - 12 tools across 5 categories (research, servicenow, docs, IT support, code)
+  - `app/mcp/gateway.py` - Access control with auth, rate limiting, audit logging
+  - `app/mcp/servicenow_client.py` - Real ServiceNow REST API client with simulation mode
+
+**Features**:
+- **Research Tools**: `research_topic`, `quick_search` for web research
+- **ServiceNow Tools**: Full ITSM integration (incidents, CMDB, changes)
+- **Document Tools**: Generate SOPs, policies, WLIs
+- **IT Support Tools**: General IT queries and troubleshooting
+- **Code Tools**: Code review and explanation
+
+**ServiceNow Client**:
+- Dual mode: `simulation` (default) for development, `live` for production
+- Full incident lifecycle: create, search, get, update
+- CMDB queries for configuration items
+- Change request creation
+
+**Testing**:
+- 48 unit tests for MCP module (all passing)
+- Tests cover gateway, ServiceNow client, and integration scenarios
+
+**Files Added**:
+- `deployment/app/mcp/__init__.py` - Module exports
+- `deployment/app/mcp/server.py` - ~450 lines
+- `deployment/app/mcp/gateway.py` - ~300 lines
+- `deployment/app/mcp/servicenow_client.py` - ~400 lines
+- `deployment/tests/test_mcp.py` - ~500 lines
+
+---
+
+### 2025-12-31 - Governance Framework (v3.4)
+
+**Added**:
+- **Governance Framework**: Complete enterprise governance layer for agent deployments
+  - `app/governance/rbac.py` - Role-Based Access Control with 5 roles (ADMIN, OPERATOR, USER, VIEWER, SERVICE)
+  - `app/governance/audit_logger.py` - JSON Lines audit logging with privacy-preserving hashing
+  - `app/governance/rate_limiter.py` - Token bucket rate limiting with Redis support
+  - `app/governance/approval_workflow.py` - Multi-level (L1-L3) approval workflows for sensitive actions
+  - `app/governance/middleware.py` - FastAPI middleware integration for RBAC, rate limiting, and audit
+
+**Features**:
+- **RBAC**: API key-based role detection (sk-admin-*, sk-operator-*, sk-service-*)
+- **Audit**: Async logging, SHA-256 content hashing, log rotation, query/export
+- **Rate Limiting**: Per-user, per-agent, and global limits with burst allowance
+- **Approvals**: 24-hour expiry, callback notifications, requester cancellation
+- **Middleware**: GovernanceExceptionMiddleware for unified error handling
+
+**Testing**:
+- 68 unit tests for governance framework (all passing)
+- Tests cover RBAC, audit logging, rate limiting, and approval workflows
+- Integration test validates full governance workflow
+
+**Files Added**:
+- `deployment/app/governance/__init__.py` - Module exports
+- `deployment/app/governance/rbac.py` - 434 lines
+- `deployment/app/governance/audit_logger.py` - 350 lines
+- `deployment/app/governance/rate_limiter.py` - 450 lines
+- `deployment/app/governance/approval_workflow.py` - 420 lines
+- `deployment/app/governance/middleware.py` - 380 lines
+- `deployment/tests/test_governance.py` - 670 lines
+
+---
 
 ### 2025-12-29 - Enterprise Agent API Fixes (v3.3)
 

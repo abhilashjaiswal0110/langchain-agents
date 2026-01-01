@@ -168,3 +168,11 @@ scratch/
 .langgraph_api/
 deployment/server_log.txt
 deployment/server_startup.log
+
+# Enhancement Plan (AI Agent Reference - excluded from commits)
+deployment/docs/ENHANCEMENT_PLAN.md
+
+# Temporary/data files
+nul
+deployment/nul
+deployment/data/

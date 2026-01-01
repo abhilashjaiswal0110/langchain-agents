@@ -38,6 +38,11 @@ dependencies = [
     "tavily-python>=0.3.0",
     # Enterprise Agents - Multilingual RAG
     "langdetect>=1.0.9",
+    # Memory & Checkpointing
+    "langgraph-checkpoint-postgres>=2.0.0",
+    "psycopg[binary,pool]>=3.2.0",
+    # HuggingFace embeddings (fallback for semantic memory)
+    "sentence-transformers>=3.0.0",
 ]
 
 [project.optional-dependencies]
@@ -57,9 +62,21 @@ ollama = [
     "langchain-ollama>=0.2.0",
 ]
 
+sqlite = [
+    "langgraph-checkpoint-sqlite>=2.0.0",
+    "aiosqlite>=0.20.0",
+]
+
+memory-async = [
+    "asyncpg>=0.29.0",
+]
+
 all = [
     "langchain-anthropic>=0.3.0",
     "langchain-ollama>=0.2.0",
+    "langgraph-checkpoint-sqlite>=2.0.0",
+    "aiosqlite>=0.20.0",
+    "asyncpg>=0.29.0",
 ]
 
 [build-system]

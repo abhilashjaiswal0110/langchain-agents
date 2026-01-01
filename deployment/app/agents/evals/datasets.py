@@ -282,6 +282,200 @@ CODE_ASSISTANT_DATASET = EvalDataset(
 
 
 # =============================================================================
+# IT Helpdesk Agent Dataset
+# =============================================================================
+
+IT_HELPDESK_DATASET = EvalDataset(
+    name="it_helpdesk_eval",
+    description="Test cases for IT Helpdesk Agent",
+    agent_type="it_helpdesk",
+    test_cases=[
+        TestCase(
+            id="helpdesk_001",
+            input="My computer won't turn on",
+            expected_keywords=["power", "cable", "button", "troubleshoot"],
+            tags=["hardware", "basic"],
+            difficulty="easy",
+        ),
+        TestCase(
+            id="helpdesk_002",
+            input="I forgot my password and I'm locked out of my account",
+            expected_keywords=["password", "reset", "IT", "support"],
+            tags=["account", "password"],
+            difficulty="easy",
+        ),
+        TestCase(
+            id="helpdesk_003",
+            input="My email is not syncing on my phone",
+            expected_keywords=["email", "sync", "settings", "account"],
+            tags=["email", "mobile"],
+            difficulty="medium",
+        ),
+        TestCase(
+            id="helpdesk_004",
+            input="I need to install software but I don't have admin rights",
+            expected_keywords=["software", "admin", "request", "IT"],
+            tags=["software", "permissions"],
+            difficulty="medium",
+        ),
+    ],
+)
+
+
+# =============================================================================
+# ServiceNow Agent Dataset
+# =============================================================================
+
+SERVICENOW_AGENT_DATASET = EvalDataset(
+    name="servicenow_agent_eval",
+    description="Test cases for ServiceNow Integration Agent",
+    agent_type="servicenow",
+    test_cases=[
+        TestCase(
+            id="snow_001",
+            input="Create a new incident for network connectivity issues",
+            expected_keywords=["incident", "created", "network", "INC"],
+            tags=["incident", "create"],
+            difficulty="easy",
+        ),
+        TestCase(
+            id="snow_002",
+            input="What's the status of my ticket INC0012345?",
+            expected_keywords=["status", "ticket", "incident"],
+            tags=["incident", "query"],
+            difficulty="easy",
+        ),
+        TestCase(
+            id="snow_003",
+            input="Show me all open change requests for the finance department",
+            expected_keywords=["change", "request", "finance", "open"],
+            tags=["change", "query"],
+            difficulty="medium",
+        ),
+        TestCase(
+            id="snow_004",
+            input="Escalate incident INC0012345 to priority 1",
+            expected_keywords=["escalate", "priority", "incident", "updated"],
+            tags=["incident", "escalation"],
+            difficulty="hard",
+        ),
+    ],
+)
+
+
+# =============================================================================
+# Multi-Turn Conversation Test Cases
+# =============================================================================
+
+@dataclass
+class MultiTurnTestCase:
+    """Multi-turn conversation test case for evaluation.
+
+    Attributes:
+        id: Unique test case identifier
+        turns: List of conversation turns (user/assistant pairs)
+        expected_intents: Intents that should be completed
+        expected_tool_sequence: Expected sequence of tool calls
+        context_requirements: Context that should be maintained
+        tags: Tags for categorization
+        difficulty: Difficulty level
+    """
+
+    id: str
+    turns: list[dict[str, str]] = field(default_factory=list)
+    expected_intents: list[str] = field(default_factory=list)
+    expected_tool_sequence: list[str] = field(default_factory=list)
+    context_requirements: list[str] = field(default_factory=list)
+    tags: list[str] = field(default_factory=list)
+    difficulty: str = "medium"
+
+
+MULTI_TURN_TEST_CASES: list[MultiTurnTestCase] = [
+    MultiTurnTestCase(
+        id="mt_001",
+        turns=[
+            {"user": "I need help with my laptop"},
+            {"assistant": "I'd be happy to help! Can you tell me more about the issue?"},
+            {"user": "It keeps freezing when I open Chrome"},
+            {"assistant": "Let's troubleshoot the Chrome freezing issue..."},
+        ],
+        expected_intents=["diagnose issue", "provide solution"],
+        context_requirements=["laptop", "Chrome", "freezing"],
+        tags=["troubleshooting", "software"],
+        difficulty="medium",
+    ),
+    MultiTurnTestCase(
+        id="mt_002",
+        turns=[
+            {"user": "I need to reset my password"},
+            {"assistant": "I can help with that. Which system do you need to reset?"},
+            {"user": "My Windows login password"},
+            {"assistant": "For Windows password reset, I'll need to verify your identity..."},
+            {"user": "My employee ID is E12345"},
+        ],
+        expected_intents=["identify user", "reset password", "verify identity"],
+        context_requirements=["password", "Windows", "employee ID"],
+        tags=["password", "security"],
+        difficulty="medium",
+    ),
+    MultiTurnTestCase(
+        id="mt_003",
+        turns=[
+            {"user": "Create an incident for VPN not working"},
+            {"assistant": "I'll create an incident. What error are you seeing?"},
+            {"user": "Connection timeout error"},
+            {"assistant": "Incident created. Would you like me to check for known issues?"},
+            {"user": "Yes please"},
+        ],
+        expected_intents=["create incident", "gather details", "check known issues"],
+        expected_tool_sequence=["create_incident", "search_knowledge_base"],
+        context_requirements=["VPN", "timeout", "incident"],
+        tags=["servicenow", "vpn"],
+        difficulty="hard",
+    ),
+    MultiTurnTestCase(
+        id="mt_004",
+        turns=[
+            {"user": "My printer isn't working"},
+            {"assistant": "Let me help troubleshoot. Is it a network or USB printer?"},
+            {"user": "Network printer"},
+            {"assistant": "Can you see the printer in your list of devices?"},
+            {"user": "No, it's not showing up"},
+            {"assistant": "Let's try to reconnect it..."},
+        ],
+        expected_intents=["identify printer type", "diagnose connection", "resolve issue"],
+        context_requirements=["printer", "network", "devices"],
+        tags=["hardware", "printer", "network"],
+        difficulty="medium",
+    ),
+]
+
+
+def get_multi_turn_test_cases(
+    tags: list[str] | None = None,
+    difficulty: str | None = None,
+) -> list[MultiTurnTestCase]:
+    """Get multi-turn test cases with optional filtering.
+
+    Args:
+        tags: Filter by tags (any match).
+        difficulty: Filter by difficulty level.
+
+    Returns:
+        List of matching multi-turn test cases.
+    """
+    cases = MULTI_TURN_TEST_CASES
+
+    if tags:
+        cases = [c for c in cases if any(t in c.tags for t in tags)]
+
+    if difficulty:
+        cases = [c for c in cases if c.difficulty == difficulty]
+
+    return cases
+
+
+# =============================================================================
 # Dataset Registry
 # =============================================================================
 
@@ -293,6 +487,8 @@ ALL_DATASETS: dict[str, EvalDataset] = {
     "multilingual_rag": MULTILINGUAL_RAG_DATASET,
     "hitl_support": HITL_SUPPORT_DATASET,
     "code_assistant": CODE_ASSISTANT_DATASET,
+    "it_helpdesk": IT_HELPDESK_DATASET,
+    "servicenow": SERVICENOW_AGENT_DATASET,
 }
 
 

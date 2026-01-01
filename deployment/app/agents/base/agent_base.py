@@ -27,6 +27,14 @@ from langgraph.prebuilt import ToolNode
 from langsmith import traceable
 from pydantic import BaseModel, Field
 
+# Import memory module components
+from app.agents.memory.checkpointers import (
+    CheckpointerBackend,
+    get_checkpointer,
+)
+from app.agents.memory.semantic_memory import get_semantic_memory
+from app.agents.memory.summarizer import get_summarizer
+
 
 # Type variable for state
 StateT = TypeVar("StateT", bound=BaseModel)
@@ -42,6 +50,9 @@ class AgentConfig:
         temperature: Model temperature for response generation
         max_tokens: Maximum tokens in response
         checkpointer: Optional checkpointer for state persistence
+        memory_backend: Memory backend type ("postgres", "sqlite", "memory", "auto")
+        semantic_memory_enabled: Whether to enable semantic long-term memory
+        conversation_summarization: Whether to enable conversation summarization
         tracing_enabled: Whether to enable LangSmith tracing
         project_name: LangSmith project name for tracing
     """
@@ -51,6 +62,9 @@ class AgentConfig:
     temperature: float = 0.7
     max_tokens: int = 4096
     checkpointer: BaseCheckpointSaver | None = None
+    memory_backend: Literal["postgres", "sqlite", "memory", "auto"] = "auto"
+    semantic_memory_enabled: bool = False
+    conversation_summarization: bool = False
     tracing_enabled: bool = True
     project_name: str = "enterprise-it-agents"
 
@@ -197,7 +211,31 @@ class BaseAgent(ABC):
         """Compile the agent's graph for execution."""
         self._graph = self._build_graph()
 
-        checkpointer = self.config.checkpointer or MemorySaver()
+        # Use provided checkpointer, or get from factory based on config
+        if self.config.checkpointer is not None:
+            checkpointer = self.config.checkpointer
+        elif self.config.memory_backend == "auto":
+            # Auto mode: use factory which reads from environment
+            checkpointer = get_checkpointer()
+        elif self.config.memory_backend == "postgres":
+            from app.agents.memory.checkpointers import (
+                CheckpointerConfig,
+                CheckpointerBackend,
+                create_checkpointer,
+            )
+            config = CheckpointerConfig(backend=CheckpointerBackend.POSTGRES)
+            checkpointer = create_checkpointer(config)
+        elif self.config.memory_backend == "sqlite":
+            from app.agents.memory.checkpointers import (
+                CheckpointerConfig,
+                CheckpointerBackend,
+                create_checkpointer,
+            )
+            config = CheckpointerConfig(backend=CheckpointerBackend.SQLITE)
+            checkpointer = create_checkpointer(config)
+        else:
+            checkpointer = MemorySaver()
+
         self._compiled_graph = self._graph.compile(checkpointer=checkpointer)
 
     @traceable(name="agent_invoke")
@@ -314,6 +352,154 @@ class BaseAgent(ABC):
         # For MemorySaver, we can't truly delete, but we can
         # update to empty state. Production should use proper DB.
         pass
+
+    def inject_semantic_context(
+        self,
+        user_id: str | None = None,
+        query: str | None = None,
+        top_k: int = 3,
+    ) -> str | None:
+        """Retrieve relevant context from semantic memory.
+
+        This method retrieves past conversation summaries and context
+        that may be relevant to the current conversation.
+
+        Args:
+            user_id: User identifier for personalized context.
+            query: Optional query to find relevant past context.
+            top_k: Number of relevant memories to retrieve.
+
+        Returns:
+            Formatted context string or None if semantic memory disabled.
+        """
+        if not self.config.semantic_memory_enabled:
+            return None
+
+        try:
+            semantic_memory = get_semantic_memory()
+            context_parts = []
+
+            # Get user-specific context
+            if user_id:
+                user_context = semantic_memory.get_user_context(
+                    user_id=user_id,
+                    top_k=top_k,
+                )
+                if user_context:
+                    context_parts.append(f"## User History\n{user_context}")
+
+            # Get query-relevant context
+            if query:
+                results = semantic_memory.search(
+                    query=query,
+                    top_k=top_k,
+                    user_id=user_id,
+                )
+                if results:
+                    relevant = "\n".join([
+                        f"- {r.content[:200]}..." if len(r.content) > 200 else f"- {r.content}"
+                        for r in results
+                    ])
+                    context_parts.append(f"## Relevant Past Context\n{relevant}")
+
+            if context_parts:
+                return "\n\n".join(context_parts)
+            return None
+
+        except Exception as e:
+            print(f"Warning: Failed to inject semantic context: {e}")
+            return None
+
+    def store_conversation_summary(
+        self,
+        session_id: str,
+        user_id: str | None = None,
+        messages: list[BaseMessage] | None = None,
+    ) -> bool:
+        """Store a conversation summary in semantic memory.
+
+        This method creates a summary of the conversation and stores it
+        for future retrieval and context injection.
+
+        Args:
+            session_id: Session identifier.
+            user_id: Optional user identifier.
+            messages: Optional messages to summarize. If None, retrieves from state.
+
+        Returns:
+            True if summary was stored successfully.
+        """
+        if not self.config.semantic_memory_enabled:
+            return False
+
+        try:
+            # Get messages from state if not provided
+            if messages is None:
+                state = self.get_state(session_id)
+                if state:
+                    messages = state.get("messages", [])
+
+            if not messages:
+                return False
+
+            # Get summarizer
+            summarizer = get_summarizer()
+
+            # Check if summarization is needed
+            if not summarizer.should_summarize(messages):
+                return False
+
+            # Create summary
+            summary = summarizer.summarize(messages)
+
+            if not summary:
+                return False
+
+            # Store in semantic memory
+            semantic_memory = get_semantic_memory()
+            semantic_memory.add_memory(
+                content=summary,
+                memory_type="conversation_summary",
+                session_id=session_id,
+                user_id=user_id,
+                agent_type=self.__class__.__name__,
+                metadata={
+                    "message_count": len(messages),
+                    "session_id": session_id,
+                },
+            )
+            return True
+
+        except Exception as e:
+            print(f"Warning: Failed to store conversation summary: {e}")
+            return False
+
+    def apply_conversation_compression(
+        self,
+        messages: list[BaseMessage],
+        keep_recent: int = 3,
+    ) -> tuple[list[BaseMessage], str | None]:
+        """Apply conversation compression if enabled.
+
+        This method uses the summarizer to compress older messages
+        while keeping recent ones intact.
+
+        Args:
+            messages: Full list of conversation messages.
+            keep_recent: Number of recent messages to keep intact.
+
+        Returns:
+            Tuple of (compressed messages, summary if created).
+        """
+        if not self.config.conversation_summarization:
+            return messages, None
+
+        try:
+            summarizer = get_summarizer()
+            return summarizer.summarize_and_compress(messages, keep_recent)
+        except Exception as e:
+            print(f"Warning: Conversation compression failed: {e}")
+            return messages, None
 
 
 def create_react_agent_graph(
