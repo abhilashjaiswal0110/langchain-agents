@@ -3,6 +3,7 @@
 Defines the abstract interface for session stores and common data types.
 """
 
+import copy
 import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
@@ -221,6 +222,35 @@ class Session:
             created_at=created_at,
             updated_at=updated_at,
             expires_at=expires_at,
+        )
+
+    def copy(self) -> "Session":
+        """Create a deep copy of this session.
+
+        Returns:
+            A new Session instance with copied data.
+        """
+        return Session(
+            id=self.id,
+            metadata=SessionMetadata(
+                user_id=self.metadata.user_id,
+                agent_type=self.metadata.agent_type,
+                tags=copy.deepcopy(self.metadata.tags),
+                custom=copy.deepcopy(self.metadata.custom),
+            ),
+            messages=[
+                Message(
+                    role=m.role,
+                    content=m.content,
+                    timestamp=m.timestamp,
+                    metadata=copy.deepcopy(m.metadata),
+                )
+                for m in self.messages
+            ],
+            context=copy.deepcopy(self.context),
+            created_at=self.created_at,
+            updated_at=self.updated_at,
+            expires_at=self.expires_at,
         )
 
 

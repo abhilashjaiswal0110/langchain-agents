@@ -100,9 +100,11 @@ class SQLiteSessionStore(BaseSessionStore):
 
     @contextmanager
     def _get_connection(self) -> Generator[sqlite3.Connection, None, None]:
-        """Get database connection."""
+        """Get database connection with foreign keys enabled."""
         conn = sqlite3.connect(str(self._db_path))
         conn.row_factory = sqlite3.Row
+        # Enable foreign keys for data integrity
+        conn.execute("PRAGMA foreign_keys = ON")
         try:
             yield conn
         finally:
@@ -227,6 +229,8 @@ class SQLiteSessionStore(BaseSessionStore):
     ) -> bool:
         """Update session with new messages.
 
+        Uses a transaction to ensure atomicity - all changes succeed or none do.
+
         Args:
             session_id: Session identifier.
             user_message: User's message.
@@ -243,39 +247,47 @@ class SQLiteSessionStore(BaseSessionStore):
         now = datetime.now()
 
         with self._get_connection() as conn:
-            # Add user message
-            conn.execute(
-                """
-                INSERT INTO messages (session_id, role, content, timestamp, metadata)
-                VALUES (?, ?, ?, ?, ?)
-                """,
-                (session_id, "user", user_message, now.isoformat(), "{}"),
-            )
+            try:
+                # Begin transaction explicitly
+                conn.execute("BEGIN IMMEDIATE")
 
-            # Add assistant message
-            conn.execute(
-                """
-                INSERT INTO messages (session_id, role, content, timestamp, metadata)
-                VALUES (?, ?, ?, ?, ?)
-                """,
-                (
-                    session_id,
-                    "assistant",
-                    assistant_message,
-                    now.isoformat(),
-                    json.dumps(metadata or {}),
-                ),
-            )
+                # Add user message
+                conn.execute(
+                    """
+                    INSERT INTO messages (session_id, role, content, timestamp, metadata)
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (session_id, "user", user_message, now.isoformat(), "{}"),
+                )
 
-            # Update session timestamp
-            conn.execute(
-                "UPDATE sessions SET updated_at = ? WHERE id = ?",
-                (now.isoformat(), session_id),
-            )
+                # Add assistant message
+                conn.execute(
+                    """
+                    INSERT INTO messages (session_id, role, content, timestamp, metadata)
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (
+                        session_id,
+                        "assistant",
+                        assistant_message,
+                        now.isoformat(),
+                        json.dumps(metadata or {}),
+                    ),
+                )
 
-            conn.commit()
+                # Update session timestamp
+                conn.execute(
+                    "UPDATE sessions SET updated_at = ? WHERE id = ?",
+                    (now.isoformat(), session_id),
+                )
 
-        return True
+                conn.commit()
+                return True
+
+            except Exception as e:
+                conn.rollback()
+                logger.error(f"Failed to update session {session_id}: {e}")
+                return False
 
     def delete_session(self, session_id: str) -> bool:
         """Delete a session.
@@ -429,6 +441,8 @@ class SQLiteSessionStore(BaseSessionStore):
     ) -> bool:
         """Set session context.
 
+        Uses a transaction to ensure atomicity.
+
         Args:
             session_id: Session identifier.
             context: Context data to set.
@@ -444,20 +458,26 @@ class SQLiteSessionStore(BaseSessionStore):
         session.context.update(context)
 
         with self._get_connection() as conn:
-            cursor = conn.execute(
-                """
-                UPDATE sessions
-                SET context = ?, updated_at = ?
-                WHERE id = ?
-                """,
-                (
-                    json.dumps(session.context),
-                    datetime.now().isoformat(),
-                    session_id,
-                ),
-            )
-            conn.commit()
-            return cursor.rowcount > 0
+            try:
+                conn.execute("BEGIN IMMEDIATE")
+                cursor = conn.execute(
+                    """
+                    UPDATE sessions
+                    SET context = ?, updated_at = ?
+                    WHERE id = ?
+                    """,
+                    (
+                        json.dumps(session.context),
+                        datetime.now().isoformat(),
+                        session_id,
+                    ),
+                )
+                conn.commit()
+                return cursor.rowcount > 0
+            except Exception as e:
+                conn.rollback()
+                logger.error(f"Failed to set context for session {session_id}: {e}")
+                return False
 
     def get_context(self, session_id: str) -> dict[str, Any]:
         """Get session context.

@@ -2,112 +2,28 @@
 
 Provides unified interface for managing conversations across different agents
 with session persistence, history tracking, and integration support.
+
+Supports multiple storage backends via the memory module:
+- InMemorySessionStore: Fast, non-persistent (development)
+- RedisSessionStore: Distributed, persistent (production)
+- SQLiteSessionStore: Local persistent (single-instance production)
 """
 
-import uuid
+import os
 from datetime import datetime
 from typing import Any, Literal
 from langsmith import traceable
 
+from app.memory import get_session_store
+from app.memory.base import BaseSessionStore
+
 
 # =============================================================================
-# Session Storage (In-memory for demo, use Redis/DB for production)
+# Session TTL Configuration
 # =============================================================================
 
-class SessionStore:
-    """In-memory session storage."""
-
-    def __init__(self) -> None:
-        self.sessions: dict[str, dict[str, Any]] = {}
-
-    def create_session(
-        self,
-        agent_type: str,
-        user_id: str | None = None,
-        metadata: dict | None = None,
-    ) -> str:
-        """Create a new session."""
-        session_id = str(uuid.uuid4())
-
-        self.sessions[session_id] = {
-            "id": session_id,
-            "agent_type": agent_type,
-            "user_id": user_id,
-            "created_at": datetime.now().isoformat(),
-            "updated_at": datetime.now().isoformat(),
-            "metadata": metadata or {},
-            "messages": [],
-            "context": {},
-        }
-
-        return session_id
-
-    def get_session(self, session_id: str) -> dict | None:
-        """Get session by ID."""
-        return self.sessions.get(session_id)
-
-    def update_session(
-        self,
-        session_id: str,
-        user_message: str,
-        assistant_message: str,
-        metadata: dict | None = None,
-    ) -> None:
-        """Update session with new messages."""
-        session = self.sessions.get(session_id)
-        if not session:
-            return
-
-        session["messages"].append({
-            "role": "user",
-            "content": user_message,
-            "timestamp": datetime.now().isoformat(),
-        })
-        session["messages"].append({
-            "role": "assistant",
-            "content": assistant_message,
-            "timestamp": datetime.now().isoformat(),
-        })
-        session["updated_at"] = datetime.now().isoformat()
-
-        if metadata:
-            session["metadata"].update(metadata)
-
-    def get_history(self, session_id: str, limit: int = 50) -> list[dict]:
-        """Get conversation history."""
-        session = self.sessions.get(session_id)
-        if not session:
-            return []
-        return session["messages"][-limit:]
-
-    def delete_session(self, session_id: str) -> bool:
-        """Delete a session."""
-        if session_id in self.sessions:
-            del self.sessions[session_id]
-            return True
-        return False
-
-    def list_sessions(
-        self,
-        user_id: str | None = None,
-        agent_type: str | None = None,
-    ) -> list[dict]:
-        """List sessions with optional filters."""
-        results = []
-        for session in self.sessions.values():
-            if user_id and session.get("user_id") != user_id:
-                continue
-            if agent_type and session.get("agent_type") != agent_type:
-                continue
-            results.append({
-                "id": session["id"],
-                "agent_type": session["agent_type"],
-                "user_id": session["user_id"],
-                "created_at": session["created_at"],
-                "updated_at": session["updated_at"],
-                "message_count": len(session["messages"]),
-            })
-        return results
+# Default session TTL in hours (configurable via environment)
+DEFAULT_SESSION_TTL_HOURS = int(os.getenv("SESSION_TTL_HOURS", "24"))
 
 
 # =============================================================================
@@ -115,16 +31,26 @@ class SessionStore:
 # =============================================================================
 
 class ConversationManager:
-    """Unified conversation manager for all IT Support agents."""
+    """Unified conversation manager for all IT Support agents.
+
+    Uses configurable session storage backend (memory, Redis, or SQLite)
+    via the memory module. Set MEMORY_BACKEND environment variable to configure.
+    """
 
     AVAILABLE_AGENTS = {
         "it_helpdesk": "IT Helpdesk Agent - General IT support, password resets, troubleshooting",
         "servicenow": "ServiceNow Agent - Ticket management, change requests, CMDB",
     }
 
-    def __init__(self) -> None:
-        """Initialize conversation manager."""
-        self.session_store = SessionStore()
+    def __init__(self, session_store: BaseSessionStore | None = None) -> None:
+        """Initialize conversation manager.
+
+        Args:
+            session_store: Optional session store instance. If not provided,
+                          uses the global session store from memory module.
+        """
+        # Use provided store or get from memory module (supports Redis, SQLite, in-memory)
+        self.session_store = session_store or get_session_store()
         self._agents: dict[str, Any] = {}
         self._load_agents()
 
@@ -171,8 +97,9 @@ class ConversationManager:
 
         session_id = self.session_store.create_session(
             agent_type=agent_type,
-            user_id=user_id,
+            user_id=user_id or "",
             metadata=metadata,
+            ttl_hours=DEFAULT_SESSION_TTL_HOURS,
         )
 
         # Welcome messages
@@ -235,7 +162,7 @@ What would you like to do?""",
                 "session_id": None,
             }
 
-        agent_type = session["agent_type"]
+        agent_type = session.metadata.agent_type
         agent = self._agents.get(agent_type)
 
         if not agent:
@@ -252,7 +179,7 @@ What would you like to do?""",
         try:
             result = agent.chat(message, thread_id=session_id)
 
-            # Update session
+            # Update session via session store
             self.session_store.update_session(
                 session_id=session_id,
                 user_message=message,
@@ -285,7 +212,7 @@ What would you like to do?""",
                 "session_id": None,
             }
 
-        agent_type = session["agent_type"]
+        agent_type = session.metadata.agent_type
         agent = self._agents.get(agent_type)
 
         if not agent:
@@ -325,7 +252,7 @@ What would you like to do?""",
         session = self.session_store.get_session(session_id)
 
         if cmd == "/history":
-            history = self.session_store.get_history(session_id)
+            history = self.session_store.get_history(session_id, limit=10)
             if not history:
                 return {
                     "session_id": session_id,
@@ -333,9 +260,10 @@ What would you like to do?""",
                     "is_command": True,
                 }
             formatted = []
-            for msg in history[-10:]:  # Last 10 messages
-                role = "You" if msg["role"] == "user" else "Agent"
-                formatted.append(f"**{role}:** {msg['content'][:100]}...")
+            for msg in history:  # Already limited to last 10
+                role = "You" if msg.role == "user" else "Agent"
+                content_preview = msg.content[:100] if len(msg.content) > 100 else msg.content
+                formatted.append(f"**{role}:** {content_preview}...")
             return {
                 "session_id": session_id,
                 "response": "**Recent History:**\n\n" + "\n\n".join(formatted),
@@ -344,7 +272,7 @@ What would you like to do?""",
 
         elif cmd == "/clear":
             if session:
-                session["messages"] = []
+                self.session_store.clear_session(session_id)
             return {
                 "session_id": session_id,
                 "response": "Conversation cleared. How can I help you?",
@@ -380,7 +308,11 @@ What would you like to do?""",
             new_agent = parts[1]
             if new_agent in self._agents:
                 if session:
-                    session["agent_type"] = new_agent
+                    # Update session context with new agent type
+                    self.session_store.set_context(
+                        session_id,
+                        {"agent_type_override": new_agent},
+                    )
                 return {
                     "session_id": session_id,
                     "response": f"Switched to {new_agent} agent. How can I help?",
@@ -423,12 +355,12 @@ Just type your question to chat with the current agent.""",
             return None
 
         return {
-            "id": session["id"],
-            "agent_type": session["agent_type"],
-            "user_id": session["user_id"],
-            "created_at": session["created_at"],
-            "updated_at": session["updated_at"],
-            "message_count": len(session["messages"]),
+            "id": session.id,
+            "agent_type": session.metadata.agent_type,
+            "user_id": session.metadata.user_id,
+            "created_at": session.created_at.isoformat(),
+            "updated_at": session.updated_at.isoformat(),
+            "message_count": len(session.messages),
         }
 
     def end_conversation(self, session_id: str) -> dict[str, Any]:
@@ -439,17 +371,13 @@ Just type your question to chat with the current agent.""",
 
         summary = {
             "session_id": session_id,
-            "agent_type": session["agent_type"],
-            "duration": session["updated_at"],
-            "message_count": len(session["messages"]),
+            "agent_type": session.metadata.agent_type,
+            "duration": session.updated_at.isoformat(),
+            "message_count": len(session.messages),
             "status": "ended",
         }
 
-        # Optionally keep session for history
+        # Optionally delete session - uncomment to remove ended sessions
         # self.session_store.delete_session(session_id)
 
         return summary
-
-
-# Global instance
-conversation_manager = ConversationManager()

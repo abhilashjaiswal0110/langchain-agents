@@ -2,10 +2,13 @@
 
 Provides configuration management and factory functions for
 creating session stores and LangGraph checkpointers.
+
+Thread-safe singleton pattern is used for global instances.
 """
 
 import logging
 import os
+import threading
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
@@ -13,6 +16,10 @@ from typing import Any
 from app.memory.base import BaseSessionStore
 
 logger = logging.getLogger(__name__)
+
+# Lock for thread-safe singleton initialization
+_config_lock = threading.Lock()
+_store_lock = threading.Lock()
 
 
 class MemoryBackend(str, Enum):
@@ -84,7 +91,7 @@ class MemoryConfig:
         )
 
 
-# Global instances
+# Global instances (protected by locks for thread safety)
 _memory_config: MemoryConfig | None = None
 _session_store: BaseSessionStore | None = None
 
@@ -92,37 +99,53 @@ _session_store: BaseSessionStore | None = None
 def get_memory_config() -> MemoryConfig:
     """Get or create global memory configuration.
 
+    Thread-safe singleton pattern using double-checked locking.
+
     Returns:
         Memory configuration.
     """
     global _memory_config
     if _memory_config is None:
-        _memory_config = MemoryConfig.from_env()
+        with _config_lock:
+            # Double-check after acquiring lock
+            if _memory_config is None:
+                _memory_config = MemoryConfig.from_env()
     return _memory_config
 
 
 def set_memory_config(config: MemoryConfig) -> None:
     """Set global memory configuration.
 
+    Thread-safe update that also resets the session store.
+
     Args:
         config: Memory configuration.
     """
     global _memory_config, _session_store
-    _memory_config = config
-    _session_store = None  # Reset store to use new config
+    with _config_lock:
+        with _store_lock:
+            _memory_config = config
+            # Close existing store before resetting
+            if _session_store:
+                _session_store.close()
+            _session_store = None
 
 
 def reset_memory_config() -> None:
     """Reset global memory configuration.
 
-    The next call to get_memory_config will re-read from environment.
+    Thread-safe reset. The next call to get_memory_config will re-read
+    from environment.
     """
     global _memory_config
-    _memory_config = None
+    with _config_lock:
+        _memory_config = None
 
 
 def get_session_store(config: MemoryConfig | None = None) -> BaseSessionStore:
     """Get or create global session store.
+
+    Thread-safe singleton pattern using double-checked locking.
 
     Args:
         config: Optional configuration override.
@@ -132,52 +155,62 @@ def get_session_store(config: MemoryConfig | None = None) -> BaseSessionStore:
     """
     global _session_store
 
+    # Fast path: return existing store if available and no override
     if _session_store is not None and config is None:
         return _session_store
 
-    cfg = config or get_memory_config()
+    with _store_lock:
+        # Double-check after acquiring lock
+        if _session_store is not None and config is None:
+            return _session_store
 
-    if cfg.backend == MemoryBackend.MEMORY:
-        from app.memory.memory_store import InMemorySessionStore
+        cfg = config or get_memory_config()
 
-        _session_store = InMemorySessionStore(max_sessions=cfg.max_sessions)
-        logger.info("Using in-memory session store")
+        if cfg.backend == MemoryBackend.MEMORY:
+            from app.memory.memory_store import InMemorySessionStore
 
-    elif cfg.backend == MemoryBackend.REDIS:
-        from app.memory.redis_store import RedisSessionStore
+            _session_store = InMemorySessionStore(max_sessions=cfg.max_sessions)
+            logger.info("Using in-memory session store")
 
-        _session_store = RedisSessionStore(
-            url=cfg.redis_url,
-            prefix=cfg.key_prefix,
-            default_ttl_hours=cfg.session_ttl_hours,
-        )
-        logger.info(f"Using Redis session store at {cfg.redis_url}")
+        elif cfg.backend == MemoryBackend.REDIS:
+            from app.memory.redis_store import RedisSessionStore
 
-    elif cfg.backend == MemoryBackend.SQLITE:
-        from app.memory.sqlite_store import SQLiteSessionStore
+            _session_store = RedisSessionStore(
+                url=cfg.redis_url,
+                prefix=cfg.key_prefix,
+                default_ttl_hours=cfg.session_ttl_hours,
+            )
+            logger.info(f"Using Redis session store at {cfg.redis_url}")
 
-        _session_store = SQLiteSessionStore(
-            db_path=cfg.sqlite_path,
-            default_ttl_hours=cfg.session_ttl_hours,
-        )
-        logger.info(f"Using SQLite session store at {cfg.sqlite_path}")
+        elif cfg.backend == MemoryBackend.SQLITE:
+            from app.memory.sqlite_store import SQLiteSessionStore
 
-    else:
-        # Fallback to memory
-        from app.memory.memory_store import InMemorySessionStore
+            _session_store = SQLiteSessionStore(
+                db_path=cfg.sqlite_path,
+                default_ttl_hours=cfg.session_ttl_hours,
+            )
+            logger.info(f"Using SQLite session store at {cfg.sqlite_path}")
 
-        _session_store = InMemorySessionStore()
-        logger.warning(f"Unknown backend {cfg.backend}, using in-memory store")
+        else:
+            # Fallback to memory
+            from app.memory.memory_store import InMemorySessionStore
 
-    return _session_store
+            _session_store = InMemorySessionStore()
+            logger.warning(f"Unknown backend {cfg.backend}, using in-memory store")
+
+        return _session_store
 
 
 def reset_session_store() -> None:
-    """Reset global session store instance."""
+    """Reset global session store instance.
+
+    Thread-safe reset that closes the existing store.
+    """
     global _session_store
-    if _session_store:
-        _session_store.close()
-    _session_store = None
+    with _store_lock:
+        if _session_store:
+            _session_store.close()
+        _session_store = None
 
 
 def get_checkpointer(

@@ -84,11 +84,13 @@ class InMemorySessionStore(BaseSessionStore):
     def get_session(self, session_id: str) -> Session | None:
         """Get a session by ID.
 
+        Returns a deep copy to prevent callers from modifying internal state.
+
         Args:
             session_id: Session identifier.
 
         Returns:
-            Session or None if not found.
+            Deep copy of Session or None if not found.
         """
         with self._lock:
             session = self._sessions.get(session_id)
@@ -97,7 +99,8 @@ class InMemorySessionStore(BaseSessionStore):
                 del self._sessions[session_id]
                 return None
 
-            return session
+            # Return deep copy to prevent external modifications
+            return session.copy() if session else None
 
     def update_session(
         self,
@@ -159,6 +162,8 @@ class InMemorySessionStore(BaseSessionStore):
     ) -> list[Session]:
         """List sessions with optional filters.
 
+        Returns deep copies to prevent external modifications.
+
         Args:
             user_id: Filter by user.
             agent_type: Filter by agent type.
@@ -166,7 +171,7 @@ class InMemorySessionStore(BaseSessionStore):
             offset: Offset for pagination.
 
         Returns:
-            List of sessions.
+            List of session deep copies.
         """
         with self._lock:
             results = []
@@ -183,7 +188,8 @@ class InMemorySessionStore(BaseSessionStore):
             # Sort by updated_at descending
             results.sort(key=lambda s: s.updated_at, reverse=True)
 
-            return results[offset : offset + limit]
+            # Return deep copies
+            return [s.copy() for s in results[offset : offset + limit]]
 
     def get_history(
         self,

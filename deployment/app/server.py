@@ -5,6 +5,7 @@ as REST API endpoints using LangServe with LangSmith tracing enabled.
 """
 
 import os
+import secrets
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
@@ -101,7 +102,7 @@ tracing_enabled = setup_langsmith_tracing()
 # API Key Security (for ngrok/external exposure)
 # ============================================================================
 
-API_KEY_ENABLED = os.getenv("API_KEY_ENABLED", "false").lower() == "true"
+API_KEY_ENABLED = os.getenv("API_KEY_ENABLED", "true").lower() == "true"
 API_KEY = os.getenv("API_KEY", "")
 API_KEY_HEADER = "X-API-Key"
 
@@ -125,9 +126,9 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
         if request.url.path.startswith("/static") or request.url.path == "/chat":
             return await call_next(request)
 
-        # Validate API key
+        # Validate API key (use constant-time comparison to prevent timing attacks)
         api_key = request.headers.get(API_KEY_HEADER)
-        if not api_key or api_key != API_KEY:
+        if not api_key or not API_KEY or not secrets.compare_digest(api_key, API_KEY):
             return HTMLResponse(
                 content='{"detail": "Invalid or missing API key"}',
                 status_code=401,
@@ -451,10 +452,12 @@ LangSmith tracing for full observability.
     lifespan=lifespan,
 )
 
-# Configure CORS
+# Configure CORS (restrict origins in production, never use "*")
+_cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:8000,http://localhost:3000")
+_allowed_origins = [origin.strip() for origin in _cors_origins.split(",") if origin.strip()]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=os.getenv("CORS_ORIGINS", "*").split(","),
+    allow_origins=_allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*", API_KEY_HEADER],
