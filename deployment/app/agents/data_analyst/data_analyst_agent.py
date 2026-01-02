@@ -77,8 +77,8 @@ class DataAnalystState(BaseModel):
     )
 
 
-# Global DataFrame storage (in production, use proper session management)
-_dataframes: dict[str, Any] = {}
+# Session-aware DataFrame storage (keyed by session_id)
+_dataframes: dict[str, dict[str, Any]] = {}
 
 
 def _get_pandas():
@@ -94,12 +94,13 @@ def _get_pandas():
 
 @tool
 @tool_error_handler
-def load_excel_file(file_path: str, sheet_name: str = "Sheet1") -> str:
+def load_excel_file(file_path: str, sheet_name: str = "Sheet1", session_id: str = "default_session") -> str:
     """Load an Excel file for analysis.
 
     Args:
         file_path: Path to the Excel file
         sheet_name: Name of the sheet to load (default: Sheet1)
+        session_id: Session identifier for multi-user isolation
 
     Returns:
         Summary of loaded data including columns and row count
@@ -113,7 +114,12 @@ def load_excel_file(file_path: str, sheet_name: str = "Sheet1") -> str:
 
     try:
         df = pd.read_excel(file_path, sheet_name=sheet_name)
-        _dataframes["current"] = df
+
+        # Initialize session storage if needed
+        if session_id not in _dataframes:
+            _dataframes[session_id] = {}
+
+        _dataframes[session_id]["current"] = df
 
         return (
             f"Excel file loaded successfully!\n\n"
@@ -131,12 +137,13 @@ def load_excel_file(file_path: str, sheet_name: str = "Sheet1") -> str:
 
 @tool
 @tool_error_handler
-def load_csv_file(file_path: str, delimiter: str = ",") -> str:
+def load_csv_file(file_path: str, delimiter: str = ",", session_id: str = "default_session") -> str:
     """Load a CSV file for analysis.
 
     Args:
         file_path: Path to the CSV file
         delimiter: Column delimiter (default: comma)
+        session_id: Session identifier for multi-user isolation
 
     Returns:
         Summary of loaded data
@@ -150,7 +157,12 @@ def load_csv_file(file_path: str, delimiter: str = ",") -> str:
 
     try:
         df = pd.read_csv(file_path, delimiter=delimiter)
-        _dataframes["current"] = df
+
+        # Initialize session storage if needed
+        if session_id not in _dataframes:
+            _dataframes[session_id] = {}
+
+        _dataframes[session_id]["current"] = df
 
         return (
             f"CSV file loaded successfully!\n\n"
@@ -167,8 +179,11 @@ def load_csv_file(file_path: str, delimiter: str = ",") -> str:
 
 @tool
 @tool_error_handler
-def get_data_summary() -> str:
+def get_data_summary(session_id: str = "default_session") -> str:
     """Get statistical summary of the loaded data.
+
+    Args:
+        session_id: Session identifier for multi-user isolation
 
     Returns:
         Statistical summary including count, mean, std, min, max, etc.
@@ -177,10 +192,10 @@ def get_data_summary() -> str:
     if pd is None:
         return "Error: pandas library not installed"
 
-    if "current" not in _dataframes:
+    if session_id not in _dataframes or "current" not in _dataframes[session_id]:
         return "Error: No data loaded. Please load a file first."
 
-    df = _dataframes["current"]
+    df = _dataframes[session_id]["current"]
 
     try:
         summary = df.describe(include='all').to_string()
@@ -200,11 +215,12 @@ def get_data_summary() -> str:
 
 @tool
 @tool_error_handler
-def run_sql_query(query: str) -> str:
+def run_sql_query(query: str, session_id: str = "default_session") -> str:
     """Run a SQL query on the loaded data using pandasql.
 
     Args:
         query: SQL query to execute (table name is 'df')
+        session_id: Session identifier for multi-user isolation
 
     Returns:
         Query results
@@ -213,10 +229,10 @@ def run_sql_query(query: str) -> str:
     if pd is None:
         return "Error: pandas library not installed"
 
-    if "current" not in _dataframes:
+    if session_id not in _dataframes or "current" not in _dataframes[session_id]:
         return "Error: No data loaded. Please load a file first."
 
-    df = _dataframes["current"]
+    df = _dataframes[session_id]["current"]
 
     # Security: Basic SQL injection prevention
     dangerous_keywords = ["DROP", "DELETE", "UPDATE", "INSERT", "ALTER", "CREATE", "TRUNCATE"]
@@ -250,12 +266,13 @@ def run_sql_query(query: str) -> str:
 
 @tool
 @tool_error_handler
-def calculate_statistics(column: str, operation: str = "all") -> str:
+def calculate_statistics(column: str, operation: str = "all", session_id: str = "default_session") -> str:
     """Calculate statistics for a specific column.
 
     Args:
         column: Column name to analyze
         operation: Statistic to calculate (mean/median/std/min/max/all)
+        session_id: Session identifier for multi-user isolation
 
     Returns:
         Calculated statistics
@@ -264,10 +281,10 @@ def calculate_statistics(column: str, operation: str = "all") -> str:
     if pd is None:
         return "Error: pandas library not installed"
 
-    if "current" not in _dataframes:
+    if session_id not in _dataframes or "current" not in _dataframes[session_id]:
         return "Error: No data loaded."
 
-    df = _dataframes["current"]
+    df = _dataframes[session_id]["current"]
 
     if column not in df.columns:
         return f"Error: Column '{column}' not found. Available: {', '.join(df.columns)}"
@@ -306,11 +323,12 @@ def calculate_statistics(column: str, operation: str = "all") -> str:
 
 @tool
 @tool_error_handler
-def suggest_visualization(analysis_goal: str) -> str:
+def suggest_visualization(analysis_goal: str, session_id: str = "default_session") -> str:
     """Suggest appropriate visualizations based on the data and goal.
 
     Args:
         analysis_goal: What you want to visualize or understand
+        session_id: Session identifier for multi-user isolation
 
     Returns:
         Visualization recommendations
@@ -319,10 +337,10 @@ def suggest_visualization(analysis_goal: str) -> str:
     if pd is None:
         return "Error: pandas library not installed"
 
-    if "current" not in _dataframes:
+    if session_id not in _dataframes or "current" not in _dataframes[session_id]:
         return "Error: No data loaded."
 
-    df = _dataframes["current"]
+    df = _dataframes[session_id]["current"]
     numeric_cols = df.select_dtypes(include=['int64', 'float64']).columns.tolist()
     categorical_cols = df.select_dtypes(include=['object', 'category']).columns.tolist()
     date_cols = df.select_dtypes(include=['datetime64']).columns.tolist()
@@ -368,11 +386,12 @@ def suggest_visualization(analysis_goal: str) -> str:
 
 @tool
 @tool_error_handler
-def generate_insights(focus_area: str = "general") -> str:
+def generate_insights(focus_area: str = "general", session_id: str = "default_session") -> str:
     """Generate automated insights from the loaded data.
 
     Args:
         focus_area: Area to focus insights on (general/outliers/trends/correlations)
+        session_id: Session identifier for multi-user isolation
 
     Returns:
         Generated insights
@@ -381,10 +400,10 @@ def generate_insights(focus_area: str = "general") -> str:
     if pd is None:
         return "Error: pandas library not installed"
 
-    if "current" not in _dataframes:
+    if session_id not in _dataframes or "current" not in _dataframes[session_id]:
         return "Error: No data loaded."
 
-    df = _dataframes["current"]
+    df = _dataframes[session_id]["current"]
     insights = [f"Data Insights (Focus: {focus_area})\n{'=' * 50}\n"]
 
     try:
@@ -508,7 +527,25 @@ For SQL queries, the table name is always 'df'."""
 
         def call_model(state: DataAnalystState) -> dict:
             """Call the LLM to process the current state."""
-            system_prompt = SystemMessage(content=self._get_system_prompt())
+            # Get base system prompt
+            base_prompt = self._get_system_prompt()
+
+            # Check if data is already loaded and add context
+            session_id = state.session_id or "default_session"
+            data_context = ""
+            if session_id in _dataframes and "current" in _dataframes[session_id]:
+                df = _dataframes[session_id]["current"]
+                data_context = f"""
+
+## IMPORTANT: Data Already Loaded
+A data file has been uploaded and is ready for analysis. DO NOT ask the user to upload a file.
+- Rows: {len(df)}
+- Columns: {len(df.columns)}
+- Column names: {', '.join(df.columns.tolist()[:20])}{'...' if len(df.columns) > 20 else ''}
+
+You can directly use get_data_summary, generate_insights, calculate_statistics, run_sql_query, or suggest_visualization tools to analyze this data."""
+
+            system_prompt = SystemMessage(content=base_prompt + data_context)
             messages = [system_prompt] + list(state.messages)
             response = self.llm_with_tools.invoke(messages)
             return {"messages": [response]}

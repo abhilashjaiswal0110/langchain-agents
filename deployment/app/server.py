@@ -1473,12 +1473,30 @@ async def data_analyst_upload(file: UploadFile = File(...)) -> dict:
         tmp.write(content)
         tmp_path = tmp.name
 
-    return {
-        "status": "success",
-        "filename": filename,
-        "path": tmp_path,
-        "message": f"File uploaded. Use path '{tmp_path}' in your analysis requests.",
-    }
+    # Automatically load the file into the agent's memory
+    try:
+        from app.agents.data_analyst.data_analyst_agent import load_excel_file, load_csv_file
+
+        # Generate a session_id if not provided (for production, use proper session management)
+        session_id = "default_session"  # In production, extract from request headers/cookies
+
+        if ext in [".xlsx", ".xls"]:
+            result = load_excel_file.invoke({"file_path": tmp_path, "session_id": session_id})
+        else:  # CSV
+            result = load_csv_file.invoke({"file_path": tmp_path, "session_id": session_id})
+
+        # Return success with truncated result for security
+        return {
+            "status": "success",
+            "filename": filename,
+            "message": f"File loaded successfully! Ready for analysis.",
+        }
+    except Exception as e:
+        # Generic error for security
+        return {
+            "status": "error",
+            "message": "Failed to load file. Please ensure it's a valid Excel or CSV file.",
+        }
 
 
 @app.post("/api/enterprise/documents/invoke", response_model=EnterpriseAgentResponse, tags=["Enterprise Agents"])
@@ -1594,13 +1612,55 @@ async def rag_upload_document(file: UploadFile = File(...)) -> dict:
             detail=f"Unsupported file type: {ext}. Supported: {', '.join(allowed)}",
         )
 
-    content = await file.read()
+    content_bytes = await file.read()
 
+    # Extract text content based on file type
     try:
-        result = multilingual_rag_agent.upload_document(content, filename)
-        return result
+        if ext in [".txt", ".md"]:
+            # Plain text files - decode as UTF-8
+            text_content = content_bytes.decode("utf-8", errors="replace")
+        elif ext == ".pdf":
+            # PDF files - use PyPDF2 or pdfplumber
+            try:
+                import io
+                from PyPDF2 import PdfReader
+                pdf_reader = PdfReader(io.BytesIO(content_bytes))
+                text_content = ""
+                for page in pdf_reader.pages:
+                    text_content += page.extract_text() or ""
+            except ImportError:
+                raise HTTPException(
+                    status_code=500,
+                    detail="PDF processing requires PyPDF2. Install with: pip install PyPDF2",
+                )
+        elif ext in [".docx", ".doc"]:
+            # Word files - use python-docx
+            try:
+                import io
+                from docx import Document
+                doc = Document(io.BytesIO(content_bytes))
+                text_content = "\n".join([para.text for para in doc.paragraphs])
+            except ImportError:
+                raise HTTPException(
+                    status_code=500,
+                    detail="Word processing requires python-docx. Install with: pip install python-docx",
+                )
+        else:
+            text_content = content_bytes.decode("utf-8", errors="replace")
+
+        if not text_content.strip():
+            raise HTTPException(
+                status_code=400,
+                detail="Could not extract text from the document. The file may be empty or corrupted.",
+            )
+
+        # Upload extracted text to the RAG agent
+        result = multilingual_rag_agent.upload(text_content, filename, ext.replace(".", ""))
+        return {"status": "success", "message": result, "filename": filename}
+    except HTTPException:
+        raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=f"Failed to process document: {str(e)}")
 
 
 @app.post("/api/enterprise/support/invoke", response_model=EnterpriseAgentResponse, tags=["Enterprise Agents"])
