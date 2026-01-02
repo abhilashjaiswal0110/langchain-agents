@@ -2,7 +2,7 @@
 
 > **Purpose**: This document serves as the authoritative knowledge source for AI agents working on this repository. It contains architectural decisions, implementation patterns, and guidelines that must be followed when making changes or enhancements.
 
-**Last Updated**: 2026-01-01 (v3.7 - Enhanced Governance & Security)
+**Last Updated**: 2026-01-02 (v3.8 - Memory & Persistence Upgrade)
 
 ---
 
@@ -174,12 +174,20 @@ deployment/
 │   │   ├── rate_limiter.py      # Token bucket rate limiting
 │   │   ├── approval_workflow.py # Multi-level approval workflows
 │   │   └── middleware.py        # FastAPI middleware integration
-│   ├── mcp/                     # MCP integration (NEW)
+│   ├── mcp/                     # MCP integration
 │   │   ├── __init__.py          # Module exports
 │   │   ├── server.py            # FastMCP server with tools
 │   │   ├── gateway.py           # Access control gateway
 │   │   ├── servicenow_client.py # Real ServiceNow REST API
 │   │   └── tools/               # Tool implementations
+│   ├── memory/                  # Session persistence (NEW)
+│   │   ├── __init__.py          # Module exports
+│   │   ├── base.py              # Base classes and types
+│   │   ├── memory_store.py      # In-memory session store
+│   │   ├── redis_store.py       # Redis session store
+│   │   ├── sqlite_store.py      # SQLite session store
+│   │   ├── conversation_memory.py # LangChain integration
+│   │   └── config.py            # Configuration and factories
 │   └── static/                  # Static web files
 │       └── chat.html            # Web UI for demos
 ├── tests/                       # Test suite
@@ -297,6 +305,69 @@ temperature: float = 0      # Response temperature
 **LangSmith Tracing**:
 - `@traceable(name="load_document", tags=["doc-rag", "ingestion"])`
 - `@traceable(name="query_document", tags=["doc-rag", "query"])`
+
+### 7. Memory Module (`app/memory/`)
+
+**Purpose**: Persistent session storage with multiple backends for conversation history.
+
+**Storage Backends**:
+| Backend | Use Case | Features |
+|---------|----------|----------|
+| `InMemorySessionStore` | Development/testing | Fast, non-persistent, thread-safe |
+| `RedisSessionStore` | Production/distributed | Scalable, TTL support, indices |
+| `SQLiteSessionStore` | Single-instance production | Persistent, local storage, ACID |
+
+**Core Components**:
+
+1. **Base Types** (`base.py`):
+   - `Message`: Role, content, timestamp, metadata
+   - `Session`: ID, messages, context, metadata, expiration
+   - `SessionMetadata`: User ID, agent type, tags, custom data
+   - `BaseSessionStore`: Abstract interface for all backends
+
+2. **Conversation Memory** (`conversation_memory.py`):
+   - `ConversationMemory`: LangChain-integrated memory management
+   - `ConversationSummary`: Session summary with message counts
+   - `get_langchain_messages()`: Convert to LangChain message format
+   - `get_chat_history_string()`: Formatted history for prompts
+
+3. **Configuration** (`config.py`):
+   - `MemoryBackend`: Enum for backend selection
+   - `MemoryConfig`: Configuration from environment
+   - `get_session_store()`: Factory for session stores
+   - `get_checkpointer()`: Factory for LangGraph checkpointers
+
+**Environment Variables**:
+```bash
+MEMORY_BACKEND=memory|redis|sqlite   # Storage backend (default: memory)
+REDIS_URL=redis://localhost:6379     # Redis connection URL
+SQLITE_PATH=data/sessions.db         # SQLite database path
+SESSION_TTL_HOURS=24                 # Session TTL in hours
+MAX_SESSIONS=10000                   # Max sessions (memory backend)
+SESSION_KEY_PREFIX=session:          # Redis key prefix
+```
+
+**Usage Example**:
+```python
+from app.memory import (
+    get_session_store,
+    ConversationMemory,
+    MemoryConfig,
+)
+
+# Using default configuration
+store = get_session_store()
+
+# Create conversation memory
+memory = ConversationMemory(session_store=store)
+session_id = memory.create_session("helpdesk", user_id="user-123")
+
+# Add messages
+memory.add_exchange(session_id, "Hello", "How can I help?")
+
+# Get LangChain messages
+lc_messages = memory.get_langchain_messages(session_id)
+```
 
 ---
 
@@ -1919,6 +1990,65 @@ from langgraph.prebuilt import create_react_agent
 ---
 
 ## Change Log
+
+### 2026-01-02 - Memory & Persistence Upgrade (v3.8)
+
+**Added**:
+- **Session Memory Module**: Multiple backend support for conversation persistence
+  - `app/memory/base.py` - Base types: Message, Session, SessionMetadata, BaseSessionStore
+  - `app/memory/memory_store.py` - In-memory session store (development/testing)
+  - `app/memory/redis_store.py` - Redis session store (production/distributed)
+  - `app/memory/sqlite_store.py` - SQLite session store (single-instance persistence)
+  - `app/memory/conversation_memory.py` - LangChain-integrated conversation memory
+  - `app/memory/config.py` - Configuration and factory functions
+
+- **Storage Backends**:
+  - `InMemorySessionStore`: Thread-safe in-memory storage with max sessions limit
+  - `RedisSessionStore`: Redis-backed with TTL support and user/agent indices
+  - `SQLiteSessionStore`: SQLite-backed with VACUUM and stats support
+
+- **Conversation Features**:
+  - `ConversationMemory`: High-level API for managing conversations
+  - `ConversationSummary`: Session metadata and message counts
+  - `get_langchain_messages()`: Convert to HumanMessage/AIMessage format
+  - `get_chat_history_string()`: Formatted history for prompts
+
+- **Configuration**:
+  - `MemoryBackend` enum: MEMORY, REDIS, SQLITE
+  - `MemoryConfig.from_env()`: Environment-based configuration
+  - `get_session_store()`: Factory with singleton pattern
+  - `get_checkpointer()`: LangGraph checkpointer factory
+
+- **LangGraph Integration**:
+  - `CheckpointerType` enum: MEMORY, REDIS, SQLITE, POSTGRES
+  - Auto-matching checkpointer to session backend
+  - Support for MemorySaver, SqliteSaver, PostgresSaver
+
+**Environment Variables**:
+```bash
+MEMORY_BACKEND=memory|redis|sqlite
+REDIS_URL=redis://localhost:6379
+SQLITE_PATH=data/sessions.db
+SESSION_TTL_HOURS=24
+MAX_SESSIONS=10000
+SESSION_KEY_PREFIX=session:
+```
+
+**Testing**:
+- 59 unit tests for session memory module (all passing)
+- Tests cover all backends, conversation memory, config, and factories
+
+**Files Added**:
+- `deployment/app/memory/__init__.py` - Module exports
+- `deployment/app/memory/base.py` - ~400 lines
+- `deployment/app/memory/memory_store.py` - ~305 lines
+- `deployment/app/memory/redis_store.py` - ~300 lines
+- `deployment/app/memory/sqlite_store.py` - ~575 lines
+- `deployment/app/memory/conversation_memory.py` - ~400 lines
+- `deployment/app/memory/config.py` - ~290 lines
+- `deployment/tests/test_session_memory.py` - ~800 lines
+
+---
 
 ### 2026-01-01 - Enhanced Governance & Security (v3.7)
 
