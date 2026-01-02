@@ -1,0 +1,286 @@
+# LangChain Platform CI/CD Pipeline
+# Builds, tests, and deploys the platform to Azure Container Apps
+
+name: "🚀 Deploy Platform"
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    paths:
+      - "deployment/**"
+      - ".github/workflows/deploy-platform.yml"
+  pull_request:
+    branches:
+      - main
+      - master
+    paths:
+      - "deployment/**"
+      - ".github/workflows/deploy-platform.yml"
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: "Deployment environment"
+        required: true
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+        default: dev
+      skip_tests:
+        description: "Skip tests"
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  id-token: write  # Required for OIDC authentication to Azure
+
+env:
+  WORKING_DIRECTORY: deployment
+  PYTHON_VERSION: "3.11"
+  AZURE_RESOURCE_GROUP: ${{ vars.AZURE_RESOURCE_GROUP }}
+  AZURE_CONTAINER_REGISTRY: ${{ vars.AZURE_CONTAINER_REGISTRY }}
+  IMAGE_NAME: langchain-platform
+
+jobs:
+  # =============================================================================
+  # Test Job - Run unit and integration tests
+  # =============================================================================
+  test:
+    name: "🧪 Test"
+    runs-on: ubuntu-latest
+    if: ${{ !inputs.skip_tests }}
+    defaults:
+      run:
+        working-directory: deployment
+
+    steps:
+      - name: "📋 Checkout Code"
+        uses: actions/checkout@v4
+
+      - name: "🐍 Set up Python ${{ env.PYTHON_VERSION }}"
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: "📦 Install UV"
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+      - name: "📦 Install Dependencies"
+        run: |
+          uv venv
+          uv pip install -e ".[test]"
+
+      - name: "🔍 Lint with Ruff"
+        run: |
+          uv pip install ruff
+          uv run ruff check app/
+          uv run ruff format --check app/
+
+      - name: "🧪 Run Tests"
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY_TEST }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY_TEST }}
+        run: |
+          uv run pytest tests/ -v --tb=short --cov=app --cov-report=xml
+
+      - name: "📊 Upload Coverage"
+        uses: codecov/codecov-action@v4
+        if: always()
+        with:
+          files: deployment/coverage.xml
+          flags: unittests
+          name: langchain-platform
+          fail_ci_if_error: false
+
+  # =============================================================================
+  # Build Job - Build and push Docker image
+  # =============================================================================
+  build:
+    name: "🐳 Build"
+    runs-on: ubuntu-latest
+    needs: [test]
+    if: always() && (needs.test.result == 'success' || needs.test.result == 'skipped')
+    outputs:
+      image_tag: ${{ steps.meta.outputs.tags }}
+      image_digest: ${{ steps.build.outputs.digest }}
+      short_sha: ${{ steps.vars.outputs.short_sha }}
+
+    steps:
+      - name: "📋 Checkout Code"
+        uses: actions/checkout@v4
+
+      - name: "🔧 Set Variables"
+        id: vars
+        run: |
+          echo "short_sha=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+          echo "build_date=$(date -u +'%Y-%m-%dT%H:%M:%SZ')" >> $GITHUB_OUTPUT
+
+      - name: "🔐 Login to Azure"
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: "🔐 Login to ACR"
+        run: |
+          az acr login --name ${{ env.AZURE_CONTAINER_REGISTRY }}
+
+      - name: "🏷️ Docker Metadata"
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,prefix=
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: "🐳 Set up Docker Buildx"
+        uses: docker/setup-buildx-action@v3
+
+      - name: "🏗️ Build and Push"
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: ./deployment
+          file: ./deployment/Dockerfile
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            BUILD_DATE=${{ steps.vars.outputs.build_date }}
+            GIT_SHA=${{ github.sha }}
+
+  # =============================================================================
+  # Deploy Job - Deploy to Azure Container Apps
+  # =============================================================================
+  deploy:
+    name: "🚀 Deploy"
+    runs-on: ubuntu-latest
+    needs: [build]
+    if: github.event_name != 'pull_request'
+    environment:
+      name: ${{ inputs.environment || 'dev' }}
+      url: ${{ steps.deploy.outputs.app_url }}
+
+    steps:
+      - name: "📋 Checkout Code"
+        uses: actions/checkout@v4
+
+      - name: "🔐 Login to Azure"
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: "🔧 Set Environment Variables"
+        id: env
+        run: |
+          ENV="${{ inputs.environment || 'dev' }}"
+          echo "environment=$ENV" >> $GITHUB_OUTPUT
+          echo "container_app_name=langchain-$ENV-app" >> $GITHUB_OUTPUT
+          echo "image_tag=${{ needs.build.outputs.short_sha }}" >> $GITHUB_OUTPUT
+
+      - name: "🚀 Deploy to Container Apps"
+        id: deploy
+        run: |
+          IMAGE="${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ steps.env.outputs.image_tag }}"
+
+          # Update container app with new image
+          az containerapp update \
+            --name ${{ steps.env.outputs.container_app_name }} \
+            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+            --image $IMAGE \
+            --output none
+
+          # Get the app URL
+          APP_URL=$(az containerapp show \
+            --name ${{ steps.env.outputs.container_app_name }} \
+            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+            --query "properties.configuration.ingress.fqdn" \
+            --output tsv)
+
+          echo "app_url=https://$APP_URL" >> $GITHUB_OUTPUT
+          echo "Deployed to: https://$APP_URL"
+
+      - name: "✅ Verify Deployment"
+        run: |
+          echo "Waiting for deployment to stabilize..."
+          sleep 30
+
+          # Health check
+          HEALTH_URL="${{ steps.deploy.outputs.app_url }}/health"
+          echo "Checking health at: $HEALTH_URL"
+
+          for i in {1..5}; do
+            HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$HEALTH_URL" || echo "000")
+            if [ "$HTTP_STATUS" = "200" ]; then
+              echo "✅ Health check passed!"
+              exit 0
+            fi
+            echo "Attempt $i: HTTP $HTTP_STATUS - Retrying in 10s..."
+            sleep 10
+          done
+
+          echo "❌ Health check failed after 5 attempts"
+          exit 1
+
+  # =============================================================================
+  # Infrastructure Job - Deploy Azure infrastructure (manual trigger)
+  # =============================================================================
+  infrastructure:
+    name: "🏗️ Infrastructure"
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' && inputs.environment != ''
+    environment:
+      name: ${{ inputs.environment }}-infra
+
+    steps:
+      - name: "📋 Checkout Code"
+        uses: actions/checkout@v4
+
+      - name: "🔐 Login to Azure"
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: "🔧 Validate Bicep Templates"
+        run: |
+          az bicep build --file deployment/infrastructure/main.bicep
+
+      - name: "📝 What-If Deployment"
+        run: |
+          az deployment group what-if \
+            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+            --template-file deployment/infrastructure/main.bicep \
+            --parameters deployment/infrastructure/parameters.${{ inputs.environment }}.json
+
+      - name: "🏗️ Deploy Infrastructure"
+        if: ${{ inputs.environment == 'dev' || inputs.environment == 'staging' }}
+        run: |
+          az deployment group create \
+            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+            --template-file deployment/infrastructure/main.bicep \
+            --parameters deployment/infrastructure/parameters.${{ inputs.environment }}.json \
+            --name "langchain-${{ inputs.environment }}-$(date +%Y%m%d%H%M%S)"
+
+      - name: "⚠️ Production Deployment Notice"
+        if: ${{ inputs.environment == 'prod' }}
+        run: |
+          echo "⚠️ Production infrastructure deployment requires manual approval."
+          echo "Please run the deployment manually with appropriate approvals."
+          exit 1

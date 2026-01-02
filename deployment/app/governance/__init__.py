@@ -5,6 +5,9 @@ This module provides a comprehensive governance layer including:
 - Audit logging for compliance
 - Rate limiting
 - Approval workflows for sensitive actions
+- PII detection and masking
+- Token usage cost tracking
+- Anomaly detection
 - FastAPI middleware integration
 
 Usage:
@@ -24,6 +27,18 @@ Usage:
         # Approval workflow
         ApprovalWorkflowManager, ApprovalRequest, ApprovalLevel,
         get_approval_manager, request_approval,
+
+        # PII detection
+        PIIDetector, PIIType, PIIMatch, PIIConfig,
+        get_pii_detector, detect_pii, mask_pii,
+
+        # Cost tracking
+        CostTracker, TokenUsage, CostConfig,
+        get_cost_tracker, track_usage, get_usage_summary,
+
+        # Anomaly detection
+        AnomalyDetector, Anomaly, AnomalyType, AnomalyConfig,
+        get_anomaly_detector, record_event, check_for_anomalies,
 
         # Middleware
         setup_governance_middleware, get_user_context,
@@ -102,9 +117,11 @@ from app.governance.approval_workflow import (
 
 # Middleware exports
 from app.governance.middleware import (
+    AnomalyMiddleware,
     AuditMiddleware,
     GovernanceContext,
     GovernanceExceptionMiddleware,
+    PIIMiddleware,
     RateLimitMiddleware,
     RBACMiddleware,
     create_permission_dependency,
@@ -117,6 +134,56 @@ from app.governance.middleware import (
     require_operator,
     require_user,
     setup_governance_middleware,
+)
+
+# PII detection exports
+from app.governance.pii_detector import (
+    PIIAnalysisResult,
+    PIIBlockedError,
+    PIIConfig,
+    PIIDetector,
+    PIIMatch,
+    PIISeverity,
+    PIIType,
+    check_for_pii,
+    detect_pii,
+    get_pii_detector,
+    mask_pii,
+    reset_pii_detector,
+)
+
+# Cost tracking exports
+from app.governance.cost_tracker import (
+    BudgetConfig,
+    BudgetExceededError,
+    CostConfig,
+    CostTracker,
+    ModelPricing,
+    ModelProvider,
+    TokenUsage,
+    UsageSummary,
+    get_cost_tracker,
+    get_usage_summary,
+    reset_cost_tracker,
+    track_usage,
+)
+
+# Anomaly detection exports
+from app.governance.anomaly_detector import (
+    Anomaly,
+    AnomalyBlockedError,
+    AnomalyConfig,
+    AnomalyDetector,
+    AnomalySeverity,
+    AnomalyType,
+    ContentConfig,
+    ErrorConfig,
+    Event,
+    RateConfig,
+    check_for_anomalies,
+    get_anomaly_detector,
+    record_event,
+    reset_anomaly_detector,
 )
 
 __all__ = [
@@ -172,6 +239,8 @@ __all__ = [
     "RBACMiddleware",
     "RateLimitMiddleware",
     "AuditMiddleware",
+    "PIIMiddleware",
+    "AnomalyMiddleware",
     "GovernanceExceptionMiddleware",
     "setup_governance_middleware",
     "get_governance_context",
@@ -183,4 +252,45 @@ __all__ = [
     "require_user",
     "require_agent_invoke",
     "require_audit_read",
+    # PII detection
+    "PIIType",
+    "PIISeverity",
+    "PIIMatch",
+    "PIIAnalysisResult",
+    "PIIConfig",
+    "PIIDetector",
+    "PIIBlockedError",
+    "get_pii_detector",
+    "reset_pii_detector",
+    "detect_pii",
+    "mask_pii",
+    "check_for_pii",
+    # Cost tracking
+    "ModelProvider",
+    "ModelPricing",
+    "TokenUsage",
+    "UsageSummary",
+    "BudgetConfig",
+    "CostConfig",
+    "CostTracker",
+    "BudgetExceededError",
+    "get_cost_tracker",
+    "reset_cost_tracker",
+    "track_usage",
+    "get_usage_summary",
+    # Anomaly detection
+    "AnomalyType",
+    "AnomalySeverity",
+    "Event",
+    "Anomaly",
+    "RateConfig",
+    "ErrorConfig",
+    "ContentConfig",
+    "AnomalyConfig",
+    "AnomalyDetector",
+    "AnomalyBlockedError",
+    "get_anomaly_detector",
+    "reset_anomaly_detector",
+    "record_event",
+    "check_for_anomalies",
 ]

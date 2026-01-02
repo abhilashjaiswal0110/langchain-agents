@@ -2,7 +2,7 @@
 
 > **Purpose**: This document serves as the authoritative knowledge source for AI agents working on this repository. It contains architectural decisions, implementation patterns, and guidelines that must be followed when making changes or enhancements.
 
-**Last Updated**: 2026-01-01 (v3.6 - DeepSearch Enhancement)
+**Last Updated**: 2026-01-02 (v3.10 - Azure Deployment & CI/CD)
 
 ---
 
@@ -174,17 +174,41 @@ deployment/
 │   │   ├── rate_limiter.py      # Token bucket rate limiting
 │   │   ├── approval_workflow.py # Multi-level approval workflows
 │   │   └── middleware.py        # FastAPI middleware integration
-│   ├── mcp/                     # MCP integration (NEW)
+│   ├── mcp/                     # MCP integration
 │   │   ├── __init__.py          # Module exports
 │   │   ├── server.py            # FastMCP server with tools
 │   │   ├── gateway.py           # Access control gateway
 │   │   ├── servicenow_client.py # Real ServiceNow REST API
 │   │   └── tools/               # Tool implementations
+│   ├── memory/                  # Session persistence
+│   │   ├── __init__.py          # Module exports
+│   │   ├── base.py              # Base classes and types
+│   │   ├── memory_store.py      # In-memory session store
+│   │   ├── redis_store.py       # Redis session store
+│   │   ├── sqlite_store.py      # SQLite session store
+│   │   ├── conversation_memory.py # LangChain integration
+│   │   └── config.py            # Configuration and factories
+│   ├── integrations/            # External integrations (NEW)
+│   │   ├── __init__.py          # Module exports
+│   │   ├── teams_webhook.py     # Microsoft Teams webhook
+│   │   ├── slack_webhook.py     # Slack webhook
+│   │   └── routes.py            # FastAPI routes
 │   └── static/                  # Static web files
 │       └── chat.html            # Web UI for demos
 ├── tests/                       # Test suite
 │   ├── __init__.py
 │   └── test_server.py           # Server endpoint tests
+├── infrastructure/              # Azure deployment (NEW)
+│   ├── main.bicep               # Main Bicep orchestration
+│   ├── parameters.dev.json      # Development parameters
+│   ├── parameters.prod.json     # Production parameters
+│   ├── README.md                # Infrastructure documentation
+│   └── modules/                 # Bicep modules
+│       ├── containerRegistry.bicep
+│       ├── containerAppsEnvironment.bicep
+│       ├── containerApp.bicep
+│       ├── logAnalytics.bicep
+│       └── applicationInsights.bicep
 ├── cli_chat.py                  # CLI chat interface (NEW)
 ├── .env                         # Environment variables (NOT committed)
 ├── .env.example                 # Environment template (committed)
@@ -297,6 +321,69 @@ temperature: float = 0      # Response temperature
 **LangSmith Tracing**:
 - `@traceable(name="load_document", tags=["doc-rag", "ingestion"])`
 - `@traceable(name="query_document", tags=["doc-rag", "query"])`
+
+### 7. Memory Module (`app/memory/`)
+
+**Purpose**: Persistent session storage with multiple backends for conversation history.
+
+**Storage Backends**:
+| Backend | Use Case | Features |
+|---------|----------|----------|
+| `InMemorySessionStore` | Development/testing | Fast, non-persistent, thread-safe |
+| `RedisSessionStore` | Production/distributed | Scalable, TTL support, indices |
+| `SQLiteSessionStore` | Single-instance production | Persistent, local storage, ACID |
+
+**Core Components**:
+
+1. **Base Types** (`base.py`):
+   - `Message`: Role, content, timestamp, metadata
+   - `Session`: ID, messages, context, metadata, expiration
+   - `SessionMetadata`: User ID, agent type, tags, custom data
+   - `BaseSessionStore`: Abstract interface for all backends
+
+2. **Conversation Memory** (`conversation_memory.py`):
+   - `ConversationMemory`: LangChain-integrated memory management
+   - `ConversationSummary`: Session summary with message counts
+   - `get_langchain_messages()`: Convert to LangChain message format
+   - `get_chat_history_string()`: Formatted history for prompts
+
+3. **Configuration** (`config.py`):
+   - `MemoryBackend`: Enum for backend selection
+   - `MemoryConfig`: Configuration from environment
+   - `get_session_store()`: Factory for session stores
+   - `get_checkpointer()`: Factory for LangGraph checkpointers
+
+**Environment Variables**:
+```bash
+MEMORY_BACKEND=memory|redis|sqlite   # Storage backend (default: memory)
+REDIS_URL=redis://localhost:6379     # Redis connection URL
+SQLITE_PATH=data/sessions.db         # SQLite database path
+SESSION_TTL_HOURS=24                 # Session TTL in hours
+MAX_SESSIONS=10000                   # Max sessions (memory backend)
+SESSION_KEY_PREFIX=session:          # Redis key prefix
+```
+
+**Usage Example**:
+```python
+from app.memory import (
+    get_session_store,
+    ConversationMemory,
+    MemoryConfig,
+)
+
+# Using default configuration
+store = get_session_store()
+
+# Create conversation memory
+memory = ConversationMemory(session_store=store)
+session_id = memory.create_session("helpdesk", user_id="user-123")
+
+# Add messages
+memory.add_exchange(session_id, "Hello", "How can I help?")
+
+# Get LangChain messages
+lc_messages = memory.get_langchain_messages(session_id)
+```
 
 ---
 
@@ -890,6 +977,9 @@ The governance framework provides enterprise-grade security, compliance, and ope
 | Audit Logger | Compliance | JSON Lines, privacy hashing, async |
 | Rate Limiter | Protection | Token bucket, Redis support, per-user/agent |
 | Approval Workflow | HITL | Multi-level (L1-L3), callbacks, expiry |
+| PII Detector | Privacy | Regex + Presidio, masking, blocking |
+| Cost Tracker | Budgeting | Token usage, pricing, budget alerts |
+| Anomaly Detector | Security | Rate/error/content anomalies, auto-block |
 | Middleware | Integration | FastAPI middleware stack |
 
 ### Role-Based Access Control (RBAC)
@@ -1002,17 +1092,194 @@ admin_ctx = UserContext(user_id="admin", role=Role.ADMIN)
 response = manager.approve(request.id, admin_ctx, reason="Verified identity")
 ```
 
+### PII Detection
+
+**Purpose:** Detect and mask Personally Identifiable Information in agent inputs/outputs
+
+**Supported PII Types:**
+| Type | Examples | Severity |
+|------|----------|----------|
+| Email | user@example.com | HIGH |
+| Phone | 555-123-4567 | HIGH |
+| Credit Card | 4111111111111111 | CRITICAL |
+| SSN | 123-45-6789 | CRITICAL |
+| API Key | sk-xxxx... | CRITICAL |
+| IP Address | 192.168.1.1 | MEDIUM |
+| Password | password: xxx | CRITICAL |
+
+**Usage:**
+```python
+from app.governance import (
+    PIIDetector, detect_pii, mask_pii, check_for_pii,
+    PIIType, PIISeverity, PIIConfig,
+)
+
+# Simple detection
+matches = detect_pii("Contact john@email.com or 555-123-4567")
+
+# Masking
+masked = mask_pii("My email is john@email.com")
+# Returns: "My email is [EMAIL_REDACTED]"
+
+# Check for critical PII (blocks credit cards, SSN, API keys)
+if check_for_pii("Card: 4111111111111111"):
+    raise Exception("Cannot process sensitive data")
+
+# Custom detector configuration
+config = PIIConfig(
+    enabled=True,
+    use_presidio=True,  # Use Presidio if available
+    block_on_pii=False,
+    allowed_pii_types={PIIType.EMAIL},  # Allow emails through
+)
+detector = PIIDetector(config)
+
+# Add custom pattern
+detector.add_custom_pattern("employee_id", r"EMP-\d{6}", PIISeverity.MEDIUM)
+```
+
+**Presidio Integration:** When `presidio-analyzer` is installed, the detector uses Presidio for enhanced NER-based detection of names, addresses, and other entities.
+
+### Cost Tracking
+
+**Purpose:** Track token usage and costs for budget management and analytics
+
+**Supported Models:**
+| Provider | Model | Input $/1K | Output $/1K |
+|----------|-------|------------|-------------|
+| OpenAI | gpt-4o | 0.005 | 0.015 |
+| OpenAI | gpt-4o-mini | 0.00015 | 0.0006 |
+| Anthropic | claude-3-5-sonnet | 0.003 | 0.015 |
+| Anthropic | claude-3-opus | 0.015 | 0.075 |
+| Anthropic | claude-3-haiku | 0.00025 | 0.00125 |
+
+**Usage:**
+```python
+from app.governance import (
+    CostTracker, track_usage, get_usage_summary,
+    CostConfig, BudgetConfig, ModelPricing,
+)
+
+# Track usage
+usage = track_usage(
+    model="gpt-4o-mini",
+    input_tokens=1000,
+    output_tokens=500,
+    user_id="user123",
+    agent_type="research",
+)
+print(f"Cost: ${usage.cost:.6f}")
+
+# Get usage summary
+summary = get_usage_summary(user_id="user123")
+print(f"Total cost: ${summary.total_cost:.4f}")
+print(f"By model: {summary.by_model}")
+
+# Budget configuration
+config = CostConfig(
+    budget=BudgetConfig(
+        daily_limit=100.0,
+        monthly_limit=2000.0,
+        per_user_daily=10.0,
+        alert_threshold=0.8,  # Alert at 80%
+    ),
+    alert_callback=lambda t, c, l: print(f"Budget alert: {t}"),
+)
+tracker = CostTracker(config)
+
+# Check budget
+if tracker.check_budget(user_id="user123", period="daily"):
+    # Within budget
+    pass
+
+# Add custom model pricing
+tracker.add_pricing(ModelPricing(
+    model_name="custom-model",
+    provider=ModelProvider.CUSTOM,
+    input_price_per_1k=0.01,
+    output_price_per_1k=0.02,
+))
+```
+
+### Anomaly Detection
+
+**Purpose:** Detect unusual patterns that may indicate security threats or abuse
+
+**Anomaly Types:**
+| Category | Type | Description |
+|----------|------|-------------|
+| Rate | HIGH_REQUEST_RATE | Too many requests in window |
+| Rate | BURST_ACTIVITY | Spike in requests per second |
+| Rate | OFF_HOURS_ACTIVITY | Unusual activity timing |
+| Error | HIGH_ERROR_RATE | Excessive failures |
+| Error | REPEATED_FAILURES | Consecutive failures |
+| Error | AUTH_FAILURES | Multiple auth failures |
+| Content | LARGE_INPUT | Oversized input |
+| Content | PROMPT_INJECTION | Injection attempt patterns |
+| Performance | HIGH_LATENCY | Slow responses |
+
+**Usage:**
+```python
+from app.governance import (
+    AnomalyDetector, record_event, check_for_anomalies,
+    AnomalyConfig, RateConfig, AnomalySeverity,
+)
+
+# Record events
+anomalies = record_event(
+    user_id="user123",
+    agent_type="research",
+    event_type="request",
+    success=True,
+    metadata={
+        "input_length": 500,
+        "response_time_ms": 1200,
+    },
+)
+
+# Check for recent anomalies
+anomalies = check_for_anomalies(user_id="user123")
+for anomaly in anomalies:
+    print(f"{anomaly.anomaly_type}: {anomaly.description}")
+
+# Get user risk score
+detector = get_anomaly_detector()
+risk = detector.get_user_risk_score("user123")  # 0.0 to 1.0
+
+# Add custom detection rule
+detector.add_rule(
+    "slow_response",
+    lambda e: e.metadata.get("response_time_ms", 0) > 5000,
+    AnomalySeverity.MEDIUM,
+    "Response time exceeds 5 seconds",
+)
+
+# Configuration with auto-blocking
+config = AnomalyConfig(
+    rate_config=RateConfig(
+        max_requests_per_window=100,
+        burst_threshold=10,
+    ),
+    auto_block=True,  # Auto-block on critical anomalies
+    alert_callback=lambda a: print(f"Anomaly: {a.anomaly_type}"),
+)
+```
+
 ### FastAPI Middleware Integration
 
 ```python
 from app.governance import setup_governance_middleware
 
-# Add full governance stack
+# Add full governance stack with Phase 3 components
 setup_governance_middleware(
     app,
     enable_rbac=True,
     enable_rate_limit=True,
     enable_audit=True,
+    enable_pii=True,           # NEW: PII detection
+    enable_anomaly=True,       # NEW: Anomaly detection
+    block_on_pii=False,        # Block requests with critical PII
+    block_on_anomaly=False,    # Block on critical anomalies
     exclude_paths=["/health", "/ready", "/docs"],
 )
 
@@ -1053,6 +1320,24 @@ RATE_LIMIT_DEFAULT=100
 APPROVAL_WORKFLOW_ENABLED=true
 APPROVAL_AUTO_APPROVE_L1=false
 APPROVAL_EXPIRY_HOURS=24
+
+# PII Detection (Phase 3)
+PII_DETECTION_ENABLED=true
+PII_USE_PRESIDIO=true
+PII_BLOCK_ON_CRITICAL=false
+
+# Cost Tracking (Phase 3)
+COST_TRACKING_ENABLED=true
+COST_DAILY_LIMIT=100.0
+COST_MONTHLY_LIMIT=2000.0
+COST_PER_USER_DAILY=10.0
+COST_ALERT_THRESHOLD=0.8
+
+# Anomaly Detection (Phase 3)
+ANOMALY_DETECTION_ENABLED=true
+ANOMALY_MAX_REQUESTS_PER_MINUTE=100
+ANOMALY_BURST_THRESHOLD=10
+ANOMALY_AUTO_BLOCK=false
 ```
 
 ---
@@ -1721,6 +2006,212 @@ from langgraph.prebuilt import create_react_agent
 ---
 
 ## Change Log
+
+### 2026-01-02 - Azure Deployment & CI/CD (v3.10)
+
+**Added**:
+- **Azure Bicep Infrastructure**: Production-ready Azure deployment templates
+  - `infrastructure/main.bicep` - Main orchestration template
+  - `infrastructure/modules/containerRegistry.bicep` - Azure Container Registry
+  - `infrastructure/modules/containerAppsEnvironment.bicep` - Container Apps Environment
+  - `infrastructure/modules/containerApp.bicep` - LangChain Platform container app
+  - `infrastructure/modules/logAnalytics.bicep` - Log Analytics Workspace
+  - `infrastructure/modules/applicationInsights.bicep` - Application Insights
+
+- **Parameter Templates**: Environment-specific configurations
+  - `infrastructure/parameters.dev.json` - Development (single replica, memory storage)
+  - `infrastructure/parameters.prod.json` - Production (autoscaling, Redis, Azure AD)
+
+- **GitHub Actions CI/CD**: Automated deployment pipeline
+  - `.github/workflows/deploy-platform.yml` - Full CI/CD workflow
+  - Test job: pytest, ruff linting, coverage reporting
+  - Build job: Docker build and push to ACR
+  - Deploy job: Container Apps deployment with health checks
+  - Infrastructure job: Bicep deployment with what-if
+
+**Infrastructure Features**:
+- Container Apps with HTTP autoscaling (1-10 replicas)
+- Integrated Application Insights monitoring
+- Centralized logging via Log Analytics
+- Health/readiness probes for reliability
+- Secret management via Container Apps secrets
+- Multi-environment support (dev/staging/prod)
+
+**CI/CD Features**:
+- Automatic tests on PR and push
+- Docker layer caching for fast builds
+- Environment-based deployment gates
+- Health check verification after deploy
+- Manual infrastructure deployment trigger
+
+**GitHub Actions Secrets Required**:
+```
+AZURE_CLIENT_ID       # Azure AD app registration
+AZURE_TENANT_ID       # Azure AD tenant
+AZURE_SUBSCRIPTION_ID # Target subscription
+OPENAI_API_KEY_TEST   # For test runs
+```
+
+**Files Added**:
+- `deployment/infrastructure/main.bicep` - ~200 lines
+- `deployment/infrastructure/modules/*.bicep` - 5 modules, ~350 lines total
+- `deployment/infrastructure/parameters.*.json` - 2 files
+- `deployment/infrastructure/README.md` - ~150 lines
+- `.github/workflows/deploy-platform.yml` - ~250 lines
+
+---
+
+### 2026-01-02 - Teams & Slack Integrations (v3.9)
+
+**Added**:
+- **Microsoft Teams Webhook Integration**: Full Bot Framework support
+  - `app/integrations/teams_webhook.py` - Teams message handling
+  - `TeamsAdaptiveCard`: Adaptive Card builder for rich messages
+  - `TeamsMessageCard`: Legacy Message Card support
+  - `TeamsActivity`: Incoming activity parsing (message, invoke, conversationUpdate)
+  - `TeamsWebhookHandler`: Process incoming messages and route to agents
+  - Support for card actions, mentions, and conversation contexts
+
+- **Slack Webhook Integration**: Events API and interactivity support
+  - `app/integrations/slack_webhook.py` - Slack event handling
+  - `SlackBlockBuilder`: Block Kit message construction
+  - `SlackMessage`: Rich message formatting with attachments
+  - `SlackEvent`: Event parsing (message, app_mention, reaction)
+  - `SlackWebhookHandler`: Process events and route to agents
+  - `verify_slack_signature()`: HMAC signature verification for security
+  - Slash command support with response formatting
+
+- **Integration Routes**: FastAPI endpoints for external platforms
+  - `app/integrations/routes.py` - Webhook endpoint routes
+  - `POST /api/integrations/teams/webhook` - Teams Bot Framework endpoint
+  - `POST /api/integrations/slack/events` - Slack Events API endpoint
+  - `POST /api/integrations/slack/commands` - Slash command handler
+  - `POST /api/integrations/slack/interactive` - Block Kit interactions
+
+**Environment Variables**:
+```bash
+TEAMS_BOT_ID=your-bot-id
+TEAMS_APP_ID=your-app-id
+TEAMS_APP_PASSWORD=your-app-password
+SLACK_BOT_TOKEN=xoxb-your-bot-token
+SLACK_SIGNING_SECRET=your-signing-secret
+SLACK_APP_TOKEN=xapp-your-app-token
+```
+
+**Testing**:
+- 44 unit tests for Teams and Slack integrations (all passing)
+- Tests cover message building, event parsing, signature verification, and webhook handling
+
+**Files Added**:
+- `deployment/app/integrations/__init__.py` - Module exports
+- `deployment/app/integrations/teams_webhook.py` - ~300 lines
+- `deployment/app/integrations/slack_webhook.py` - ~350 lines
+- `deployment/app/integrations/routes.py` - ~200 lines
+- `deployment/tests/test_integrations.py` - ~450 lines
+
+---
+
+### 2026-01-02 - Memory & Persistence Upgrade (v3.8)
+
+**Added**:
+- **Session Memory Module**: Multiple backend support for conversation persistence
+  - `app/memory/base.py` - Base types: Message, Session, SessionMetadata, BaseSessionStore
+  - `app/memory/memory_store.py` - In-memory session store (development/testing)
+  - `app/memory/redis_store.py` - Redis session store (production/distributed)
+  - `app/memory/sqlite_store.py` - SQLite session store (single-instance persistence)
+  - `app/memory/conversation_memory.py` - LangChain-integrated conversation memory
+  - `app/memory/config.py` - Configuration and factory functions
+
+- **Storage Backends**:
+  - `InMemorySessionStore`: Thread-safe in-memory storage with max sessions limit
+  - `RedisSessionStore`: Redis-backed with TTL support and user/agent indices
+  - `SQLiteSessionStore`: SQLite-backed with VACUUM and stats support
+
+- **Conversation Features**:
+  - `ConversationMemory`: High-level API for managing conversations
+  - `ConversationSummary`: Session metadata and message counts
+  - `get_langchain_messages()`: Convert to HumanMessage/AIMessage format
+  - `get_chat_history_string()`: Formatted history for prompts
+
+- **Configuration**:
+  - `MemoryBackend` enum: MEMORY, REDIS, SQLITE
+  - `MemoryConfig.from_env()`: Environment-based configuration
+  - `get_session_store()`: Factory with singleton pattern
+  - `get_checkpointer()`: LangGraph checkpointer factory
+
+- **LangGraph Integration**:
+  - `CheckpointerType` enum: MEMORY, REDIS, SQLITE, POSTGRES
+  - Auto-matching checkpointer to session backend
+  - Support for MemorySaver, SqliteSaver, PostgresSaver
+
+**Environment Variables**:
+```bash
+MEMORY_BACKEND=memory|redis|sqlite
+REDIS_URL=redis://localhost:6379
+SQLITE_PATH=data/sessions.db
+SESSION_TTL_HOURS=24
+MAX_SESSIONS=10000
+SESSION_KEY_PREFIX=session:
+```
+
+**Testing**:
+- 59 unit tests for session memory module (all passing)
+- Tests cover all backends, conversation memory, config, and factories
+
+**Files Added**:
+- `deployment/app/memory/__init__.py` - Module exports
+- `deployment/app/memory/base.py` - ~400 lines
+- `deployment/app/memory/memory_store.py` - ~305 lines
+- `deployment/app/memory/redis_store.py` - ~300 lines
+- `deployment/app/memory/sqlite_store.py` - ~575 lines
+- `deployment/app/memory/conversation_memory.py` - ~400 lines
+- `deployment/app/memory/config.py` - ~290 lines
+- `deployment/tests/test_session_memory.py` - ~800 lines
+
+---
+
+### 2026-01-01 - Enhanced Governance & Security (v3.7)
+
+**Added**:
+- **PII Detection**: Privacy protection for agent inputs/outputs
+  - `app/governance/pii_detector.py` - Regex + Presidio-based PII detection
+  - Supports: email, phone, credit cards, SSN, API keys, passwords, IP addresses
+  - Masking with configurable redaction format
+  - Severity levels: LOW, MEDIUM, HIGH, CRITICAL
+
+- **Cost Tracking**: Token usage and budget management
+  - `app/governance/cost_tracker.py` - Multi-model pricing and tracking
+  - Pre-configured pricing for OpenAI and Anthropic models
+  - Daily/monthly budget limits with alerts
+  - Usage summaries by user, agent, and model
+
+- **Anomaly Detection**: Security threat and abuse detection
+  - `app/governance/anomaly_detector.py` - Pattern-based anomaly detection
+  - Rate anomalies: high request rate, burst activity, off-hours
+  - Error anomalies: high error rate, consecutive failures, auth failures
+  - Content anomalies: large input/output, prompt injection detection
+  - User risk scoring and auto-blocking
+
+- **Middleware Integration**: Extended governance middleware
+  - `PIIMiddleware` - Request PII scanning with optional blocking
+  - `AnomalyMiddleware` - Event recording and anomaly detection
+  - Updated `setup_governance_middleware()` with new options
+
+**Testing**:
+- 59 unit tests for Phase 3 components (all passing)
+- Tests cover PII detection, cost tracking, anomaly detection, and middleware integration
+
+**Files Added**:
+- `deployment/app/governance/pii_detector.py` - ~550 lines
+- `deployment/app/governance/cost_tracker.py` - ~500 lines
+- `deployment/app/governance/anomaly_detector.py` - ~650 lines
+- `deployment/tests/test_governance_phase3.py` - ~650 lines
+
+**Files Modified**:
+- `deployment/app/governance/__init__.py` - Added new exports
+- `deployment/app/governance/middleware.py` - Added PII and Anomaly middleware
+
+---
 
 ### 2026-01-01 - DeepSearch Enhancement (v3.6)
 
