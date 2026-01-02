@@ -1,0 +1,77 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "environment": {
+      "value": "dev"
+    },
+    "baseName": {
+      "value": "langchain"
+    },
+    "imageTag": {
+      "value": "latest"
+    },
+    "openAIApiKey": {
+      "reference": {
+        "keyVault": {
+          "id": "/subscriptions/{subscription-id}/resourceGroups/{rg-name}/providers/Microsoft.KeyVault/vaults/{vault-name}"
+        },
+        "secretName": "openai-api-key"
+      }
+    },
+    "anthropicApiKey": {
+      "reference": {
+        "keyVault": {
+          "id": "/subscriptions/{subscription-id}/resourceGroups/{rg-name}/providers/Microsoft.KeyVault/vaults/{vault-name}"
+        },
+        "secretName": "anthropic-api-key"
+      }
+    },
+    "langsmithApiKey": {
+      "reference": {
+        "keyVault": {
+          "id": "/subscriptions/{subscription-id}/resourceGroups/{rg-name}/providers/Microsoft.KeyVault/vaults/{vault-name}"
+        },
+        "secretName": "langsmith-api-key"
+      }
+    },
+    "langsmithProject": {
+      "value": "langchain-platform-dev"
+    },
+    "enableTracing": {
+      "value": true
+    },
+    "tavilyApiKey": {
+      "reference": {
+        "keyVault": {
+          "id": "/subscriptions/{subscription-id}/resourceGroups/{rg-name}/providers/Microsoft.KeyVault/vaults/{vault-name}"
+        },
+        "secretName": "tavily-api-key"
+      }
+    },
+    "apiKeyEnabled": {
+      "value": false
+    },
+    "corsOrigins": {
+      "value": "*"
+    },
+    "memoryBackend": {
+      "value": "memory"
+    },
+    "authEnabled": {
+      "value": false
+    },
+    "minReplicas": {
+      "value": 1
+    },
+    "maxReplicas": {
+      "value": 3
+    },
+    "cpu": {
+      "value": "0.5"
+    },
+    "memory": {
+      "value": "1Gi"
+    }
+  }
+}

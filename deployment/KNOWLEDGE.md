@@ -2,7 +2,7 @@
 
 > **Purpose**: This document serves as the authoritative knowledge source for AI agents working on this repository. It contains architectural decisions, implementation patterns, and guidelines that must be followed when making changes or enhancements.
 
-**Last Updated**: 2026-01-02 (v3.9 - Teams & Slack Integrations)
+**Last Updated**: 2026-01-02 (v3.10 - Azure Deployment & CI/CD)
 
 ---
 
@@ -198,6 +198,17 @@ deployment/
 ├── tests/                       # Test suite
 │   ├── __init__.py
 │   └── test_server.py           # Server endpoint tests
+├── infrastructure/              # Azure deployment (NEW)
+│   ├── main.bicep               # Main Bicep orchestration
+│   ├── parameters.dev.json      # Development parameters
+│   ├── parameters.prod.json     # Production parameters
+│   ├── README.md                # Infrastructure documentation
+│   └── modules/                 # Bicep modules
+│       ├── containerRegistry.bicep
+│       ├── containerAppsEnvironment.bicep
+│       ├── containerApp.bicep
+│       ├── logAnalytics.bicep
+│       └── applicationInsights.bicep
 ├── cli_chat.py                  # CLI chat interface (NEW)
 ├── .env                         # Environment variables (NOT committed)
 ├── .env.example                 # Environment template (committed)
@@ -1995,6 +2006,60 @@ from langgraph.prebuilt import create_react_agent
 ---
 
 ## Change Log
+
+### 2026-01-02 - Azure Deployment & CI/CD (v3.10)
+
+**Added**:
+- **Azure Bicep Infrastructure**: Production-ready Azure deployment templates
+  - `infrastructure/main.bicep` - Main orchestration template
+  - `infrastructure/modules/containerRegistry.bicep` - Azure Container Registry
+  - `infrastructure/modules/containerAppsEnvironment.bicep` - Container Apps Environment
+  - `infrastructure/modules/containerApp.bicep` - LangChain Platform container app
+  - `infrastructure/modules/logAnalytics.bicep` - Log Analytics Workspace
+  - `infrastructure/modules/applicationInsights.bicep` - Application Insights
+
+- **Parameter Templates**: Environment-specific configurations
+  - `infrastructure/parameters.dev.json` - Development (single replica, memory storage)
+  - `infrastructure/parameters.prod.json` - Production (autoscaling, Redis, Azure AD)
+
+- **GitHub Actions CI/CD**: Automated deployment pipeline
+  - `.github/workflows/deploy-platform.yml` - Full CI/CD workflow
+  - Test job: pytest, ruff linting, coverage reporting
+  - Build job: Docker build and push to ACR
+  - Deploy job: Container Apps deployment with health checks
+  - Infrastructure job: Bicep deployment with what-if
+
+**Infrastructure Features**:
+- Container Apps with HTTP autoscaling (1-10 replicas)
+- Integrated Application Insights monitoring
+- Centralized logging via Log Analytics
+- Health/readiness probes for reliability
+- Secret management via Container Apps secrets
+- Multi-environment support (dev/staging/prod)
+
+**CI/CD Features**:
+- Automatic tests on PR and push
+- Docker layer caching for fast builds
+- Environment-based deployment gates
+- Health check verification after deploy
+- Manual infrastructure deployment trigger
+
+**GitHub Actions Secrets Required**:
+```
+AZURE_CLIENT_ID       # Azure AD app registration
+AZURE_TENANT_ID       # Azure AD tenant
+AZURE_SUBSCRIPTION_ID # Target subscription
+OPENAI_API_KEY_TEST   # For test runs
+```
+
+**Files Added**:
+- `deployment/infrastructure/main.bicep` - ~200 lines
+- `deployment/infrastructure/modules/*.bicep` - 5 modules, ~350 lines total
+- `deployment/infrastructure/parameters.*.json` - 2 files
+- `deployment/infrastructure/README.md` - ~150 lines
+- `.github/workflows/deploy-platform.yml` - ~250 lines
+
+---
 
 ### 2026-01-02 - Teams & Slack Integrations (v3.9)
 

@@ -1,0 +1,99 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "environment": {
+      "value": "prod"
+    },
+    "baseName": {
+      "value": "langchain"
+    },
+    "imageTag": {
+      "value": "latest"
+    },
+    "openAIApiKey": {
+      "reference": {
+        "keyVault": {
+          "id": "/subscriptions/{subscription-id}/resourceGroups/{rg-name}/providers/Microsoft.KeyVault/vaults/{vault-name}"
+        },
+        "secretName": "openai-api-key"
+      }
+    },
+    "anthropicApiKey": {
+      "reference": {
+        "keyVault": {
+          "id": "/subscriptions/{subscription-id}/resourceGroups/{rg-name}/providers/Microsoft.KeyVault/vaults/{vault-name}"
+        },
+        "secretName": "anthropic-api-key"
+      }
+    },
+    "langsmithApiKey": {
+      "reference": {
+        "keyVault": {
+          "id": "/subscriptions/{subscription-id}/resourceGroups/{rg-name}/providers/Microsoft.KeyVault/vaults/{vault-name}"
+        },
+        "secretName": "langsmith-api-key"
+      }
+    },
+    "langsmithProject": {
+      "value": "langchain-platform-prod"
+    },
+    "enableTracing": {
+      "value": true
+    },
+    "tavilyApiKey": {
+      "reference": {
+        "keyVault": {
+          "id": "/subscriptions/{subscription-id}/resourceGroups/{rg-name}/providers/Microsoft.KeyVault/vaults/{vault-name}"
+        },
+        "secretName": "tavily-api-key"
+      }
+    },
+    "apiKey": {
+      "reference": {
+        "keyVault": {
+          "id": "/subscriptions/{subscription-id}/resourceGroups/{rg-name}/providers/Microsoft.KeyVault/vaults/{vault-name}"
+        },
+        "secretName": "api-key"
+      }
+    },
+    "apiKeyEnabled": {
+      "value": true
+    },
+    "corsOrigins": {
+      "value": "https://your-production-domain.com"
+    },
+    "memoryBackend": {
+      "value": "redis"
+    },
+    "azureTenantId": {
+      "value": "{your-tenant-id}"
+    },
+    "azureClientId": {
+      "value": "{your-client-id}"
+    },
+    "azureClientSecret": {
+      "reference": {
+        "keyVault": {
+          "id": "/subscriptions/{subscription-id}/resourceGroups/{rg-name}/providers/Microsoft.KeyVault/vaults/{vault-name}"
+        },
+        "secretName": "azure-client-secret"
+      }
+    },
+    "authEnabled": {
+      "value": true
+    },
+    "minReplicas": {
+      "value": 2
+    },
+    "maxReplicas": {
+      "value": 10
+    },
+    "cpu": {
+      "value": "1"
+    },
+    "memory": {
+      "value": "2Gi"
+    }
+  }
+}
