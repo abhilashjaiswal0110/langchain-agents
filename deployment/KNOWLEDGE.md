@@ -2,7 +2,7 @@
 
 > **Purpose**: This document serves as the authoritative knowledge source for AI agents working on this repository. It contains architectural decisions, implementation patterns, and guidelines that must be followed when making changes or enhancements.
 
-**Last Updated**: 2026-01-02 (v3.8 - Memory & Persistence Upgrade)
+**Last Updated**: 2026-01-02 (v3.9 - Teams & Slack Integrations)
 
 ---
 
@@ -180,7 +180,7 @@ deployment/
 │   │   ├── gateway.py           # Access control gateway
 │   │   ├── servicenow_client.py # Real ServiceNow REST API
 │   │   └── tools/               # Tool implementations
-│   ├── memory/                  # Session persistence (NEW)
+│   ├── memory/                  # Session persistence
 │   │   ├── __init__.py          # Module exports
 │   │   ├── base.py              # Base classes and types
 │   │   ├── memory_store.py      # In-memory session store
@@ -188,6 +188,11 @@ deployment/
 │   │   ├── sqlite_store.py      # SQLite session store
 │   │   ├── conversation_memory.py # LangChain integration
 │   │   └── config.py            # Configuration and factories
+│   ├── integrations/            # External integrations (NEW)
+│   │   ├── __init__.py          # Module exports
+│   │   ├── teams_webhook.py     # Microsoft Teams webhook
+│   │   ├── slack_webhook.py     # Slack webhook
+│   │   └── routes.py            # FastAPI routes
 │   └── static/                  # Static web files
 │       └── chat.html            # Web UI for demos
 ├── tests/                       # Test suite
@@ -1990,6 +1995,56 @@ from langgraph.prebuilt import create_react_agent
 ---
 
 ## Change Log
+
+### 2026-01-02 - Teams & Slack Integrations (v3.9)
+
+**Added**:
+- **Microsoft Teams Webhook Integration**: Full Bot Framework support
+  - `app/integrations/teams_webhook.py` - Teams message handling
+  - `TeamsAdaptiveCard`: Adaptive Card builder for rich messages
+  - `TeamsMessageCard`: Legacy Message Card support
+  - `TeamsActivity`: Incoming activity parsing (message, invoke, conversationUpdate)
+  - `TeamsWebhookHandler`: Process incoming messages and route to agents
+  - Support for card actions, mentions, and conversation contexts
+
+- **Slack Webhook Integration**: Events API and interactivity support
+  - `app/integrations/slack_webhook.py` - Slack event handling
+  - `SlackBlockBuilder`: Block Kit message construction
+  - `SlackMessage`: Rich message formatting with attachments
+  - `SlackEvent`: Event parsing (message, app_mention, reaction)
+  - `SlackWebhookHandler`: Process events and route to agents
+  - `verify_slack_signature()`: HMAC signature verification for security
+  - Slash command support with response formatting
+
+- **Integration Routes**: FastAPI endpoints for external platforms
+  - `app/integrations/routes.py` - Webhook endpoint routes
+  - `POST /api/integrations/teams/webhook` - Teams Bot Framework endpoint
+  - `POST /api/integrations/slack/events` - Slack Events API endpoint
+  - `POST /api/integrations/slack/commands` - Slash command handler
+  - `POST /api/integrations/slack/interactive` - Block Kit interactions
+
+**Environment Variables**:
+```bash
+TEAMS_BOT_ID=your-bot-id
+TEAMS_APP_ID=your-app-id
+TEAMS_APP_PASSWORD=your-app-password
+SLACK_BOT_TOKEN=xoxb-your-bot-token
+SLACK_SIGNING_SECRET=your-signing-secret
+SLACK_APP_TOKEN=xapp-your-app-token
+```
+
+**Testing**:
+- 44 unit tests for Teams and Slack integrations (all passing)
+- Tests cover message building, event parsing, signature verification, and webhook handling
+
+**Files Added**:
+- `deployment/app/integrations/__init__.py` - Module exports
+- `deployment/app/integrations/teams_webhook.py` - ~300 lines
+- `deployment/app/integrations/slack_webhook.py` - ~350 lines
+- `deployment/app/integrations/routes.py` - ~200 lines
+- `deployment/tests/test_integrations.py` - ~450 lines
+
+---
 
 ### 2026-01-02 - Memory & Persistence Upgrade (v3.8)
 
