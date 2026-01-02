@@ -5,9 +5,16 @@ Provides:
 - Online feedback submission
 - Run tracking and metrics
 - Evaluation experiment management
+- LangSmith SDK compatible evaluators with proper variable mapping
+
+IMPORTANT FIX (2026-01-02):
+- Fixed dataset schema to properly map expected outputs for LangSmith evaluators
+- Fixed evaluator execution to provide all required variables (context, reference_outputs)
+- Added tracing diagnostics and verification functions
 """
 
 import os
+import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Callable, Literal
@@ -17,6 +24,8 @@ from langsmith import Client
 from langsmith.schemas import Example, Run
 
 from app.agents.evals.evaluators import BaseEvaluator, EvaluationResult
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -158,20 +167,43 @@ class LangSmithEvaluator:
     ) -> str:
         """Sync local test cases to LangSmith dataset.
 
+        Creates a dataset with proper schema for LangSmith SDK evaluators.
+        The dataset includes both `outputs` (for compatibility) and properly
+        structured data for built-in evaluators.
+
         Args:
             dataset_name: Name for the LangSmith dataset.
             test_cases: List of test case dictionaries.
 
         Returns:
             Dataset ID.
+
+        Note:
+            FIX (2026-01-02): Updated to include `reference_output` field
+            for LangSmith built-in evaluators that expect this variable.
         """
         examples = []
         for case in test_cases:
+            expected_output = case.get("expected_output") or ""
+            expected_keywords = case.get("expected_keywords", [])
+
+            # Build context from expected output and keywords
+            context = expected_output
+            if expected_keywords:
+                context += f"\nExpected keywords: {', '.join(expected_keywords)}"
+
             examples.append({
-                "inputs": {"input": case.get("input", "")},
+                "inputs": {
+                    "input": case.get("input", ""),
+                    # Include context in inputs for evaluators that need it
+                    "context": context,
+                },
                 "outputs": {
-                    "expected": case.get("expected_output"),
-                    "keywords": case.get("expected_keywords", []),
+                    # Standard output field
+                    "expected": expected_output,
+                    "keywords": expected_keywords,
+                    # Reference output for LangSmith built-in evaluators
+                    "reference_output": expected_output,
                 },
                 "metadata": {
                     "id": case.get("id"),
@@ -453,3 +485,317 @@ async def evaluate_agent_offline(
         dataset_name=dataset_name,
         evaluators=evaluators,
     )
+
+
+# =============================================================================
+# Tracing Diagnostics - Added 2026-01-02
+# =============================================================================
+
+
+def verify_tracing_config() -> dict[str, Any]:
+    """Verify LangSmith tracing configuration.
+
+    Returns:
+        Dictionary with tracing configuration status and diagnostics.
+    """
+    config = {
+        "LANGCHAIN_TRACING_V2": os.getenv("LANGCHAIN_TRACING_V2"),
+        "LANGCHAIN_API_KEY": "***" if os.getenv("LANGCHAIN_API_KEY") else None,
+        "LANGCHAIN_PROJECT": os.getenv("LANGCHAIN_PROJECT"),
+        "LANGCHAIN_ENDPOINT": os.getenv("LANGCHAIN_ENDPOINT", "https://api.smith.langchain.com"),
+    }
+
+    is_enabled = config["LANGCHAIN_TRACING_V2"] == "true"
+    has_api_key = config["LANGCHAIN_API_KEY"] is not None
+
+    return {
+        "tracing_enabled": is_enabled,
+        "api_key_configured": has_api_key,
+        "project_name": config["LANGCHAIN_PROJECT"],
+        "endpoint": config["LANGCHAIN_ENDPOINT"],
+        "status": "OK" if (is_enabled and has_api_key) else "NOT_CONFIGURED",
+        "issues": _get_tracing_issues(config, is_enabled, has_api_key),
+    }
+
+
+def _get_tracing_issues(
+    config: dict[str, Any],
+    is_enabled: bool,
+    has_api_key: bool,
+) -> list[str]:
+    """Get list of tracing configuration issues."""
+    issues = []
+
+    if not is_enabled:
+        issues.append("LANGCHAIN_TRACING_V2 is not set to 'true'")
+    if not has_api_key:
+        issues.append("LANGCHAIN_API_KEY is not configured")
+    if not config["LANGCHAIN_PROJECT"]:
+        issues.append("LANGCHAIN_PROJECT is not set (using default)")
+
+    return issues
+
+
+def test_langsmith_connection() -> dict[str, Any]:
+    """Test connection to LangSmith API.
+
+    Returns:
+        Dictionary with connection test results.
+    """
+    result = {
+        "connected": False,
+        "projects": [],
+        "error": None,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+
+    try:
+        client = Client()
+        # Try to list projects to verify connection
+        projects = list(client.list_projects(limit=5))
+        result["connected"] = True
+        result["projects"] = [p.name for p in projects]
+        logger.info(f"LangSmith connection verified. Found {len(projects)} projects.")
+    except Exception as e:
+        result["error"] = str(e)
+        logger.error(f"LangSmith connection failed: {e}")
+
+    return result
+
+
+def get_recent_traces(
+    project_name: str | None = None,
+    limit: int = 10,
+    hours: int = 24,
+) -> dict[str, Any]:
+    """Get recent traces from LangSmith.
+
+    Args:
+        project_name: Project to query. Uses env var if not provided.
+        limit: Maximum number of traces to return.
+        hours: Number of hours to look back.
+
+    Returns:
+        Dictionary with trace information.
+    """
+    project_name = project_name or os.getenv("LANGCHAIN_PROJECT", "enterprise-it-agents")
+
+    result = {
+        "project": project_name,
+        "traces": [],
+        "total_count": 0,
+        "error": None,
+        "query_time": datetime.now(timezone.utc).isoformat(),
+    }
+
+    try:
+        client = Client()
+        start_time = datetime.now(timezone.utc) - timezone.utc.utcoffset(None)
+
+        # Calculate start time for query
+        from datetime import timedelta
+        query_start = datetime.now(timezone.utc) - timedelta(hours=hours)
+
+        runs = list(client.list_runs(
+            project_name=project_name,
+            start_time=query_start,
+            limit=limit,
+        ))
+
+        result["total_count"] = len(runs)
+        result["traces"] = [
+            {
+                "id": str(run.id),
+                "name": run.name,
+                "status": run.status,
+                "start_time": run.start_time.isoformat() if run.start_time else None,
+                "end_time": run.end_time.isoformat() if run.end_time else None,
+                "error": run.error[:100] if run.error else None,
+            }
+            for run in runs
+        ]
+
+        if len(runs) == 0:
+            logger.warning(f"No traces found in project '{project_name}' in last {hours} hours")
+        else:
+            logger.info(f"Found {len(runs)} traces in project '{project_name}'")
+
+    except Exception as e:
+        result["error"] = str(e)
+        logger.error(f"Failed to get traces: {e}")
+
+    return result
+
+
+# =============================================================================
+# LangSmith SDK Compatible Evaluation - Added 2026-01-02
+# =============================================================================
+
+
+def create_langsmith_evaluator_wrapper(
+    base_evaluator: BaseEvaluator,
+) -> Callable:
+    """Create a LangSmith SDK compatible evaluator from a BaseEvaluator.
+
+    This wrapper handles the variable mapping that LangSmith SDK expects:
+    - inputs: The input to the agent
+    - outputs: The agent's output
+    - reference_outputs: The expected/reference output
+    - context: Additional context (optional)
+
+    Args:
+        base_evaluator: The base evaluator to wrap.
+
+    Returns:
+        A callable compatible with LangSmith's evaluate() function.
+
+    Example:
+        >>> from langsmith.evaluation import evaluate
+        >>> from app.agents.evals import ResponseQualityEvaluator
+        >>>
+        >>> quality_eval = create_langsmith_evaluator_wrapper(ResponseQualityEvaluator())
+        >>> results = evaluate(agent_func, data="my-dataset", evaluators=[quality_eval])
+    """
+    def evaluator_fn(
+        inputs: dict[str, Any],
+        outputs: dict[str, Any],
+        reference_outputs: dict[str, Any] | None = None,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        """LangSmith SDK compatible evaluator function."""
+        # Extract values from the inputs/outputs structure
+        input_text = inputs.get("input", "") or str(inputs)
+        output_text = outputs.get("output", "") or str(outputs)
+
+        # Get expected output from reference_outputs
+        expected = None
+        if reference_outputs:
+            expected = (
+                reference_outputs.get("expected")
+                or reference_outputs.get("reference_output")
+                or reference_outputs.get("output")
+            )
+
+        # Run the base evaluator
+        try:
+            result = base_evaluator.evaluate(input_text, output_text, expected)
+            return {
+                "key": base_evaluator.name,
+                "score": result.score,
+                "comment": result.feedback,
+                "passed": result.passed,
+            }
+        except Exception as e:
+            logger.error(f"Evaluator {base_evaluator.name} failed: {e}")
+            return {
+                "key": base_evaluator.name,
+                "score": 0.0,
+                "comment": f"Evaluation error: {e}",
+                "passed": False,
+            }
+
+    # Set function name for LangSmith display
+    evaluator_fn.__name__ = base_evaluator.name
+    return evaluator_fn
+
+
+async def run_langsmith_sdk_evaluation(
+    agent_func: Callable,
+    dataset_name: str,
+    evaluators: list[BaseEvaluator] | None = None,
+    experiment_prefix: str = "eval",
+) -> dict[str, Any]:
+    """Run evaluation using LangSmith SDK evaluate() function.
+
+    This function properly maps variables for LangSmith SDK evaluators,
+    fixing the KeyError for missing 'reference_outputs' and 'context'.
+
+    Args:
+        agent_func: Agent function to evaluate.
+        dataset_name: LangSmith dataset name.
+        evaluators: Custom evaluators to use.
+        experiment_prefix: Prefix for experiment name.
+
+    Returns:
+        Evaluation results dictionary.
+
+    Note:
+        This requires the langsmith package with evaluation support.
+        Install with: pip install langsmith[evaluation]
+    """
+    try:
+        from langsmith.evaluation import evaluate
+    except ImportError:
+        logger.error("langsmith.evaluation not available. Install with: pip install langsmith[evaluation]")
+        return {"error": "langsmith.evaluation not installed"}
+
+    # Import default evaluators if none provided
+    if evaluators is None:
+        from app.agents.evals.evaluators import (
+            ResponseQualityEvaluator,
+            TaskCompletionEvaluator,
+        )
+        evaluators = [ResponseQualityEvaluator(), TaskCompletionEvaluator()]
+
+    # Create LangSmith SDK compatible wrappers
+    sdk_evaluators = [create_langsmith_evaluator_wrapper(e) for e in evaluators]
+
+    # Create the target function wrapper to handle input/output format
+    async def target_fn(inputs: dict[str, Any]) -> dict[str, Any]:
+        input_text = inputs.get("input", "") or str(inputs)
+        try:
+            result = await agent_func(input_text)
+            return {"output": str(result)}
+        except Exception as e:
+            return {"output": f"Error: {e}"}
+
+    experiment_name = f"{experiment_prefix}-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}"
+
+    try:
+        results = evaluate(
+            target_fn,
+            data=dataset_name,
+            evaluators=sdk_evaluators,
+            experiment_prefix=experiment_name,
+        )
+
+        return {
+            "experiment_name": experiment_name,
+            "dataset": dataset_name,
+            "status": "completed",
+            "results": results,
+        }
+    except Exception as e:
+        logger.error(f"LangSmith SDK evaluation failed: {e}")
+        return {
+            "experiment_name": experiment_name,
+            "dataset": dataset_name,
+            "status": "failed",
+            "error": str(e),
+        }
+
+
+def ensure_tracing_enabled() -> bool:
+    """Ensure LangSmith tracing is properly enabled.
+
+    This function verifies and enables tracing if the API key is available.
+    Call this at application startup to ensure tracing works.
+
+    Returns:
+        True if tracing is enabled, False otherwise.
+    """
+    api_key = os.getenv("LANGCHAIN_API_KEY") or os.getenv("LANGSMITH_API_KEY")
+
+    if not api_key:
+        logger.warning("No LangSmith API key found. Tracing disabled.")
+        return False
+
+    # Ensure environment variables are set
+    os.environ["LANGCHAIN_TRACING_V2"] = "true"
+    os.environ["LANGCHAIN_API_KEY"] = api_key
+
+    if not os.getenv("LANGCHAIN_PROJECT"):
+        os.environ["LANGCHAIN_PROJECT"] = "enterprise-it-agents"
+
+    logger.info(f"LangSmith tracing enabled for project: {os.getenv('LANGCHAIN_PROJECT')}")
+    return True

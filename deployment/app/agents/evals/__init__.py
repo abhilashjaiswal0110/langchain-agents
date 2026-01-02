@@ -38,6 +38,14 @@ from app.agents.evals.langsmith_evaluator import (
     get_langsmith_evaluator,
     reset_langsmith_evaluator,
     submit_online_feedback,
+    # Tracing diagnostics (added 2026-01-02)
+    verify_tracing_config,
+    test_langsmith_connection,
+    get_recent_traces,
+    ensure_tracing_enabled,
+    # LangSmith SDK compatible evaluation (added 2026-01-02)
+    create_langsmith_evaluator_wrapper,
+    run_langsmith_sdk_evaluation,
 )
 
 # Multi-turn evaluation
@@ -99,6 +107,14 @@ __all__ = [
     "reset_langsmith_evaluator",
     "submit_online_feedback",
     "evaluate_agent_offline",
+    # Tracing diagnostics
+    "verify_tracing_config",
+    "test_langsmith_connection",
+    "get_recent_traces",
+    "ensure_tracing_enabled",
+    # LangSmith SDK compatible evaluation
+    "create_langsmith_evaluator_wrapper",
+    "run_langsmith_sdk_evaluation",
     # Multi-Turn
     "ConversationTurn",
     "MultiTurnTestCase",

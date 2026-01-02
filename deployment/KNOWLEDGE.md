@@ -2,7 +2,7 @@
 
 > **Purpose**: This document serves as the authoritative knowledge source for AI agents working on this repository. It contains architectural decisions, implementation patterns, and guidelines that must be followed when making changes or enhancements.
 
-**Last Updated**: 2026-01-02 (v3.11 - Production Certification & Testing)
+**Last Updated**: 2026-01-02 (v3.12 - LangSmith Tracing & Evaluation Fixes)
 
 ---
 
@@ -1985,6 +1985,106 @@ from langgraph.prebuilt import create_react_agent
 1. Set `LANGCHAIN_TRACING_V2=true`
 2. Verify `LANGCHAIN_API_KEY` is valid
 3. Check `LANGCHAIN_PROJECT` name
+4. Use diagnostic tools to verify:
+```python
+from app.agents.evals import verify_tracing_config, test_langsmith_connection
+
+# Check configuration
+config = verify_tracing_config()
+print(config)
+
+# Test connection
+conn = test_langsmith_connection()
+print(conn)
+
+# Check recent traces
+from app.agents.evals import get_recent_traces
+traces = get_recent_traces(hours=72)
+print(traces)
+```
+
+**Run test script**:
+```bash
+cd deployment
+python tests/test_tracing_and_evaluation.py
+```
+
+---
+
+### Issue: LangSmith Evaluator KeyError (FIXED 2026-01-02)
+
+**Symptom**: `KeyError("Input to StructuredPrompt is missing variables {'reference_outputs', 'context'}")`
+
+**Root Cause**: LangSmith's built-in evaluators expect specific variable names (`reference_outputs`, `context`) that weren't being provided by the dataset sync function.
+
+**Fix Applied**:
+- Updated `sync_dataset_from_local()` in `langsmith_evaluator.py` to include:
+  - `reference_output` field in outputs
+  - `context` field in inputs
+- Added `create_langsmith_evaluator_wrapper()` for LangSmith SDK compatibility
+- Added `run_langsmith_sdk_evaluation()` for proper variable mapping
+
+**Usage After Fix**:
+```python
+from app.agents.evals import (
+    create_langsmith_evaluator_wrapper,
+    ResponseQualityEvaluator,
+)
+
+# Create wrapper for LangSmith SDK
+wrapper = create_langsmith_evaluator_wrapper(ResponseQualityEvaluator())
+
+# Use with LangSmith evaluate()
+from langsmith.evaluation import evaluate
+results = evaluate(
+    agent_func,
+    data="my-dataset",
+    evaluators=[wrapper],
+)
+```
+
+**Files Changed**:
+- `app/agents/evals/langsmith_evaluator.py`
+- `app/agents/evals/__init__.py`
+
+---
+
+### Issue: No traces since specific date
+
+**Symptom**: Traces stopped appearing in LangSmith after a certain date
+
+**Possible Causes**:
+1. API key expired or rotated
+2. Environment variable not being loaded
+3. Project name mismatch
+4. Network/firewall blocking LangSmith API
+
+**Diagnostic Steps**:
+```bash
+# 1. Verify environment
+echo $LANGCHAIN_TRACING_V2
+echo $LANGCHAIN_API_KEY | head -c 10
+echo $LANGCHAIN_PROJECT
+
+# 2. Run diagnostic script
+python tests/test_tracing_and_evaluation.py
+
+# 3. Check if traces exist
+python -c "
+from app.agents.evals import get_recent_traces
+result = get_recent_traces(hours=168)  # 7 days
+print(f'Found {result[\"total_count\"]} traces')
+"
+```
+
+**Solutions**:
+1. Regenerate API key in LangSmith console
+2. Restart server after `.env` changes
+3. Call `ensure_tracing_enabled()` at startup:
+```python
+from app.agents.evals import ensure_tracing_enabled
+ensure_tracing_enabled()
+```
 
 ### Issue: Docker container fails
 
@@ -2160,6 +2260,39 @@ LANGCHAIN_PROJECT=langchain-platform-prod
 ---
 
 ## Change Log
+
+### 2026-01-02 - LangSmith Tracing & Evaluation Fixes (v3.12)
+
+**Fixed**:
+- **LangSmith Evaluator KeyError**: Fixed `KeyError("Input to StructuredPrompt is missing variables {'reference_outputs', 'context'}")` error
+  - Updated `sync_dataset_from_local()` to include `reference_output` and `context` fields
+  - Dataset schema now compatible with LangSmith built-in evaluators
+  - Files: `app/agents/evals/langsmith_evaluator.py`
+
+- **Tracing Diagnostics**: Added comprehensive tracing verification tools
+  - `verify_tracing_config()` - Check configuration status
+  - `test_langsmith_connection()` - Verify API connectivity
+  - `get_recent_traces()` - Query recent traces from LangSmith
+  - `ensure_tracing_enabled()` - Force enable tracing at startup
+
+**Added**:
+- **LangSmith SDK Compatible Evaluators**:
+  - `create_langsmith_evaluator_wrapper()` - Wrap custom evaluators for LangSmith SDK
+  - `run_langsmith_sdk_evaluation()` - Run evaluations with proper variable mapping
+
+- **Test Script**: `tests/test_tracing_and_evaluation.py`
+  - Comprehensive tests for tracing configuration
+  - Connection verification tests
+  - Evaluator variable mapping tests
+  - Can be run standalone for diagnostics
+
+**Files Changed**:
+- `app/agents/evals/langsmith_evaluator.py`
+- `app/agents/evals/__init__.py`
+- `tests/test_tracing_and_evaluation.py` (new)
+- `KNOWLEDGE.md` (this file)
+
+---
 
 ### 2026-01-02 - Production Certification & Testing (v3.11)
 
