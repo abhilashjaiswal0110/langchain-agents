@@ -463,6 +463,14 @@ app.add_middleware(
 # Add API key authentication middleware
 app.add_middleware(APIKeyMiddleware)
 
+# Include integration routes (Teams, Slack webhooks)
+try:
+    from app.integrations.routes import router as integrations_router
+    app.include_router(integrations_router)
+    print("[OK] Integration routes loaded (Teams, Slack)")
+except ImportError as e:
+    print(f"[--] Integration routes not loaded: {e}")
+
 
 # ============================================================================
 # Response Models
