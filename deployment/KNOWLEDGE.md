@@ -2,7 +2,7 @@
 
 > **Purpose**: This document serves as the authoritative knowledge source for AI agents working on this repository. It contains architectural decisions, implementation patterns, and guidelines that must be followed when making changes or enhancements.
 
-**Last Updated**: 2026-01-02 (v3.12 - LangSmith Tracing & Evaluation Fixes)
+**Last Updated**: 2026-01-03 (v3.13 - Content Agent HITL & Recursion Fixes)
 
 ---
 
@@ -862,12 +862,14 @@ In addition to the IT Support Agents, the platform includes 7 enterprise-grade a
 | Agent | Purpose | HITL | Key Features |
 |-------|---------|------|--------------|
 | ResearchAgent | Web research | No | Tavily search, source citations |
-| ContentCreationAgent | Marketing content | Yes | Draft approval, revision cycles |
+| ContentCreationAgent | Marketing content | Optional* | Draft approval, revision cycles, auto_approve mode |
 | DataAnalystAgent | Data analysis | No | CSV/Excel processing, visualizations |
 | DocumentGenerationAgent | Doc creation | No | SOP, WLI, Policy templates |
 | MultilingualRAGAgent | Multi-language Q&A | No | 10+ languages, translation |
 | HITLITSupportAgent | IT tickets | Yes | Priority routing, approvals |
 | CodeAssistantAgent | Code help | No | Review, generation, debugging |
+
+*ContentCreationAgent supports `auto_approve=True` for API usage (skips HITL review)
 
 ### BaseAgent Pattern
 
@@ -945,6 +947,32 @@ def _approval_node(self, state: AgentState) -> dict:
     else:
         return {"status": "rejected"}
 ```
+
+#### ContentAgent Auto-Approve Mode
+
+For API/automated usage, the Content Agent supports `auto_approve` mode which skips HITL review:
+
+```python
+from app.agents.content import ContentAgent
+
+# Interactive mode (default) - HITL enabled
+agent = ContentAgent()  # auto_approve=False
+
+# API mode - HITL disabled, completes without human review
+agent = ContentAgent(auto_approve=True)
+
+# Can also be set per-request
+result = agent.create_content(
+    topic="AI automation",
+    platform="linkedin",
+    auto_approve=True  # Override instance default
+)
+```
+
+**Important**: When `auto_approve=True`:
+- The workflow skips the `review` node entirely
+- Goes directly from `draft` to `END` after content generation
+- Iteration limits prevent infinite loops (planning: 5 messages, drafting: 10 messages)
 
 ### Enterprise Agent API Endpoints
 
@@ -2260,6 +2288,36 @@ LANGCHAIN_PROJECT=langchain-platform-prod
 ---
 
 ## Change Log
+
+### 2026-01-03 - Content Agent HITL & Recursion Fixes (v3.13)
+
+**Fixed**:
+- **Content Agent Recursion Limit Error**: Resolved `Recursion limit of 200 reached` error
+  - Root cause: Infinite loops in LangGraph workflow during auto_approve mode
+  - Planning phase looped indefinitely (plan → tools → plan)
+  - Drafting phase looped indefinitely (draft → tools_draft → draft)
+  - HITL interrupt() returned None in auto_approve mode, causing revision loops
+
+- **Content Agent HITL Timeout**: Fixed API calls timing out waiting for human approval
+  - Added `auto_approve` field to `ContentState` for workflow awareness
+  - Modified `should_continue_planning()` to handle ToolMessage and limit iterations
+  - Modified `should_continue_drafting()` to go directly to END in auto_approve mode
+  - Added "end" edge to draft conditional edges for direct completion
+
+**Added**:
+- **auto_approve Mode for Content Agent**:
+  - `ContentAgent(auto_approve=True)` - Skip HITL review for API usage
+  - `create_content(..., auto_approve=True)` - Override per-request
+  - Iteration limits prevent infinite loops (planning: 5 messages, drafting: 10 messages)
+
+- **Tavily Package**: Installed `tavily-python` for Research Agent web search
+
+**Files Changed**:
+- `app/agents/content/content_agent.py` - Added auto_approve support, fixed workflow
+- `app/server.py` - Load Content Agent with auto_approve=True for API
+- `KNOWLEDGE.md` - Updated documentation
+
+---
 
 ### 2026-01-02 - LangSmith Tracing & Evaluation Fixes (v3.12)
 
