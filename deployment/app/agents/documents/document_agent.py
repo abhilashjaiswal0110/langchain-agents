@@ -315,6 +315,10 @@ class DocumentAgent(BaseAgent):
         """Initialize the Document Agent."""
         super().__init__(config)
 
+        # Increased recursion limit for document generation workflows
+        # Document generation requires multiple tool calls (template, sections, validate, format)
+        self._recursion_limit = 50
+
         self.register_tools([
             get_template,
             generate_section,
@@ -396,6 +400,51 @@ Always validate documents before finalizing."""
         graph.add_edge("tools", "agent")
 
         return graph
+
+    def invoke(
+        self,
+        message: str,
+        session_id: str | None = None,
+        user_id: str | None = None,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        """Invoke the Document Agent with increased recursion limit.
+
+        Overrides base invoke to pass recursion_limit for document workflows.
+        Document generation requires multiple tool calls (template, sections, validate, format).
+
+        Args:
+            message: User message to process
+            session_id: Optional session ID for continuity
+            user_id: Optional user ID for personalization
+            **kwargs: Additional state fields
+
+        Returns:
+            Agent response and updated state
+        """
+        if self._compiled_graph is None:
+            self.compile()
+
+        # Build input state
+        input_state = {
+            "messages": [HumanMessage(content=message)],
+            "session_id": session_id,
+            "user_id": user_id,
+            **kwargs,
+        }
+
+        # Get recursion limit (default to 50 for document workflows)
+        recursion_limit = getattr(self, '_recursion_limit', 50)
+
+        # Configure thread for checkpointing with increased recursion limit
+        config = {
+            "configurable": {"thread_id": session_id or "default"},
+            "recursion_limit": recursion_limit,
+        }
+
+        # Invoke graph with increased recursion limit
+        result = self._compiled_graph.invoke(input_state, config=config)
+        return result
 
     @traceable(name="document_create")
     def create_document(

@@ -2,7 +2,7 @@
 
 > **Purpose**: This document serves as the authoritative knowledge source for AI agents working on this repository. It contains architectural decisions, implementation patterns, and guidelines that must be followed when making changes or enhancements.
 
-**Last Updated**: 2026-01-03 (v3.13 - Content Agent HITL & Recursion Fixes)
+**Last Updated**: 2026-01-04 (v3.14 - Document Agent Recursion Fix)
 
 ---
 
@@ -2288,6 +2288,20 @@ LANGCHAIN_PROJECT=langchain-platform-prod
 ---
 
 ## Change Log
+
+### 2026-01-04 - Document Agent Recursion Fix (v3.14)
+
+**Fixed**:
+- **Document Agent Recursion Limit Error**: Resolved `Recursion limit of 25 reached` error
+  - Root cause: Default LangGraph recursion limit (25) too low for document generation
+  - Document generation requires multiple tool calls (template, sections, validate, format)
+  - Added `_recursion_limit = 50` to DocumentAgent class
+  - Override `invoke()` method to pass increased recursion_limit in config
+
+**Files Changed**:
+- `app/agents/documents/document_agent.py` - Added recursion limit override
+
+---
 
 ### 2026-01-03 - Content Agent HITL & Recursion Fixes (v3.13)
 
