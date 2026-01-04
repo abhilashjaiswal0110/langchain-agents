@@ -289,10 +289,10 @@ def load_enterprise_agents() -> dict[str, bool]:
         print(f"Failed to load Research Agent: {e}")
         status["research"] = False
 
-    # Content Agent
+    # Content Agent (with auto_approve=True for API usage - skip HITL review)
     try:
         from app.agents.content import ContentAgent
-        content_agent = ContentAgent()
+        content_agent = ContentAgent(auto_approve=True)
         status["content"] = True
     except Exception as e:
         print(f"Failed to load Content Agent: {e}")
@@ -1370,15 +1370,14 @@ async def content_agent_invoke(request: ContentAgentRequest) -> EnterpriseAgentR
         )
 
     try:
-        # Ensure increased recursion limit for content workflows
-        content_agent._recursion_limit = 200
-
+        # Ensure auto_approve mode for API usage (skip HITL review)
         result = content_agent.create_content(
             topic=request.topic,
             platform=request.platform,
             tone=request.tone,
             target_audience=request.audience,
             session_id=request.session_id,
+            auto_approve=True,  # Skip HITL review for API calls
         )
         # Extract response from LangGraph state messages
         response_text = extract_agent_response(result)

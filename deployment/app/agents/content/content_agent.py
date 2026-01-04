@@ -86,6 +86,10 @@ class ContentState(BaseModel):
         default=0,
         description="Number of revisions made"
     )
+    auto_approve: bool = Field(
+        default=False,
+        description="If True, skip HITL review and auto-approve (API mode)"
+    )
 
 
 # Platform-specific configurations
@@ -259,13 +263,22 @@ class ContentAgent(BaseAgent):
         ... )
     """
 
-    def __init__(self, config: AgentConfig | None = None) -> None:
-        """Initialize the Content Agent."""
+    def __init__(self, config: AgentConfig | None = None, auto_approve: bool = False) -> None:
+        """Initialize the Content Agent.
+
+        Args:
+            config: Agent configuration.
+            auto_approve: If True, skip HITL review and auto-approve content.
+                         Use True for API/automated usage, False for interactive UI.
+        """
         super().__init__(config)
 
         # Set increased recursion limit for content workflows with HITL
         # Content agents need many steps (plan, draft, review, revise)
         self._recursion_limit = 200
+
+        # Auto-approve mode skips HITL review (useful for API usage)
+        self._auto_approve = auto_approve
 
         # Register content tools
         self.register_tools([
@@ -439,13 +452,31 @@ Please revise the content to address the feedback while maintaining quality."""
 
         def should_continue_planning(state: ContentState) -> str:
             """Check if planning is complete."""
+            from langchain_core.messages import ToolMessage
+
             messages = list(state.messages)
             if not messages:
                 return "plan"
 
             last_message = messages[-1]
+
+            # If there are pending tool calls, must execute them
             if hasattr(last_message, "tool_calls") and last_message.tool_calls:
                 return "tools"
+
+            # If last message is from tools, need to process the results
+            if isinstance(last_message, ToolMessage):
+                return "plan"
+
+            # In auto_approve mode, limit iterations - go to draft after processing
+            if getattr(state, 'auto_approve', False):
+                # If we have an AIMessage response (outline complete), move to drafting
+                if isinstance(last_message, AIMessage):
+                    return "draft"
+                # Limit iterations to prevent infinite loops
+                if len(messages) >= 5:
+                    return "draft"
+                return "plan"
 
             # Check if outline is done
             if "outline" in str(last_message.content).lower():
@@ -454,13 +485,31 @@ Please revise the content to address the feedback while maintaining quality."""
 
         def should_continue_drafting(state: ContentState) -> str:
             """Check if drafting is complete."""
+            from langchain_core.messages import ToolMessage
+
             messages = list(state.messages)
             if not messages:
                 return "draft"
 
             last_message = messages[-1]
+
+            # If there are pending tool calls, must execute them
             if hasattr(last_message, "tool_calls") and last_message.tool_calls:
                 return "tools_draft"
+
+            # If last message is from tools, need to process the results
+            if isinstance(last_message, ToolMessage):
+                return "draft"
+
+            # In auto_approve mode, go directly to end after draft is complete
+            if getattr(state, 'auto_approve', False):
+                # Limit total iterations to prevent infinite loops
+                if len(messages) > 10:
+                    return "end"
+                # If we have a complete response (AIMessage without tool calls), end
+                if isinstance(last_message, AIMessage):
+                    return "end"
+                return "draft"
 
             return "review"
 
@@ -495,7 +544,7 @@ Please revise the content to address the feedback while maintaining quality."""
         graph.add_conditional_edges(
             "draft",
             should_continue_drafting,
-            {"tools_draft": "tools_draft", "draft": "draft", "review": "review"}
+            {"tools_draft": "tools_draft", "draft": "draft", "review": "review", "end": END}
         )
         graph.add_edge("tools_draft", "draft")
 
@@ -508,21 +557,35 @@ Please revise the content to address the feedback while maintaining quality."""
 
         return graph
 
-    def compile(self) -> None:
+    def compile(self, auto_approve: bool | None = None) -> None:
         """Compile the content agent's graph with increased recursion limit.
 
         Overrides base compile to add recursion_limit configuration.
         Content creation workflows with HITL require more steps than default.
+
+        Args:
+            auto_approve: If True, skip HITL review. Overrides instance setting if provided.
         """
         from langgraph.checkpoint.memory import MemorySaver
 
         self._graph = self._build_graph()
 
         checkpointer = self.config.checkpointer or MemorySaver()
-        self._compiled_graph = self._graph.compile(
-            checkpointer=checkpointer,
-            interrupt_before=["review"],  # For HITL review
-        )
+
+        # Determine if we should use HITL or auto-approve
+        use_auto_approve = auto_approve if auto_approve is not None else self._auto_approve
+
+        if use_auto_approve:
+            # API mode: no HITL interrupt
+            self._compiled_graph = self._graph.compile(
+                checkpointer=checkpointer,
+            )
+        else:
+            # Interactive mode: HITL review enabled
+            self._compiled_graph = self._graph.compile(
+                checkpointer=checkpointer,
+                interrupt_before=["review"],  # For HITL review
+            )
 
         # Store increased recursion limit for content workflows
         # Content agents with HITL need many steps (plan, draft, review, revise)
@@ -552,6 +615,7 @@ Please revise the content to address the feedback while maintaining quality."""
             "tone": kwargs.get("tone", "professional"),
             "target_audience": kwargs.get("target_audience", ""),
             "status": "planning",  # Valid status: planning, drafting, review, revising, approved
+            "auto_approve": self._auto_approve,  # Pass auto_approve flag to state
         }
 
         # Get recursion limit (default to 100 for content workflows)
@@ -575,6 +639,7 @@ Please revise the content to address the feedback while maintaining quality."""
         tone: Literal["professional", "casual", "technical", "inspirational"] = "professional",
         target_audience: str = "",
         session_id: str | None = None,
+        auto_approve: bool | None = None,
     ) -> dict[str, Any]:
         """Create content for a specific platform.
 
@@ -584,10 +649,16 @@ Please revise the content to address the feedback while maintaining quality."""
             tone: Content tone
             target_audience: Description of target audience
             session_id: Optional session ID
+            auto_approve: If True, skip HITL review. If None, uses instance default.
 
         Returns:
             Content generation result
         """
+        # If auto_approve is explicitly set, recompile with the new setting
+        if auto_approve is not None and auto_approve != self._auto_approve:
+            self._auto_approve = auto_approve
+            self._compiled_graph = None  # Force recompile
+
         initial_message = (
             f"Create content about: {topic}\n\n"
             f"Platform: {platform}\n"
