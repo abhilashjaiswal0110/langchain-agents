@@ -433,18 +433,47 @@ START → agent_node → [should_continue?]
 
 ### 2. ServiceNow Agent (`app/agents/servicenow_agent.py`)
 
-**Purpose**: ServiceNow ITSM operations agent
+**Purpose**: ServiceNow ITSM operations agent with real API integration support
+
+**Operation Modes**:
+- **Simulation (Default)**: Uses mock data for development/testing
+- **Live**: Connects to real ServiceNow instance via REST API
+
+**Environment Configuration**:
+```bash
+# ServiceNow Instance (e.g., "dev12345" for dev12345.service-now.com)
+SERVICENOW_INSTANCE=your-instance-name
+
+# API Credentials (use a service account with appropriate roles)
+SERVICENOW_USERNAME=your-username
+SERVICENOW_PASSWORD=your-password
+
+# Operation mode: "simulation" (default) or "live"
+SERVICENOW_MODE=live
+
+# Optional settings
+SERVICENOW_TIMEOUT=30
+SERVICENOW_VERIFY_SSL=true  # Set to "false" for dev instances with self-signed certs
+```
+
+**Enabling Live Mode**:
+1. Set `SERVICENOW_MODE=live` in your `.env` file
+2. Configure your ServiceNow PDI (Personal Developer Instance) credentials
+3. Ensure the user has appropriate roles:
+   - `itil` - For incident management
+   - `cmdb_read` - For CMDB queries
+   - `change_request` - For change management
 
 **Tools Available**:
 | Tool | Description |
 |------|-------------|
-| `search_incidents` | Search incidents by query |
-| `get_incident_details` | Get detailed incident info |
-| `create_incident` | Create new incident |
-| `update_incident` | Update existing incident |
+| `search_incidents` | Search incidents by query, state, priority, assignee |
+| `get_incident_details` | Get detailed incident info including work notes |
+| `create_incident` | Create new incident with category/priority |
+| `update_incident` | Update state, assignee, add work notes |
 | `get_change_requests` | Get upcoming change requests |
-| `search_cmdb` | Search Configuration Management DB |
-| `get_my_tickets` | Get user's assigned tickets |
+| `search_cmdb` | Search Configuration Management DB by class/status |
+| `get_my_tickets` | Get user's assigned tickets by email |
 
 **Usage Example**:
 ```python
@@ -456,7 +485,15 @@ result = agent.chat(
     thread_id="session-123"
 )
 print(result["response"])
+# Response includes [LIVE DATA] or [SIMULATION] tag
 ```
+
+**API Endpoints Used (Live Mode)**:
+| Operation | ServiceNow API Endpoint |
+|-----------|------------------------|
+| Incidents | `/api/now/table/incident` |
+| Changes | `/api/now/table/change_request` |
+| CMDB | `/api/now/table/{ci_class}` |
 
 ### 3. Conversation Manager (`app/agents/conversation_manager.py`)
 
