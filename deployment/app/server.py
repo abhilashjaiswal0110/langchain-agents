@@ -1415,16 +1415,18 @@ async def data_analyst_invoke(request: DataAnalystRequest) -> EnterpriseAgentRes
         )
 
     try:
+        # Use default_session for consistency with upload endpoint when not specified
+        effective_session_id = request.session_id or "default_session"
         result = data_analyst_agent.invoke(
             message=request.message,
-            session_id=request.session_id,
+            session_id=effective_session_id,
         )
         # Extract response from LangGraph state messages
         response_text = extract_agent_response(result)
         return EnterpriseAgentResponse(
             success=True,
             response=response_text,
-            session_id=result.get("session_id") if isinstance(result, dict) else getattr(result, "session_id", None),
+            session_id=effective_session_id,
             agent_type="data_analyst",
             tool_calls=result.get("tool_calls") if isinstance(result, dict) else None,
         )
@@ -1474,7 +1476,7 @@ async def data_analyst_upload(file: UploadFile = File(...)) -> dict:
 
     # Automatically load the file into the agent's memory
     try:
-        from app.agents.data_analyst.data_analyst_agent import load_excel_file, load_csv_file
+        from app.agents.data_analyst.data_analyst_agent import load_excel_file, load_csv_file, _dataframes
 
         # Generate a session_id if not provided (for production, use proper session management)
         session_id = "default_session"  # In production, extract from request headers/cookies
@@ -1484,17 +1486,73 @@ async def data_analyst_upload(file: UploadFile = File(...)) -> dict:
         else:  # CSV
             result = load_csv_file.invoke({"file_path": tmp_path, "session_id": session_id})
 
-        # Return success with truncated result for security
+        # Check if the tool returned an error
+        if result.startswith("Error"):
+            return {
+                "status": "error",
+                "filename": filename,
+                "message": result,
+            }
+
+        # Verify data was actually loaded
+        if session_id not in _dataframes or "current" not in _dataframes[session_id]:
+            return {
+                "status": "error",
+                "filename": filename,
+                "message": "File was processed but data was not stored. Please try again.",
+            }
+
+        # Return success with session_id for subsequent requests
+        df = _dataframes[session_id]["current"]
         return {
             "status": "success",
             "filename": filename,
-            "message": f"File loaded successfully! Ready for analysis.",
+            "session_id": session_id,
+            "rows": len(df),
+            "columns": len(df.columns),
+            "message": f"File loaded successfully! Ready for analysis. ({len(df)} rows, {len(df.columns)} columns)",
         }
     except Exception as e:
-        # Generic error for security
+        # Return actual error for debugging
         return {
             "status": "error",
-            "message": "Failed to load file. Please ensure it's a valid Excel or CSV file.",
+            "filename": filename,
+            "message": f"Failed to load file: {str(e)}",
+        }
+
+
+@app.get("/api/enterprise/data-analyst/status", tags=["Enterprise Agents"])
+async def data_analyst_status() -> dict:
+    """Check the current status of data loaded in the Data Analyst Agent.
+
+    Returns:
+        Status of loaded data including session info and data shape.
+    """
+    try:
+        from app.agents.data_analyst.data_analyst_agent import _dataframes
+
+        sessions = {}
+        for session_id, data in _dataframes.items():
+            if "current" in data:
+                df = data["current"]
+                sessions[session_id] = {
+                    "has_data": True,
+                    "rows": len(df),
+                    "columns": len(df.columns),
+                    "column_names": df.columns.tolist()[:10],  # First 10 columns
+                }
+            else:
+                sessions[session_id] = {"has_data": False}
+
+        return {
+            "status": "ok",
+            "total_sessions": len(_dataframes),
+            "sessions": sessions,
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": str(e),
         }
 
 

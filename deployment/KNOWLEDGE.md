@@ -2712,6 +2712,80 @@ SESSION_KEY_PREFIX=session:
 
 ---
 
+### 2026-01-05 - Data Analyst Agent Data Discovery Fix (v3.5)
+
+**Fixed**:
+- **Data Analyst Agent "File Not Found" After Upload**: Agent asked for file path even after successful upload
+  - **Root Cause**: Unlike the working Multilingual RAG Agent (which has `list_documents` tool), the Data Analyst Agent had NO data discovery tool. It relied solely on system prompt injection which was unreliable.
+  - **Comparison with Working RAG Agent**:
+    - RAG Agent: Has `list_documents()` tool → LLM can discover available documents
+    - Data Analyst: Had NO discovery tool → LLM couldn't confirm data was loaded
+  - **Solution** (following RAG Agent pattern):
+    1. Added `check_data_status()` tool that tells LLM if data is loaded
+    2. Updated system prompt to ALWAYS call `check_data_status()` first
+    3. Tool returns dataset overview (rows, columns, types) if data exists
+  - Modified: `app/agents/data_analyst/data_analyst_agent.py`
+
+- **Upload Endpoint Silent Failures**: Upload always returned "success" even when file loading failed
+  - **Root Cause**: Upload endpoint ignored the `result` from `load_excel_file.invoke()` and always returned success message
+  - **Solution**:
+    1. Check if result starts with "Error" and return error status
+    2. Verify data was actually stored in `_dataframes` before returning success
+    3. Include row/column count in success response for confirmation
+    4. Return actual error messages instead of generic errors
+  - Modified: `app/server.py` (upload endpoint)
+
+**Added**:
+- **Debug Status Endpoint**: `GET /api/enterprise/data-analyst/status`
+  - Returns current state of loaded data sessions
+  - Shows row/column counts and column names
+  - Useful for troubleshooting upload/invoke issues
+  - Modified: `app/server.py`
+
+**Impact**:
+- ✅ Data Analyst Agent now reliably discovers uploaded data via tool call
+- ✅ Upload endpoint properly validates and reports errors
+- ✅ Debug endpoint allows checking data state without invoking agent
+- ✅ Consistent pattern with working RAG Agent
+
+**Best Practice Established**:
+- Session-aware agents MUST have a data discovery tool (like `list_documents` or `check_data_status`)
+- Don't rely solely on system prompt injection for state awareness - use tools
+- Upload endpoints must validate tool results before returning success
+
+---
+
+### 2026-01-04 - Data Analyst Agent Session Fix (v3.4)
+
+**Fixed**:
+- **Data Analyst Agent Session State Mismatch**: Fixed "File loaded successfully" but agent asks for file again
+  - **Root Cause**: Upload endpoint used `session_id = "default_session"` but didn't return it; invoke endpoint used `request.session_id` which could be `None` or different
+  - **Technical Details**:
+    - Upload stores data in `_dataframes["default_session"]["current"]`
+    - If invoke used different session_id, data lookup failed
+    - Agent's `call_model()` checks `_dataframes[session_id]` for loaded data
+  - **Solution**:
+    1. Upload endpoint now returns `session_id` in response for client use
+    2. Invoke endpoint uses `effective_session_id = request.session_id or "default_session"` for consistency
+    3. Response includes `effective_session_id` instead of potentially None value
+  - Modified: `app/server.py` (lines 1418-1429, 1487-1493)
+
+**Added**:
+- **Unit Tests for Session Consistency**:
+  - `test_data_analyst_upload_returns_session_id`: Verifies upload returns session_id
+  - `test_data_analyst_invoke_uses_default_session`: Verifies invoke uses default_session when not provided
+  - Modified: `tests/test_enterprise_agents.py`
+
+**Impact**:
+- ✅ Data Analyst Agent correctly retains uploaded file state between upload and invoke calls
+- ✅ Clients receive session_id from upload to use in subsequent requests
+- ✅ Consistent session_id handling prevents state lookup failures
+
+**Best Practice Established**:
+- Session-aware endpoints must return and consistently use the same session_id across related operations
+
+---
+
 ### 2025-12-29 - Enterprise Agent API Fixes (v3.3)
 
 **Fixed**:

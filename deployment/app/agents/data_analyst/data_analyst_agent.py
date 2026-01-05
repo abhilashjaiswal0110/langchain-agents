@@ -179,6 +179,40 @@ def load_csv_file(file_path: str, delimiter: str = ",", session_id: str = "defau
 
 @tool
 @tool_error_handler
+def check_data_status(session_id: str = "default_session") -> str:
+    """Check if data is loaded and get basic information about it.
+
+    IMPORTANT: Always call this tool first before any analysis to check if data is available.
+
+    Args:
+        session_id: Session identifier for multi-user isolation
+
+    Returns:
+        Information about loaded data or message indicating no data is loaded.
+    """
+    pd = _get_pandas()
+    if pd is None:
+        return "Error: pandas library not installed"
+
+    if session_id not in _dataframes or "current" not in _dataframes[session_id]:
+        return "NO DATA LOADED. Please ask the user to upload an Excel or CSV file first."
+
+    df = _dataframes[session_id]["current"]
+
+    return (
+        f"DATA IS LOADED AND READY FOR ANALYSIS!\n\n"
+        f"Dataset Overview:\n"
+        f"- Rows: {len(df)}\n"
+        f"- Columns: {len(df.columns)}\n"
+        f"- Column names: {', '.join(df.columns.tolist())}\n"
+        f"- Data types:\n{df.dtypes.to_string()}\n\n"
+        f"You can now use get_data_summary, generate_insights, calculate_statistics, "
+        f"run_sql_query, or suggest_visualization tools to analyze this data."
+    )
+
+
+@tool
+@tool_error_handler
 def get_data_summary(session_id: str = "default_session") -> str:
     """Get statistical summary of the loaded data.
 
@@ -475,6 +509,7 @@ class DataAnalystAgent(BaseAgent):
 
         # Register data analysis tools
         self.register_tools([
+            check_data_status,
             load_excel_file,
             load_csv_file,
             get_data_summary,
@@ -489,27 +524,34 @@ class DataAnalystAgent(BaseAgent):
         return """You are an expert Data Analyst Agent specializing in data analysis,
 statistical interpretation, and insight generation.
 
+## CRITICAL: Always Check Data Status First
+BEFORE doing ANY analysis, you MUST call check_data_status() to see if data is already loaded.
+- If data IS loaded: proceed with analysis using the available tools
+- If data is NOT loaded: inform the user they need to upload a file first
+DO NOT ask the user for a file path - files are uploaded via the UI.
+
 ## Your Capabilities:
-1. **Data Loading**: Load Excel files (load_excel_file) and CSV files (load_csv_file)
-2. **Summary Statistics**: Get comprehensive data summaries (get_data_summary)
-3. **SQL Queries**: Run SQL queries on data (run_sql_query) - table is named 'df'
-4. **Statistics**: Calculate specific statistics (calculate_statistics)
-5. **Visualizations**: Suggest appropriate charts (suggest_visualization)
-6. **Insights**: Generate automated insights (generate_insights)
+1. **Check Data**: ALWAYS call check_data_status first to see available data
+2. **Data Loading**: Load Excel files (load_excel_file) and CSV files (load_csv_file)
+3. **Summary Statistics**: Get comprehensive data summaries (get_data_summary)
+4. **SQL Queries**: Run SQL queries on data (run_sql_query) - table is named 'df'
+5. **Statistics**: Calculate specific statistics (calculate_statistics)
+6. **Visualizations**: Suggest appropriate charts (suggest_visualization)
+7. **Insights**: Generate automated insights (generate_insights)
 
 ## Analysis Process:
-1. Load the data file first
-2. Get an overview with data summary
+1. FIRST: Call check_data_status() to verify data is loaded
+2. Get an overview with get_data_summary
 3. Explore specific aspects based on user questions
-4. Generate insights and recommendations
+4. Generate insights with generate_insights
 5. Suggest visualizations when appropriate
 
 ## Guidelines:
-- Always start by loading the data if not already loaded
+- ALWAYS call check_data_status() first - never skip this step
+- If data is loaded, proceed directly with analysis
 - Explain findings in clear, non-technical language
 - Highlight key patterns, outliers, and trends
 - Provide actionable recommendations
-- Suggest follow-up analyses when relevant
 - Be precise with numbers but explain their significance
 
 ## Output Format:

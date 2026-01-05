@@ -111,6 +111,27 @@ class TestDataAnalystEndpoint:
         )
         assert response.status_code in [200, 503]
 
+    def test_data_analyst_upload_returns_session_id(self, test_client):
+        """Test data analyst upload returns session_id for consistent state management."""
+        response = test_client.post(
+            "/api/enterprise/data-analyst/upload",
+            files={"file": ("test.csv", b"col1,col2\n1,2", "text/csv")},
+        )
+        if response.status_code == 200:
+            data = response.json()
+            assert "session_id" in data
+            assert data["session_id"] == "default_session"
+
+    def test_data_analyst_invoke_uses_default_session(self, test_client):
+        """Test data analyst invoke uses default_session when session_id is not provided."""
+        response = test_client.post(
+            "/api/enterprise/data-analyst/invoke",
+            json={"message": "Summarize the data"},
+        )
+        if response.status_code == 200:
+            data = response.json()
+            assert data.get("session_id") == "default_session"
+
 
 class TestDocumentAgentEndpoint:
     """Tests for Document Generator Agent endpoint."""
