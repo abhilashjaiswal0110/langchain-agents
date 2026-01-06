@@ -2,7 +2,7 @@
 
 > **Purpose**: This document serves as the authoritative knowledge source for AI agents working on this repository. It contains architectural decisions, implementation patterns, and guidelines that must be followed when making changes or enhancements.
 
-**Last Updated**: 2026-01-04 (v3.14 - Document Agent Recursion Fix)
+**Last Updated**: 2026-01-06 (v3.15 - ServiceNow Change/Service Request Tools)
 
 ---
 
@@ -464,7 +464,7 @@ SERVICENOW_VERIFY_SSL=true  # Set to "false" for dev instances with self-signed 
    - `cmdb_read` - For CMDB queries
    - `change_request` - For change management
 
-**Tools Available**:
+**Tools Available** (10 tools total):
 | Tool | Description |
 |------|-------------|
 | `search_incidents` | Search incidents by query, state, priority, assignee |
@@ -472,8 +472,11 @@ SERVICENOW_VERIFY_SSL=true  # Set to "false" for dev instances with self-signed 
 | `create_incident` | Create new incident with category/priority |
 | `update_incident` | Update state, assignee, add work notes |
 | `get_change_requests` | Get upcoming change requests |
+| `get_change_request_details` | Get detailed change request info (CHG tickets) |
 | `search_cmdb` | Search Configuration Management DB by class/status |
 | `get_my_tickets` | Get user's assigned tickets by email |
+| `get_service_request_details` | Get detailed service request info with items (REQ/RITM) |
+| `search_service_requests` | Search service requests by query, state, requester |
 
 **Usage Example**:
 ```python
@@ -2325,6 +2328,35 @@ LANGCHAIN_PROJECT=langchain-platform-prod
 ---
 
 ## Change Log
+
+### 2026-01-06 - ServiceNow Change/Service Request Tools (v3.15)
+
+**Added**:
+- **ServiceNow Change Request Tools**:
+  - `get_change_request_details(change_number)` - Get detailed CHG ticket info
+  - Supports both simulation mode and live ServiceNow API
+  - Added CHG0000009 test data (database migration scenario)
+
+- **ServiceNow Service Request Tools**:
+  - `get_service_request_details(request_number)` - Get REQ ticket with RITM items
+  - `search_service_requests(query, state, requested_for, limit)` - Search/filter requests
+  - REQ0010007 test data for software license request
+
+- **Updated ServiceNowAgent Class**:
+  - Registered 3 new tools (10 tools total)
+  - Updated system prompt with new capabilities
+
+- **Comprehensive Test Suite**:
+  - 23 new tests in `tests/test_servicenow_agent_tools.py`
+  - Tests for CHG0000009 and REQ0010007 scenarios
+  - Data integrity validation tests
+
+**Files Changed**:
+- `app/agents/servicenow_agent.py` - Added tools and test data
+- `tests/test_servicenow_agent_tools.py` - New test file
+- `KNOWLEDGE.md` - Updated documentation
+
+---
 
 ### 2026-01-04 - Document Agent Recursion Fix (v3.14)
 

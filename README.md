@@ -73,7 +73,8 @@ This repository includes a production-ready **Enterprise Agents Platform** in th
 
 ### 🚀 Key Features
 
-- **7 Production Agents**: Research, Content Generation (HITL), Data Analysis, Document Processing, Multilingual RAG, IT Support (HITL), Code Assistant
+- **8 Production Agents**: Research, Content Generation (HITL), Data Analysis, Document Processing, Multilingual RAG, IT Support (HITL), ServiceNow ITSM, Code Assistant
+- **ServiceNow Integration**: Full ITSM operations with 10 tools - incidents, change requests, service requests, CMDB
 - **LangGraph Orchestration**: State-based agent workflows with human-in-the-loop capabilities
 - **REST API**: FastAPI server with LangServe endpoints for seamless integration
 - **Microsoft Copilot Studio**: Ready-to-use webhooks for enterprise chatbot integration
@@ -154,6 +155,7 @@ Infrastructure Layer (LLM providers, Vector stores, External APIs)
 - **Content Creation Workflows**: Human-in-the-loop content generation with approval gates
 - **Data Analysis Automation**: Automated insights generation with visualization
 - **IT Service Desk**: Intelligent ticket routing and resolution assistance
+- **ServiceNow ITSM Operations**: Incident, change request, and service request management
 - **Developer Productivity**: Code generation, review, and debugging assistance
 - **Research Automation**: Multi-source information gathering and synthesis
 

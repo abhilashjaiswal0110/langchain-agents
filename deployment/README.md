@@ -7,6 +7,8 @@ A production-ready deployment platform serving LangChain chains and LangGraph ag
 - **LangChain Integration** - Chat, RAG, and Agent chains via LangServe
 - **LangGraph Agents** - Stateful agents with tool calling using LangGraph
 - **Multi-Provider Support** - Works with OpenAI and Anthropic models
+- **IT Support Agents** - IT Helpdesk and ServiceNow ITSM agents with conversation memory
+- **ServiceNow Integration** - Full ITSM operations: incidents, changes, service requests, CMDB
 - **LangSmith Tracing** - Full observability and debugging
 - **Health Checks** - Kubernetes-ready health and readiness endpoints
 - **Docker Support** - Multi-stage build for production deployment
@@ -139,6 +141,10 @@ curl -X POST "http://localhost:8000/langgraph/invoke" \
 | `LANGCHAIN_API_KEY` | No | - | LangSmith API key |
 | `LANGCHAIN_PROJECT` | No | `langchain-platform` | LangSmith project |
 | `TAVILY_API_KEY` | No | - | Tavily search API key |
+| `SERVICENOW_MODE` | No | `simulation` | ServiceNow mode: `simulation` or `live` |
+| `SERVICENOW_INSTANCE` | No | - | ServiceNow instance name |
+| `SERVICENOW_USERNAME` | No | - | ServiceNow API username |
+| `SERVICENOW_PASSWORD` | No | - | ServiceNow API password |
 | `PORT` | No | `8000` | Server port |
 
 *At least one LLM provider API key is required
@@ -162,6 +168,10 @@ deployment/
 ├── app/
 │   ├── __init__.py
 │   ├── server.py              # FastAPI application
+│   ├── agents/                # IT Support agents
+│   │   ├── it_helpdesk.py     # IT Helpdesk Agent
+│   │   ├── servicenow_agent.py # ServiceNow ITSM Agent (10 tools)
+│   │   └── conversation_manager.py
 │   └── chains/
 │       ├── __init__.py
 │       ├── chat.py            # Simple chat chain
@@ -170,7 +180,8 @@ deployment/
 │       └── langgraph_agent.py # LangGraph agent with tools
 ├── tests/
 │   ├── __init__.py
-│   └── test_server.py         # Server endpoint tests
+│   ├── test_server.py         # Server endpoint tests
+│   └── test_servicenow_agent_tools.py # ServiceNow tools tests
 ├── .env.example               # Environment template
 ├── .gitignore
 ├── Dockerfile                 # Production Docker image
@@ -180,6 +191,25 @@ deployment/
 ├── KNOWLEDGE.md               # Knowledge base for AI agents
 └── README.md                  # This file
 ```
+
+## ServiceNow Integration
+
+The ServiceNow Agent provides full ITSM operations with 10 tools:
+
+| Tool | Description |
+|------|-------------|
+| `search_incidents` | Search incidents by query, state, priority |
+| `get_incident_details` | Get detailed incident info |
+| `create_incident` | Create new incident |
+| `update_incident` | Update incidents with work notes |
+| `get_change_requests` | List upcoming changes |
+| `get_change_request_details` | Get detailed CHG ticket info |
+| `search_cmdb` | Query CMDB configuration items |
+| `get_my_tickets` | Get user's tickets |
+| `get_service_request_details` | Get REQ/RITM details |
+| `search_service_requests` | Search service requests |
+
+**Modes**: `simulation` (default, uses mock data) or `live` (connects to real ServiceNow)
 
 ## Development
 
