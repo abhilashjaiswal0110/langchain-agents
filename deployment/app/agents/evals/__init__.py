@@ -46,6 +46,8 @@ from app.agents.evals.langsmith_evaluator import (
     # LangSmith SDK compatible evaluation (added 2026-01-02)
     create_langsmith_evaluator_wrapper,
     run_langsmith_sdk_evaluation,
+    # Playground compatible evaluator (added 2026-01-05)
+    create_playground_compatible_evaluator,
 )
 
 # Multi-turn evaluation
@@ -115,6 +117,7 @@ __all__ = [
     # LangSmith SDK compatible evaluation
     "create_langsmith_evaluator_wrapper",
     "run_langsmith_sdk_evaluation",
+    "create_playground_compatible_evaluator",
     # Multi-Turn
     "ConversationTurn",
     "MultiTurnTestCase",

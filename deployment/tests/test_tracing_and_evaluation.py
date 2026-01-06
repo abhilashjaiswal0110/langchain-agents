@@ -175,6 +175,58 @@ class TestEvaluatorVariableMapping:
         # Should still work without reference
         print(f"\nResult without reference: {result}")
 
+    def test_playground_compatible_evaluator(self):
+        """Test playground-compatible evaluator handles missing StructuredPrompt variables.
+        
+        This tests the fix for KeyError: "Input to StructuredPrompt is missing 
+        variables {'context', 'reference_outputs'}"
+        """
+        from app.agents.evals import (
+            ResponseQualityEvaluator,
+            create_playground_compatible_evaluator,
+        )
+
+        base_evaluator = ResponseQualityEvaluator()
+        wrapper = create_playground_compatible_evaluator(base_evaluator)
+
+        assert callable(wrapper)
+        
+        # Test with minimal inputs (simulating LangSmith Playground call)
+        # This should NOT raise KeyError for missing context or reference_outputs
+        result = wrapper(
+            inputs={"input": "What is AI?"},
+            outputs={"output": "AI stands for Artificial Intelligence."},
+        )
+
+        assert "key" in result
+        assert "score" in result
+        assert "comment" in result
+        print(f"\nPlayground-compatible evaluator result: {result}")
+
+    def test_playground_evaluator_with_all_variables(self):
+        """Test playground evaluator works with all optional variables provided."""
+        from app.agents.evals import (
+            TaskCompletionEvaluator,
+            create_playground_compatible_evaluator,
+        )
+
+        base_evaluator = TaskCompletionEvaluator()
+        wrapper = create_playground_compatible_evaluator(base_evaluator)
+
+        # Test with all variables that StructuredPrompt might expect
+        result = wrapper(
+            inputs={"input": "Create a ticket for password reset"},
+            outputs={"output": "I have created ticket INC0010001 for password reset."},
+            context="ServiceNow IT support conversation",
+            reference_outputs={"expected": "Ticket should be created with INC prefix"},
+            examples_few_shot=[{"input": "example", "output": "example response"}],
+        )
+
+        assert "key" in result
+        assert "score" in result
+        assert result["key"] == "task_completion"
+        print(f"\nPlayground evaluator with all vars: {result}")
+
 
 class TestDatasetSynchronization:
     """Test dataset synchronization with proper schema."""

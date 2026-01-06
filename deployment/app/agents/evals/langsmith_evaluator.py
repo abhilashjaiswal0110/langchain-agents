@@ -655,17 +655,109 @@ def create_langsmith_evaluator_wrapper(
         >>>
         >>> quality_eval = create_langsmith_evaluator_wrapper(ResponseQualityEvaluator())
         >>> results = evaluate(agent_func, data="my-dataset", evaluators=[quality_eval])
+
+    Note:
+        FIX (2026-01-06): Updated to properly handle context and reference_outputs
+        to fix KeyError in LangSmith Playground evaluators.
     """
     def evaluator_fn(
         inputs: dict[str, Any],
         outputs: dict[str, Any],
         reference_outputs: dict[str, Any] | None = None,
+        context: str | None = None,
+        examples_few_shot: list | None = None,
         **kwargs: Any,
     ) -> dict[str, Any]:
-        """LangSmith SDK compatible evaluator function."""
+        """LangSmith SDK compatible evaluator function.
+
+        Handles all possible variable combinations from LangSmith SDK/Playground.
+        """
         # Extract values from the inputs/outputs structure
         input_text = inputs.get("input", "") or str(inputs)
         output_text = outputs.get("output", "") or str(outputs)
+
+        # Get context from multiple sources
+        ctx = context or inputs.get("context", "") or ""
+
+        # Get expected output from reference_outputs (handle None gracefully)
+        expected = None
+        if reference_outputs:
+            expected = (
+                reference_outputs.get("expected")
+                or reference_outputs.get("reference_output")
+                or reference_outputs.get("output")
+            )
+        elif outputs:
+            # Fallback: try to get from outputs if reference not provided
+            expected = outputs.get("expected") or outputs.get("reference_output")
+
+        # Run the base evaluator
+        try:
+            result = base_evaluator.evaluate(input_text, output_text, expected)
+            return {
+                "key": base_evaluator.name,
+                "score": result.score,
+                "comment": result.feedback,
+                "passed": result.passed,
+            }
+        except Exception as e:
+            logger.error(f"Evaluator {base_evaluator.name} failed: {e}")
+            return {
+                "key": base_evaluator.name,
+                "score": 0.0,
+                "comment": f"Evaluation error: {e}",
+                "passed": False,
+            }
+
+    # Set function name for LangSmith display
+    evaluator_fn.__name__ = base_evaluator.name
+    return evaluator_fn
+
+
+def create_playground_compatible_evaluator(
+    base_evaluator: BaseEvaluator,
+) -> Callable:
+    """Create a LangSmith Playground compatible evaluator.
+
+    This wrapper ensures all expected variables are handled, including:
+    - context: Defaults to empty string if not provided
+    - reference_outputs: Defaults to empty dict if not provided
+    - examples_few_shot: Handled but not required
+
+    This fixes the KeyError: "Input to StructuredPrompt is missing variables
+    {'context', 'reference_outputs'}" error in LangSmith Playground.
+
+    Args:
+        base_evaluator: The base evaluator to wrap.
+
+    Returns:
+        A callable compatible with LangSmith Playground evaluators.
+
+    Note:
+        Added 2026-01-06 to fix Playground evaluator errors.
+    """
+    def evaluator_fn(
+        inputs: dict[str, Any] | None = None,
+        outputs: dict[str, Any] | None = None,
+        reference_outputs: dict[str, Any] | None = None,
+        context: str | None = None,
+        examples_few_shot: list | None = None,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        """Playground compatible evaluator function with default handling."""
+        # Provide defaults for all expected variables
+        inputs = inputs or {}
+        outputs = outputs or {}
+        reference_outputs = reference_outputs or {}
+        context = context or ""
+
+        # Extract values
+        input_text = inputs.get("input", "") or str(inputs) if inputs else ""
+        output_text = outputs.get("output", "") or str(outputs) if outputs else ""
+
+        # Get context from inputs if not provided directly
+        if not context and inputs:
+            context = inputs.get("context", "")
 
         # Get expected output from reference_outputs
         expected = None
@@ -695,7 +787,7 @@ def create_langsmith_evaluator_wrapper(
             }
 
     # Set function name for LangSmith display
-    evaluator_fn.__name__ = base_evaluator.name
+    evaluator_fn.__name__ = f"{base_evaluator.name}_playground"
     return evaluator_fn
 
 
