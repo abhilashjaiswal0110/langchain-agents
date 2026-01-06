@@ -324,6 +324,98 @@ class ServiceNowAPI:
         result = self._request("GET", "/api/now/table/change_request", params=params)
         return result.get("result", [])
 
+    def get_change_request(self, change_number: str) -> dict[str, Any] | None:
+        """Get change request by number.
+
+        Args:
+            change_number: Change request number (e.g., CHG0000009).
+
+        Returns:
+            Change request record or None if not found.
+        """
+        params = {
+            "sysparm_query": f"number={change_number}",
+            "sysparm_limit": 1,
+            "sysparm_display_value": "true",
+        }
+
+        result = self._request("GET", "/api/now/table/change_request", params=params)
+        changes = result.get("result", [])
+        return changes[0] if changes else None
+
+    def get_service_request(self, request_number: str) -> dict[str, Any] | None:
+        """Get service request by number.
+
+        Args:
+            request_number: Service request number (e.g., REQ0010007).
+
+        Returns:
+            Service request record or None if not found.
+        """
+        params = {
+            "sysparm_query": f"number={request_number}",
+            "sysparm_limit": 1,
+            "sysparm_display_value": "true",
+        }
+
+        result = self._request("GET", "/api/now/table/sc_request", params=params)
+        requests = result.get("result", [])
+        return requests[0] if requests else None
+
+    def search_service_requests(
+        self,
+        query: str | None = None,
+        state: str | None = None,
+        requested_for: str | None = None,
+        limit: int = 10,
+    ) -> list[dict[str, Any]]:
+        """Search for service requests.
+
+        Args:
+            query: Text search in short_description.
+            state: Filter by state.
+            requested_for: Filter by requested_for user email.
+            limit: Maximum results.
+
+        Returns:
+            List of service request records.
+        """
+        query_parts = []
+
+        if query:
+            query_parts.append(f"short_descriptionLIKE{query}")
+        if state:
+            query_parts.append(f"request_state={state}")
+        if requested_for:
+            query_parts.append(f"requested_for.email={requested_for}")
+
+        params = {
+            "sysparm_query": "^".join(query_parts) if query_parts else "",
+            "sysparm_limit": limit,
+            "sysparm_display_value": "true",
+        }
+
+        result = self._request("GET", "/api/now/table/sc_request", params=params)
+        return result.get("result", [])
+
+    def get_requested_items(self, request_number: str) -> list[dict[str, Any]]:
+        """Get requested items (RITMs) for a service request.
+
+        Args:
+            request_number: Parent service request number (e.g., REQ0010007).
+
+        Returns:
+            List of requested item records.
+        """
+        params = {
+            "sysparm_query": f"request.number={request_number}",
+            "sysparm_limit": 50,
+            "sysparm_display_value": "true",
+        }
+
+        result = self._request("GET", "/api/now/table/sc_req_item", params=params)
+        return result.get("result", [])
+
     def search_cmdb(
         self,
         query: str | None = None,
@@ -477,6 +569,19 @@ CHANGE_REQUESTS_DB: dict[str, dict[str, Any]] = {
         "assigned_to": "DevOps Team",
         "approval_status": "Approved",
         "impact": "Low - Automated patching with auto-restart"
+    },
+    "CHG0000009": {
+        "number": "CHG0000009",
+        "short_description": "Database Migration - Production Oracle to PostgreSQL",
+        "description": "Critical database migration from Oracle 19c to PostgreSQL 15 for the ERP system. Includes data validation, schema conversion, and application testing.",
+        "state": "Implement",
+        "type": "Normal",
+        "risk": "High",
+        "planned_start": "2026-01-10 22:00:00",
+        "planned_end": "2026-01-11 06:00:00",
+        "assigned_to": "Database Migration Team",
+        "approval_status": "Approved",
+        "impact": "High - ERP system will be unavailable during migration window"
     }
 }
 
@@ -506,6 +611,50 @@ CMDB_DB: dict[str, dict[str, Any]] = {
         "status": "Operational",
         "owner": "ERP Team",
         "dependencies": ["PROD-DB-01", "PROD-APP-01"]
+    }
+}
+
+# Simulated service requests
+SERVICE_REQUESTS_DB: dict[str, dict[str, Any]] = {
+    "REQ0010001": {
+        "number": "REQ0010001",
+        "short_description": "New laptop request",
+        "description": "Request for new MacBook Pro for development work",
+        "request_state": "Approved",
+        "stage": "Delivery",
+        "requested_for": "jane.doe@company.com",
+        "opened_by": "jane.doe@company.com",
+        "created": "2024-12-10 10:00:00",
+        "updated": "2024-12-12 14:00:00",
+        "price": "$2,500.00",
+        "items": [
+            {
+                "number": "RITM0010001",
+                "short_description": "MacBook Pro 16-inch",
+                "stage": "Fulfillment",
+                "assigned_to": "IT Asset Team"
+            }
+        ]
+    },
+    "REQ0010007": {
+        "number": "REQ0010007",
+        "short_description": "Software license request",
+        "description": "Request for Adobe Creative Cloud license",
+        "request_state": "In Progress",
+        "stage": "Approval",
+        "requested_for": "bob.johnson@company.com",
+        "opened_by": "bob.johnson@company.com",
+        "created": "2024-12-14 09:00:00",
+        "updated": "2024-12-15 11:00:00",
+        "price": "$599.00/year",
+        "items": [
+            {
+                "number": "RITM0010007",
+                "short_description": "Adobe Creative Cloud - Single License",
+                "stage": "Waiting for Approval",
+                "assigned_to": "Software Licensing Team"
+            }
+        ]
     }
 }
 
@@ -1067,6 +1216,253 @@ def get_my_tickets(user_email: str) -> str:
     return "\n".join(output)
 
 
+@tool
+def get_change_request_details(change_number: str) -> str:
+    """Get detailed information about a specific change request.
+
+    Args:
+        change_number: The change request number (e.g., CHG0000009).
+
+    Returns:
+        Detailed change request information.
+    """
+    if is_live_mode():
+        try:
+            api = get_api_client()
+            change = api.get_change_request(change_number.upper())
+
+            if not change:
+                return f"Change request {change_number} not found. Please verify the number."
+
+            return f"""**Change Request Details: {change.get('number')}** [LIVE DATA]
+
+**Short Description:** {change.get('short_description', 'N/A')}
+**Description:** {change.get('description', 'N/A')}
+
+**Status Information:**
+- State: {change.get('state', 'Unknown')}
+- Type: {change.get('type', 'N/A')}
+- Risk: {change.get('risk', 'N/A')}
+- Priority: {change.get('priority', 'N/A')}
+
+**Schedule:**
+- Planned Start: {change.get('start_date', 'TBD')}
+- Planned End: {change.get('end_date', 'TBD')}
+
+**Assignment:**
+- Assigned To: {change.get('assigned_to', 'Unassigned') or 'Unassigned'}
+- Assignment Group: {change.get('assignment_group', 'N/A')}
+
+**Approval:**
+- Approval Status: {change.get('approval', 'Unknown')}
+
+**Timestamps:**
+- Created: {change.get('sys_created_on', 'Unknown')}
+- Last Updated: {change.get('sys_updated_on', 'Unknown')}"""
+
+        except Exception as e:
+            return f"Error getting change request details: {e}"
+
+    # Simulation mode
+    change = CHANGE_REQUESTS_DB.get(change_number.upper())
+
+    if not change:
+        return f"Change request {change_number} not found. Please verify the number."
+
+    return f"""**Change Request Details: {change['number']}** [SIMULATION]
+
+**Short Description:** {change['short_description']}
+**Description:** {change['description']}
+
+**Status Information:**
+- State: {change['state']}
+- Type: {change['type']}
+- Risk: {change['risk']}
+
+**Schedule:**
+- Planned Start: {change['planned_start']}
+- Planned End: {change['planned_end']}
+
+**Assignment:**
+- Assigned To: {change['assigned_to']}
+
+**Approval:**
+- Approval Status: {change['approval_status']}
+- Impact: {change['impact']}"""
+
+
+@tool
+def get_service_request_details(request_number: str) -> str:
+    """Get detailed information about a specific service request.
+
+    Args:
+        request_number: The service request number (e.g., REQ0010007).
+
+    Returns:
+        Detailed service request information.
+    """
+    if is_live_mode():
+        try:
+            api = get_api_client()
+            request = api.get_service_request(request_number.upper())
+
+            if not request:
+                return f"Service request {request_number} not found. Please verify the number."
+
+            # Also get the requested items
+            items = api.get_requested_items(request_number.upper())
+
+            output = f"""**Service Request Details: {request.get('number')}** [LIVE DATA]
+
+**Short Description:** {request.get('short_description', 'N/A')}
+**Description:** {request.get('description', 'N/A')}
+
+**Status Information:**
+- Request State: {request.get('request_state', 'Unknown')}
+- Stage: {request.get('stage', 'N/A')}
+
+**Requester Information:**
+- Requested For: {request.get('requested_for', 'Unknown')}
+- Opened By: {request.get('opened_by', 'Unknown')}
+
+**Timestamps:**
+- Created: {request.get('sys_created_on', 'Unknown')}
+- Last Updated: {request.get('sys_updated_on', 'Unknown')}
+
+**Price:** {request.get('price', 'N/A')}
+"""
+
+            if items:
+                output += "\n**Requested Items:**\n"
+                for item in items:
+                    output += f"""
+- **{item.get('number', 'N/A')}**: {item.get('short_description', 'N/A')}
+  - Stage: {item.get('stage', 'Unknown')}
+  - Assigned To: {item.get('assigned_to', 'Unassigned') or 'Unassigned'}
+"""
+
+            return output
+
+        except Exception as e:
+            return f"Error getting service request details: {e}"
+
+    # Simulation mode
+    request = SERVICE_REQUESTS_DB.get(request_number.upper())
+
+    if not request:
+        return f"Service request {request_number} not found. Please verify the number."
+
+    output = f"""**Service Request Details: {request['number']}** [SIMULATION]
+
+**Short Description:** {request['short_description']}
+**Description:** {request['description']}
+
+**Status Information:**
+- Request State: {request['request_state']}
+- Stage: {request['stage']}
+
+**Requester Information:**
+- Requested For: {request['requested_for']}
+- Opened By: {request['opened_by']}
+
+**Timestamps:**
+- Created: {request['created']}
+- Last Updated: {request['updated']}
+
+**Price:** {request['price']}
+"""
+
+    if request.get("items"):
+        output += "\n**Requested Items:**\n"
+        for item in request["items"]:
+            output += f"""
+- **{item['number']}**: {item['short_description']}
+  - Stage: {item['stage']}
+  - Assigned To: {item['assigned_to']}
+"""
+
+    return output
+
+
+@tool
+def search_service_requests(
+    query: str | None = None,
+    state: str | None = None,
+    requested_for: str | None = None,
+    limit: int = 5,
+) -> str:
+    """Search for service requests in ServiceNow.
+
+    Args:
+        query: Search query for request description.
+        state: Filter by state (Approved, In Progress, Closed, etc.).
+        requested_for: Filter by requester email.
+        limit: Maximum number of results to return.
+
+    Returns:
+        List of matching service requests.
+    """
+    if is_live_mode():
+        try:
+            api = get_api_client()
+            requests = api.search_service_requests(
+                query=query,
+                state=state,
+                requested_for=requested_for,
+                limit=limit,
+            )
+
+            if not requests:
+                return "No service requests found matching the criteria."
+
+            output = [f"**Found {len(requests)} service request(s) [LIVE DATA]:**\n"]
+            for req in requests:
+                output.append(f"""
+**{req.get('number', 'N/A')}** - {req.get('short_description', 'No description')}
+- State: {req.get('request_state', 'Unknown')}
+- Stage: {req.get('stage', 'N/A')}
+- Requested For: {req.get('requested_for', 'Unknown')}
+- Created: {req.get('sys_created_on', 'Unknown')}
+""")
+            return "\n".join(output)
+
+        except Exception as e:
+            return f"Error searching service requests: {e}"
+
+    # Simulation mode
+    results = []
+
+    for req_id, request in SERVICE_REQUESTS_DB.items():
+        if state and request["request_state"].lower() != state.lower():
+            continue
+        if requested_for and request["requested_for"].lower() != requested_for.lower():
+            continue
+        if query:
+            query_lower = query.lower()
+            if query_lower not in request["short_description"].lower() and query_lower not in request["description"].lower():
+                continue
+
+        results.append(request)
+
+        if len(results) >= limit:
+            break
+
+    if not results:
+        return "No service requests found matching the criteria."
+
+    output = [f"**Found {len(results)} service request(s) [SIMULATION]:**\n"]
+    for req in results:
+        output.append(f"""
+**{req['number']}** - {req['short_description']}
+- State: {req['request_state']}
+- Stage: {req['stage']}
+- Requested For: {req['requested_for']}
+- Created: {req['created']}
+""")
+
+    return "\n".join(output)
+
+
 # =============================================================================
 # ServiceNow Agent Class
 # =============================================================================
@@ -1095,9 +1491,10 @@ class ServiceNowAgent:
 1. Search and retrieve incidents
 2. Create new incidents with proper categorization
 3. Update existing incidents with work notes
-4. View upcoming change requests
+4. View upcoming change requests and get detailed change request information
 5. Search the CMDB for configuration items
 6. Track user's tickets
+7. Search and retrieve service requests with detailed information
 
 **Best Practices:**
 - Always verify incident numbers before taking action
@@ -1140,8 +1537,11 @@ You are integrated with the ServiceNow platform and can perform real-time operat
             create_incident,
             update_incident,
             get_change_requests,
+            get_change_request_details,
             search_cmdb,
             get_my_tickets,
+            get_service_request_details,
+            search_service_requests,
         ]
 
         # Bind tools to LLM
