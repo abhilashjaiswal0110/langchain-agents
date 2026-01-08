@@ -323,6 +323,75 @@ IT_HELPDESK_DATASET = EvalDataset(
 
 
 # =============================================================================
+# Document Intelligence Agent Dataset
+# =============================================================================
+
+DOCUMENT_INTELLIGENCE_DATASET = EvalDataset(
+    name="document_intelligence_eval",
+    description="Test cases for Document Intelligence Agent (RAG, OCR, Translation)",
+    agent_type="document_intelligence",
+    test_cases=[
+        TestCase(
+            id="docint_001",
+            input="What documents have been uploaded?",
+            expected_keywords=["document", "uploaded", "list"],
+            tags=["basic", "listing"],
+            difficulty="easy",
+        ),
+        TestCase(
+            id="docint_002",
+            input="Search the uploaded documents for information about security policies",
+            expected_keywords=["search", "security", "policy", "document"],
+            tags=["rag", "search"],
+            difficulty="medium",
+        ),
+        TestCase(
+            id="docint_003",
+            input="Summarize the main document in executive format",
+            expected_keywords=["summary", "executive", "key", "points"],
+            tags=["summarization", "executive"],
+            difficulty="medium",
+        ),
+        TestCase(
+            id="docint_004",
+            input="Translate the document summary to French",
+            expected_keywords=["translation", "French", "français"],
+            tags=["translation", "multilingual"],
+            difficulty="medium",
+        ),
+        TestCase(
+            id="docint_005",
+            input="Search the web for Python documentation on asyncio",
+            expected_keywords=["asyncio", "Python", "documentation", "web"],
+            tags=["web_search", "domain_restricted"],
+            difficulty="medium",
+        ),
+        TestCase(
+            id="docint_006",
+            input="Detect the language of this text: Bonjour, comment allez-vous?",
+            expected_keywords=["French", "detected", "language"],
+            tags=["language_detection", "multilingual"],
+            difficulty="easy",
+        ),
+        TestCase(
+            id="docint_007",
+            input="Upload the document and extract key findings about quarterly revenue",
+            expected_keywords=["upload", "revenue", "quarterly", "findings"],
+            tags=["rag", "analysis"],
+            difficulty="hard",
+        ),
+        TestCase(
+            id="docint_008",
+            input="Search documents for compliance requirements and translate findings to German",
+            expected_keywords=["compliance", "German", "translation", "requirements"],
+            tags=["rag", "translation", "complex"],
+            difficulty="hard",
+        ),
+    ],
+)
+
+
+# =============================================================================
 # ServiceNow Agent Dataset
 # =============================================================================
 
@@ -489,6 +558,7 @@ ALL_DATASETS: dict[str, EvalDataset] = {
     "code_assistant": CODE_ASSISTANT_DATASET,
     "it_helpdesk": IT_HELPDESK_DATASET,
     "servicenow": SERVICENOW_AGENT_DATASET,
+    "document_intelligence": DOCUMENT_INTELLIGENCE_DATASET,
 }
 
 
