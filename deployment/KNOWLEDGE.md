@@ -897,7 +897,7 @@ def lambda_handler(event, context):
 
 ### Overview
 
-In addition to the IT Support Agents, the platform includes 7 enterprise-grade agents for various business use cases:
+In addition to the IT Support Agents, the platform includes 8 enterprise-grade agents for various business use cases:
 
 | Agent | Purpose | HITL | Key Features |
 |-------|---------|------|--------------|
@@ -908,6 +908,7 @@ In addition to the IT Support Agents, the platform includes 7 enterprise-grade a
 | MultilingualRAGAgent | Multi-language Q&A | No | 10+ languages, translation |
 | HITLITSupportAgent | IT tickets | Yes | Priority routing, approvals |
 | CodeAssistantAgent | Code help | No | Review, generation, debugging |
+| DocumentIntelligenceAgent | Document analysis | No | PDF/DOCX/PPTX/images, OCR, RAG, web search, translation |
 
 *ContentCreationAgent supports `auto_approve=True` for API usage (skips HITL review)
 
@@ -1014,6 +1015,272 @@ result = agent.create_content(
 - Goes directly from `draft` to `END` after content generation
 - Iteration limits prevent infinite loops (planning: 5 messages, drafting: 10 messages)
 
+### Document Intelligence Agent
+
+A comprehensive document analysis agent that combines multi-format document ingestion, RAG-based querying, domain-restricted web search, and multi-lingual support.
+
+#### Features
+
+| Feature | Description |
+|---------|-------------|
+| **Document Ingestion** | PDF, TXT, DOCX, PPTX, PNG/JPG (with OCR) |
+| **RAG Search** | Semantic search using FAISS + OpenAI embeddings |
+| **Web Search** | Domain-restricted search via environment config |
+| **Translation** | LLM-based translation (25+ languages) |
+| **Session Scoping** | Documents isolated per session |
+
+#### Tools (8 Total)
+
+| Tool | Purpose |
+|------|---------|
+| `upload_document` | Ingest documents with auto language detection |
+| `search_documents` | Semantic search in FAISS vector store |
+| `web_search` | Search restricted to allowed domains |
+| `translate_text` | LLM-based translation |
+| `summarize_document` | Generate document summaries |
+| `list_documents` | List uploaded documents with metadata |
+| `clear_documents` | Clear documents from session |
+| `detect_language` | Detect language of text |
+
+#### Environment Variables
+
+```bash
+# Document Intelligence Agent
+ALLOWED_SEARCH_DOMAINS=docs.python.org,stackoverflow.com,github.com
+TESSERACT_CMD=                    # Windows: path to tesseract.exe
+DOC_CHUNK_SIZE=1000               # Chunk size for text splitting
+DOC_CHUNK_OVERLAP=200             # Overlap between chunks
+DEFAULT_TARGET_LANGUAGE=en        # Default translation target
+```
+
+#### System Requirements
+
+- **Tesseract OCR** must be installed for image/OCR support:
+  - Windows: Download from https://github.com/UB-Mannheim/tesseract/wiki
+  - Linux: `apt-get install tesseract-ocr`
+  - macOS: `brew install tesseract`
+
+#### Usage Example
+
+```python
+from app.agents.document_intelligence import DocumentIntelligenceAgent
+
+# Initialize agent
+agent = DocumentIntelligenceAgent()
+
+# Upload a document
+result = agent.invoke(
+    message="Upload this PDF and tell me what it's about",
+    session_id="user-123"
+)
+
+# Query the document
+result = agent.invoke(
+    message="What are the main points discussed?",
+    session_id="user-123"
+)
+
+# Translate content
+result = agent.invoke(
+    message="Translate the summary to French",
+    session_id="user-123"
+)
+
+# Web search (restricted to allowed domains)
+result = agent.invoke(
+    message="Search for Python documentation on async functions",
+    session_id="user-123"
+)
+```
+
+#### API Usage
+
+```python
+import requests
+import base64
+
+# Upload document
+with open("document.pdf", "rb") as f:
+    content = base64.b64encode(f.read()).decode()
+
+response = requests.post(
+    "http://localhost:8000/api/enterprise/document-intelligence/upload",
+    json={
+        "session_id": "user-123",
+        "filename": "document.pdf",
+        "content": content
+    }
+)
+
+# Query document
+response = requests.post(
+    "http://localhost:8000/api/enterprise/document-intelligence/invoke",
+    json={
+        "message": "Summarize this document",
+        "session_id": "user-123"
+    }
+)
+```
+
+#### Detailed Execution Guide
+
+**Step 1: Install System Dependencies**
+
+```bash
+# Windows - Download Tesseract OCR installer
+# From: https://github.com/UB-Mannheim/tesseract/wiki
+# Add to PATH or set TESSERACT_CMD in .env
+
+# Linux (Ubuntu/Debian)
+sudo apt-get update && sudo apt-get install -y tesseract-ocr poppler-utils
+
+# macOS
+brew install tesseract poppler
+```
+
+**Step 2: Install Python Dependencies**
+
+```bash
+cd deployment
+uv sync  # or pip install -e .
+```
+
+**Step 3: Configure Environment**
+
+```bash
+# Copy example and edit
+cp .env.example .env
+
+# Required variables:
+OPENAI_API_KEY=your-openai-key
+TAVILY_API_KEY=your-tavily-key  # For web search
+
+# Document Intelligence specific:
+ALLOWED_SEARCH_DOMAINS=docs.python.org,stackoverflow.com,github.com
+TESSERACT_CMD=C:\Program Files\Tesseract-OCR\tesseract.exe  # Windows only
+```
+
+**Step 4: Start the Server**
+
+```bash
+# Development mode with auto-reload
+make run-reload
+# or
+python -m app.server
+
+# Production mode
+uvicorn app.server:app --host 0.0.0.0 --port 8000
+```
+
+**Step 5: Test via Web UI**
+
+1. Open browser to `http://localhost:8000/chat`
+2. Select "Document Intelligence Agent" from dropdown
+3. Upload a PDF/DOCX/image file using the upload button
+4. Ask questions about the document
+
+**Step 6: Test via API (curl examples)**
+
+```bash
+# Health check
+curl http://localhost:8000/health
+
+# List documents in session
+curl http://localhost:8000/api/enterprise/document-intelligence/documents/user-123
+
+# Upload a document
+curl -X POST http://localhost:8000/api/enterprise/document-intelligence/upload \
+  -H "Content-Type: application/json" \
+  -d '{
+    "session_id": "user-123",
+    "filename": "report.pdf",
+    "content": "'$(base64 -w0 report.pdf)'"
+  }'
+
+# Query the document
+curl -X POST http://localhost:8000/api/enterprise/document-intelligence/invoke \
+  -H "Content-Type: application/json" \
+  -d '{
+    "message": "What are the key findings in this document?",
+    "session_id": "user-123"
+  }'
+
+# Translate content
+curl -X POST http://localhost:8000/api/enterprise/document-intelligence/invoke \
+  -H "Content-Type: application/json" \
+  -d '{
+    "message": "Translate the summary to Spanish",
+    "session_id": "user-123"
+  }'
+```
+
+#### Evaluation & Testing
+
+**Run Evaluation Tests:**
+
+```python
+from app.agents.evals import (
+    get_dataset,
+    evaluate_agent_response,
+    run_regression_sync,
+)
+
+# Get test cases
+dataset = get_dataset("document_intelligence")
+print(f"Found {len(dataset.test_cases)} test cases")
+
+# Run regression tests
+from app.agents.document_intelligence import DocumentIntelligenceAgent
+agent = DocumentIntelligenceAgent()
+
+for case in dataset.test_cases:
+    result = agent.invoke(case.input, session_id="test")
+    response = agent.get_last_response(result)
+
+    # Check expected keywords
+    found = [kw for kw in case.expected_keywords if kw.lower() in response.lower()]
+    print(f"{case.id}: {len(found)}/{len(case.expected_keywords)} keywords found")
+```
+
+**Run via pytest:**
+
+```bash
+# Run all agent tests
+pytest tests/test_document_intelligence.py -v
+
+# Run evaluation regression
+python -m app.agents.evals.regression_runner --agent document_intelligence
+```
+
+#### Observability (LangSmith)
+
+The agent is fully traced with LangSmith. Ensure these environment variables are set:
+
+```bash
+LANGCHAIN_TRACING_V2=true
+LANGCHAIN_API_KEY=your-langsmith-key
+LANGCHAIN_PROJECT=document-intelligence-agent
+```
+
+View traces at: https://smith.langchain.com
+
+Traced operations:
+- `document_intelligence_invoke` - Main agent invocation
+- `document_intelligence_chat` - Chat interface calls
+- Tool calls (upload, search, translate, etc.)
+
+#### Governance Integration
+
+The agent follows enterprise governance patterns:
+
+| Component | Integration |
+|-----------|-------------|
+| **RBAC** | Via API middleware (requires `AGENT_INVOKE` permission) |
+| **Audit** | All invocations logged with session/user context |
+| **Rate Limiting** | Configurable via `RATE_LIMIT_*` env vars |
+| **PII Detection** | Middleware scans request/response bodies |
+| **Cost Tracking** | Token usage tracked per session |
+
 ### Enterprise Agent API Endpoints
 
 | Endpoint | Method | Description |
@@ -1022,7 +1289,16 @@ result = agent.create_content(
 | `/api/enterprise/{agent}/invoke` | POST | Invoke agent |
 | `/api/enterprise/{agent}/stream` | POST | Stream agent response |
 
-Where `{agent}` is: `research`, `content`, `data-analyst`, `document`, `multilingual-rag`, `hitl-support`, `code-assistant`
+Where `{agent}` is: `research`, `content`, `data-analyst`, `document`, `multilingual-rag`, `hitl-support`, `code-assistant`, `document-intelligence`
+
+### Document Intelligence Agent API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/enterprise/document-intelligence/invoke` | POST | Chat with agent for document Q&A, analysis |
+| `/api/enterprise/document-intelligence/upload` | POST | Upload document (PDF, DOCX, PPTX, images) |
+| `/api/enterprise/document-intelligence/documents/{session_id}` | GET | List documents in session |
+| `/api/enterprise/document-intelligence/documents/{session_id}` | DELETE | Clear documents from session |
 
 ### Enterprise Webhook Endpoints
 
