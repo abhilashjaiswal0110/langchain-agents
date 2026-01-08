@@ -40,6 +40,7 @@ class ConversationManager:
     AVAILABLE_AGENTS = {
         "it_helpdesk": "IT Helpdesk Agent - General IT support, password resets, troubleshooting",
         "servicenow": "ServiceNow Agent - Ticket management, change requests, CMDB",
+        "document_intelligence": "Document Intelligence Agent - Multi-format document analysis, RAG, translation",
     }
 
     def __init__(self, session_store: BaseSessionStore | None = None) -> None:
@@ -67,6 +68,12 @@ class ConversationManager:
             self._agents["servicenow"] = ServiceNowAgent(model_provider="auto")
         except Exception as e:
             print(f"Failed to load ServiceNow Agent: {e}")
+
+        try:
+            from app.agents.document_intelligence import DocumentIntelligenceAgent
+            self._agents["document_intelligence"] = DocumentIntelligenceAgent()
+        except Exception as e:
+            print(f"Failed to load Document Intelligence Agent: {e}")
 
     def get_available_agents(self) -> dict[str, str]:
         """Get list of available agents."""

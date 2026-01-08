@@ -162,6 +162,7 @@ document_agent = None
 multilingual_rag_agent = None
 hitl_support_agent = None
 code_assistant_agent = None
+document_intelligence_agent = None
 
 
 def load_chains() -> bool:
@@ -270,7 +271,7 @@ def load_enterprise_agents() -> dict[str, bool]:
     global enterprise_agents_loaded
     global research_agent, content_agent, data_analyst_agent
     global document_agent, multilingual_rag_agent, hitl_support_agent
-    global code_assistant_agent
+    global code_assistant_agent, document_intelligence_agent
 
     has_openai = bool(os.getenv("OPENAI_API_KEY"))
     has_anthropic = bool(os.getenv("ANTHROPIC_API_KEY"))
@@ -342,6 +343,15 @@ def load_enterprise_agents() -> dict[str, bool]:
     except Exception as e:
         print(f"Failed to load Code Assistant Agent: {e}")
         status["code_assistant"] = False
+
+    # Document Intelligence Agent
+    try:
+        from app.agents.document_intelligence import DocumentIntelligenceAgent
+        document_intelligence_agent = DocumentIntelligenceAgent()
+        status["document_intelligence"] = True
+    except Exception as e:
+        print(f"Failed to load Document Intelligence Agent: {e}")
+        status["document_intelligence"] = False
 
     enterprise_agents_loaded = any(status.values())
     status["loaded"] = enterprise_agents_loaded
@@ -739,6 +749,27 @@ class HITLApprovalRequest(BaseModel):
     action_id: str
     approved: bool
     approved_by: str | None = None
+
+
+class DocumentIntelligenceRequest(BaseModel):
+    """Document Intelligence agent request."""
+
+    message: str
+    session_id: str | None = None
+    target_language: str | None = None
+
+
+class DocumentIntelligenceUploadResponse(BaseModel):
+    """Document Intelligence upload response."""
+
+    success: bool
+    document_id: str | None = None
+    filename: str | None = None
+    file_type: str | None = None
+    chunks_created: int | None = None
+    detected_language: str | None = None
+    message: str | None = None
+    error: str | None = None
 
 
 # ============================================================================
@@ -1309,6 +1340,11 @@ async def list_enterprise_agents() -> dict:
                 "description": "Code Assistant for application modernization",
                 "endpoint": "/api/enterprise/code/invoke",
             },
+            "document_intelligence": {
+                "loaded": document_intelligence_agent is not None,
+                "description": "Document Intelligence Agent for multi-format document analysis, RAG, translation",
+                "endpoint": "/api/enterprise/document-intelligence/invoke",
+            },
         },
     }
 
@@ -1837,6 +1873,162 @@ async def code_assistant_invoke(request: CodeAssistantRequest) -> EnterpriseAgen
             error=str(e),
             agent_type="code_assistant",
         )
+
+
+# ============================================================================
+# Document Intelligence Agent Endpoints
+# ============================================================================
+
+
+@app.post("/api/enterprise/document-intelligence/invoke", response_model=EnterpriseAgentResponse, tags=["Enterprise Agents"])
+async def document_intelligence_invoke(request: DocumentIntelligenceRequest) -> EnterpriseAgentResponse:
+    """Invoke the Document Intelligence Agent.
+
+    Chat with the agent for document analysis, Q&A, translation, and web search.
+
+    Args:
+        request: Message, optional session ID, and target language.
+
+    Returns:
+        Agent response with document insights.
+    """
+    if not enterprise_agents_loaded or document_intelligence_agent is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Document Intelligence Agent not available. Set OPENAI_API_KEY or ANTHROPIC_API_KEY.",
+        )
+
+    try:
+        result = document_intelligence_agent.chat(
+            message=request.message,
+            session_id=request.session_id,
+            target_language=request.target_language,
+        )
+        return EnterpriseAgentResponse(
+            success=True,
+            response=result.get("response", ""),
+            session_id=result.get("session_id"),
+            agent_type="document_intelligence",
+        )
+    except Exception as e:
+        return EnterpriseAgentResponse(
+            success=False,
+            error=str(e),
+            agent_type="document_intelligence",
+        )
+
+
+@app.post("/api/enterprise/document-intelligence/upload", response_model=DocumentIntelligenceUploadResponse, tags=["Enterprise Agents"])
+async def document_intelligence_upload(
+    file: UploadFile = File(...),
+    session_id: str | None = None,
+) -> DocumentIntelligenceUploadResponse:
+    """Upload a document for analysis.
+
+    Supports PDF, TXT, DOCX, PPTX, and images (PNG/JPG with OCR).
+
+    Args:
+        file: The document to upload.
+        session_id: Optional session ID for document isolation.
+
+    Returns:
+        Upload status with document ID and metadata.
+    """
+    if not enterprise_agents_loaded or document_intelligence_agent is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Document Intelligence Agent not available.",
+        )
+
+    filename = file.filename or "unknown"
+    ext = "." + filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+    allowed = {".pdf", ".txt", ".docx", ".doc", ".pptx", ".ppt", ".png", ".jpg", ".jpeg"}
+
+    if ext not in allowed:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported file type: {ext}. Supported: {', '.join(allowed)}",
+        )
+
+    content_bytes = await file.read()
+
+    try:
+        result = document_intelligence_agent.upload_document(
+            content=content_bytes,
+            filename=filename,
+            session_id=session_id,
+        )
+
+        # Parse result message for metadata
+        return DocumentIntelligenceUploadResponse(
+            success=result.get("success", False),
+            message=result.get("message", ""),
+            filename=filename,
+            file_type=ext.replace(".", ""),
+        )
+    except Exception as e:
+        return DocumentIntelligenceUploadResponse(
+            success=False,
+            error=str(e),
+            filename=filename,
+        )
+
+
+@app.get("/api/enterprise/document-intelligence/documents/{session_id}", tags=["Enterprise Agents"])
+async def document_intelligence_list_documents(session_id: str) -> dict:
+    """List all documents in a session.
+
+    Args:
+        session_id: Session identifier.
+
+    Returns:
+        List of documents with metadata.
+    """
+    if not enterprise_agents_loaded or document_intelligence_agent is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Document Intelligence Agent not available.",
+        )
+
+    documents = document_intelligence_agent.get_documents(session_id)
+    return {
+        "success": True,
+        "session_id": session_id,
+        "documents": documents,
+        "total": len(documents),
+    }
+
+
+@app.delete("/api/enterprise/document-intelligence/documents/{session_id}", tags=["Enterprise Agents"])
+async def document_intelligence_clear_documents(
+    session_id: str,
+    document_ids: str | None = None,
+) -> dict:
+    """Clear documents from a session.
+
+    Args:
+        session_id: Session identifier.
+        document_ids: Optional comma-separated list of document IDs to clear.
+
+    Returns:
+        Confirmation with count of cleared documents.
+    """
+    if not enterprise_agents_loaded or document_intelligence_agent is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Document Intelligence Agent not available.",
+        )
+
+    doc_ids = None
+    if document_ids:
+        doc_ids = [d.strip() for d in document_ids.split(",")]
+
+    count = document_intelligence_agent.clear_documents(session_id, doc_ids)
+    return {
+        "success": True,
+        "session_id": session_id,
+        "cleared_count": count,
+    }
 
 
 # ============================================================================

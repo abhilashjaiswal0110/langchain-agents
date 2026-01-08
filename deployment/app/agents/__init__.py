@@ -28,6 +28,7 @@ from app.agents.documents import DocumentAgent
 from app.agents.rag import MultilingualRAGAgent
 from app.agents.it_support import HITLSupportAgent
 from app.agents.code_assistant import CodeAssistantAgent
+from app.agents.document_intelligence import DocumentIntelligenceAgent
 
 # Tracing and evaluation
 from app.agents.tracing import setup_tracing, get_tracing_status
@@ -49,6 +50,7 @@ __all__ = [
     "MultilingualRAGAgent",
     "HITLSupportAgent",
     "CodeAssistantAgent",
+    "DocumentIntelligenceAgent",
     # Utilities
     "setup_tracing",
     "get_tracing_status",
