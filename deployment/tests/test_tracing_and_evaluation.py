@@ -177,8 +177,8 @@ class TestEvaluatorVariableMapping:
 
     def test_playground_compatible_evaluator(self):
         """Test playground-compatible evaluator handles missing StructuredPrompt variables.
-        
-        This tests the fix for KeyError: "Input to StructuredPrompt is missing 
+
+        This tests the fix for KeyError: "Input to StructuredPrompt is missing
         variables {'context', 'reference_outputs'}"
         """
         from app.agents.evals import (
@@ -190,7 +190,7 @@ class TestEvaluatorVariableMapping:
         wrapper = create_playground_compatible_evaluator(base_evaluator)
 
         assert callable(wrapper)
-        
+
         # Test with minimal inputs (simulating LangSmith Playground call)
         # This should NOT raise KeyError for missing context or reference_outputs
         result = wrapper(
