@@ -108,15 +108,22 @@ def search_documents(
     query: str,
     top_k: int = 5,
     document_ids: str | None = None,
+    scope: str = "current",
 ) -> str:
     """Search across uploaded documents using semantic search.
 
     Finds the most relevant document chunks for your query.
 
+    IMPORTANT: Use the scope parameter to control which documents to search:
+    - 'current': Search only the most recently uploaded document (DEFAULT - use for "this document", "the image I uploaded", etc.)
+    - 'recent': Search the 3 most recently uploaded documents
+    - 'all': Search all uploaded documents (use for general queries across all documents)
+
     Args:
         query: Search query (natural language question or keywords)
         top_k: Number of results to return (default: 5)
-        document_ids: Optional comma-separated list of document IDs to search
+        document_ids: Optional comma-separated list of specific document IDs to search (overrides scope)
+        scope: Document scope - 'current' (most recent), 'recent' (last 3), or 'all' (default: 'current')
 
     Returns:
         Relevant document chunks with source information
@@ -131,22 +138,42 @@ def search_documents(
     if document_ids:
         doc_ids = [d.strip() for d in document_ids.split(",")]
 
+    # Validate scope
+    valid_scopes = ("current", "recent", "all")
+    if scope not in valid_scopes:
+        scope = "current"
+
     results = vector_store.search(
         session_id=session_id,
         query=query,
         k=top_k,
         document_ids=doc_ids,
+        scope=scope,
     )
 
     if not results:
+        # Provide helpful context about what was searched
+        scope_desc = {
+            "current": "the most recently uploaded document",
+            "recent": "the 3 most recently uploaded documents",
+            "all": "all uploaded documents",
+        }
         return (
-            "No relevant content found. Please ensure:\n"
-            "1. Documents have been uploaded\n"
-            "2. Your query relates to the document content\n"
-            "Use 'list_documents' to see available documents."
+            f"No relevant content found in {scope_desc.get(scope, 'documents')}.\n\n"
+            "Suggestions:\n"
+            "1. Try scope='all' to search across all documents\n"
+            "2. Verify documents have been uploaded (use list_documents)\n"
+            "3. Rephrase your query\n"
         )
 
-    output = f"Found {len(results)} relevant chunks:\n\n"
+    # Show which scope was used
+    scope_info = {
+        "current": "current document",
+        "recent": "recent documents",
+        "all": "all documents",
+    }
+
+    output = f"Found {len(results)} relevant chunks (searched {scope_info.get(scope, scope)}):\n\n"
     for i, r in enumerate(results, 1):
         output += (
             f"**Result {i}** (from {r['filename']}, chunk {r['chunk_index']}):\n"
@@ -316,7 +343,8 @@ def list_documents() -> str:
     """List all uploaded documents with their metadata.
 
     Returns:
-        Formatted list of documents with IDs, names, types, languages, and chunk counts
+        Formatted list of documents with IDs, names, types, languages, and chunk counts.
+        Shows which document is currently active (most recently uploaded).
     """
     from app.agents.document_intelligence.vector_store import get_vector_store
 
@@ -333,13 +361,24 @@ def list_documents() -> str:
         )
 
     stats = vector_store.get_session_stats(session_id)
+    current_doc_id = vector_store.get_current_document_id(session_id)
+    recent_doc_ids = vector_store.get_recent_document_ids(session_id, n=3)
 
     output = "**Uploaded Documents:**\n"
     output += "=" * 40 + "\n\n"
 
     for doc in docs:
+        # Mark current and recent documents
+        status_markers = []
+        if doc['doc_id'] == current_doc_id:
+            status_markers.append("CURRENT")
+        elif doc['doc_id'] in recent_doc_ids:
+            status_markers.append("recent")
+
+        status_str = f" [{', '.join(status_markers)}]" if status_markers else ""
+
         output += (
-            f"**{doc['doc_id']}**: {doc['filename']}\n"
+            f"**{doc['doc_id']}**: {doc['filename']}{status_str}\n"
             f"  - Type: {doc['file_type']}\n"
             f"  - Language: {doc['language']}\n"
             f"  - Chunks: {doc['chunk_count']}\n"
@@ -349,6 +388,7 @@ def list_documents() -> str:
     output += f"\n**Session Statistics:**\n"
     output += f"- Total documents: {stats['total_documents']}\n"
     output += f"- Total chunks: {stats['total_chunks']}\n"
+    output += f"- Current document: {current_doc_id or 'None'}\n"
     output += f"- Languages: {', '.join(stats['languages'])}\n"
     output += f"- File types: {', '.join(stats['file_types'])}"
 

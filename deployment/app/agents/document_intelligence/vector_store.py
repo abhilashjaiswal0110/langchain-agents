@@ -24,6 +24,8 @@ logger = logging.getLogger(__name__)
 # Module-level stores for session isolation
 _vector_stores: dict[str, Any] = {}  # session_id -> FAISS store
 _document_metadata: dict[str, dict[str, dict[str, Any]]] = {}  # session_id -> {doc_id -> metadata}
+_current_document: dict[str, str] = {}  # session_id -> current_doc_id (most recently uploaded)
+_document_order: dict[str, list[str]] = {}  # session_id -> [doc_ids in upload order]
 
 
 class DocumentVectorStore:
@@ -53,7 +55,42 @@ class DocumentVectorStore:
         if session_id not in _vector_stores:
             _vector_stores[session_id] = None
             _document_metadata[session_id] = {}
+            _document_order[session_id] = []
         return _vector_stores.get(session_id)
+
+    def get_current_document_id(self, session_id: str) -> str | None:
+        """Get the most recently uploaded document ID for a session.
+
+        Args:
+            session_id: Session identifier
+
+        Returns:
+            Document ID of the most recently uploaded document, or None
+        """
+        return _current_document.get(session_id)
+
+    def get_recent_document_ids(self, session_id: str, n: int = 3) -> list[str]:
+        """Get the N most recently uploaded document IDs.
+
+        Args:
+            session_id: Session identifier
+            n: Number of recent documents to return
+
+        Returns:
+            List of document IDs in reverse chronological order
+        """
+        order = _document_order.get(session_id, [])
+        return order[-n:][::-1]  # Last N, reversed (most recent first)
+
+    def set_current_document(self, session_id: str, doc_id: str) -> None:
+        """Set the current (active) document for a session.
+
+        Args:
+            session_id: Session identifier
+            doc_id: Document identifier to set as current
+        """
+        _current_document[session_id] = doc_id
+        logger.debug(f"Set current document for session {session_id}: {doc_id}")
 
     def add_document(
         self,
@@ -116,7 +153,13 @@ class DocumentVectorStore:
             # Add to existing store
             store.add_documents(chunks)
 
-        logger.info(f"Added document {doc_id} ({filename}) to session {session_id}")
+        # Track document order and set as current
+        if session_id not in _document_order:
+            _document_order[session_id] = []
+        _document_order[session_id].append(doc_id)
+        _current_document[session_id] = doc_id
+
+        logger.info(f"Added document {doc_id} ({filename}) to session {session_id} [now current]")
         return doc_id
 
     def search(
@@ -125,6 +168,7 @@ class DocumentVectorStore:
         query: str,
         k: int = 5,
         document_ids: list[str] | None = None,
+        scope: str = "all",
     ) -> list[dict[str, Any]]:
         """Search for relevant chunks in the session's documents.
 
@@ -133,6 +177,7 @@ class DocumentVectorStore:
             query: Search query
             k: Number of results to return
             document_ids: Optional filter to specific documents
+            scope: Search scope - 'current' (most recent doc), 'recent' (last 3), or 'all'
 
         Returns:
             List of matching chunks with metadata and scores
@@ -142,6 +187,19 @@ class DocumentVectorStore:
         if store is None:
             return []
 
+        # Determine document filter based on scope
+        effective_doc_ids = document_ids
+        if scope == "current" and not document_ids:
+            current_id = self.get_current_document_id(session_id)
+            if current_id:
+                effective_doc_ids = [current_id]
+                logger.debug(f"Scoped search to current document: {current_id}")
+        elif scope == "recent" and not document_ids:
+            recent_ids = self.get_recent_document_ids(session_id, n=3)
+            if recent_ids:
+                effective_doc_ids = recent_ids
+                logger.debug(f"Scoped search to recent documents: {recent_ids}")
+
         # Perform similarity search with scores
         results = store.similarity_search_with_score(query, k=k * 2)  # Get extra for filtering
 
@@ -149,7 +207,7 @@ class DocumentVectorStore:
         formatted_results = []
         for doc, score in results:
             # Filter by document IDs if specified
-            if document_ids and doc.metadata.get("doc_id") not in document_ids:
+            if effective_doc_ids and doc.metadata.get("doc_id") not in effective_doc_ids:
                 continue
 
             formatted_results.append({
