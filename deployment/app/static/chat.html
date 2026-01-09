@@ -483,6 +483,7 @@
                         <option value="multilingual_rag">Multilingual RAG</option>
                         <option value="hitl_support">HITL IT Support</option> <!-- MOVED HERE -->
                         <option value="code_assistant">Code Assistant</option>
+                        <option value="document_intelligence">Document Intelligence</option>
                     </optgroup>
                 </select>
                 <span id="statusBadge" class="status-badge disconnected">
@@ -539,6 +540,10 @@
                             <div class="agent-card" onclick="startEnterpriseAgent('code_assistant')">
                                 <h3>Code Assistant</h3>
                                 <p>Code modernization & security</p>
+                            </div>
+                            <div class="agent-card" onclick="startEnterpriseAgent('document_intelligence')">
+                                <h3>Doc Intelligence</h3>
+                                <p>PDF/DOCX analysis, OCR, translation</p>
                             </div>
                         </div>
                     </div>
@@ -633,7 +638,8 @@
             'document': '/api/enterprise/documents/invoke',
             'multilingual_rag': '/api/enterprise/rag/invoke',
             'hitl_support': '/api/enterprise/support/invoke',
-            'code_assistant': '/api/enterprise/code/invoke'
+            'code_assistant': '/api/enterprise/code/invoke',
+            'document_intelligence': '/api/enterprise/document-intelligence/invoke'
         };
 
         // Quick actions for each agent type
@@ -672,6 +678,12 @@
                 { text: 'Analyze Code', action: 'Analyze this code for issues' },
                 { text: 'Security Check', action: 'Check for security vulnerabilities' },
                 { text: 'Modernize', action: 'Suggest modernization improvements' }
+            ],
+            'document_intelligence': [
+                { text: 'List Docs', action: 'What documents have been uploaded?' },
+                { text: 'Summarize', action: 'Summarize the uploaded document' },
+                { text: 'Translate', action: 'Translate the summary to French' },
+                { text: 'Search', action: 'Search the documents for key findings' }
             ]
         };
 
@@ -685,10 +697,11 @@
         const agentSelect = document.getElementById('agentSelect');
 
         // Agents that support file upload
-        const uploadAgents = ['multilingual_rag', 'data_analyst'];
+        const uploadAgents = ['multilingual_rag', 'data_analyst', 'document_intelligence'];
         const uploadEndpoints = {
             'multilingual_rag': '/api/enterprise/rag/upload',
-            'data_analyst': '/api/enterprise/data-analyst/upload'
+            'data_analyst': '/api/enterprise/data-analyst/upload',
+            'document_intelligence': '/api/enterprise/document-intelligence/upload'
         };
         const statusBadge = document.getElementById('statusBadge');
         const sessionInfo = document.getElementById('sessionInfo');
@@ -781,6 +794,8 @@
                     fileInput.accept = '.pdf,.txt,.docx,.doc,.md';
                 } else if (agentType === 'data_analyst') {
                     fileInput.accept = '.xlsx,.xls,.csv';
+                } else if (agentType === 'document_intelligence') {
+                    fileInput.accept = '.pdf,.txt,.docx,.doc,.pptx,.ppt,.png,.jpg,.jpeg';
                 }
             } else {
                 uploadButton.style.display = 'none';
@@ -795,7 +810,8 @@
                 'document': 'Hello! I\'m your Document Generator Agent. I can create SOP, WLI, or Policy documents. What document would you like me to generate?',
                 'multilingual_rag': 'Welcome! I\'m your Multilingual RAG Agent. Click the 📎 button to upload documents (PDF, Word, TXT, MD), then ask me questions in any language.',
                 'hitl_support': 'Hello! I\'m your IT Support Agent with human oversight. I can help with IT issues - sensitive actions will require approval.',
-                'code_assistant': 'Hi! I\'m your Code Assistant Agent. I can analyze code for modernization opportunities and security issues. Share your code to get started.'
+                'code_assistant': 'Hi! I\'m your Code Assistant Agent. I can analyze code for modernization opportunities and security issues. Share your code to get started.',
+                'document_intelligence': 'Welcome! I\'m your Document Intelligence Agent. Click 📎 to upload documents (PDF, Word, PowerPoint, images with OCR). I can search, summarize, translate, and answer questions in multiple languages.'
             };
             addMessage(welcomeMessages[agentType] || 'Hello! How can I help you today?', 'assistant');
         }
@@ -984,6 +1000,10 @@
             try {
                 const formData = new FormData();
                 formData.append('file', file);
+                // Include session_id for session-scoped document storage
+                if (sessionId) {
+                    formData.append('session_id', sessionId);
+                }
 
                 const response = await fetch(endpoint, {
                     method: 'POST',
