@@ -1715,3 +1715,24 @@ You are integrated with the ServiceNow platform and can perform real-time operat
 
 # NOTE: Global instance removed to avoid instantiation before .env is loaded
 # Instances are now created lazily by ConversationManager
+
+
+# =============================================================================
+# LangGraph Studio Entry Point
+# =============================================================================
+
+
+def get_graph():
+    """Entry point for LangGraph Studio.
+
+    Creates and returns a compiled ServiceNow agent graph.
+    This function is referenced in langgraph.json for Studio visualization.
+
+    Returns:
+        Compiled LangGraph StateGraph for ServiceNow agent.
+    """
+    agent = ServiceNowAgent(
+        model_provider="auto",
+        temperature=0,
+    )
+    return agent.graph

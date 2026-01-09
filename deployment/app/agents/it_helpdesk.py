@@ -640,3 +640,25 @@ Remember: Your goal is to resolve issues efficiently while providing excellent u
 
 # NOTE: Global instance removed to avoid instantiation before .env is loaded
 # Instances are now created lazily by ConversationManager
+
+
+# =============================================================================
+# LangGraph Studio Entry Point
+# =============================================================================
+
+
+def get_graph():
+    """Entry point for LangGraph Studio.
+
+    Creates and returns a compiled IT Helpdesk agent graph.
+    This function is referenced in langgraph.json for Studio visualization.
+
+    Returns:
+        Compiled LangGraph StateGraph for IT Helpdesk agent.
+    """
+    agent = ITHelpdeskAgent(
+        model_provider="auto",
+        temperature=0.7,
+    )
+    return agent.graph
+

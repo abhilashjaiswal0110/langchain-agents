@@ -1,0 +1,10 @@
+{
+  "dependencies": ["."],
+  "graphs": {
+    "servicenow_agent": "./app/agents/servicenow_agent.py:get_graph",
+    "document_agent": "./app/agents/documents/document_agent.py:get_graph",
+    "it_helpdesk": "./app/agents/it_helpdesk.py:get_graph"
+  },
+  "env": ".env",
+  "python_version": "3.11"
+}

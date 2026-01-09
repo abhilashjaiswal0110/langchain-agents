@@ -491,3 +491,34 @@ Please:
             department=department,
             purpose=purpose,
         )
+
+
+# =============================================================================
+# LangGraph Studio Entry Point
+# =============================================================================
+
+
+def get_graph():
+    """Entry point for LangGraph Studio.
+
+    Creates and returns a compiled Document agent graph.
+    This function is referenced in langgraph.json for Studio visualization.
+
+    Returns:
+        Compiled LangGraph StateGraph for Document agent.
+    """
+    from app.agents.base.agent_base import AgentConfig
+
+    config = AgentConfig(
+        model_provider="auto",
+        temperature=0.7,
+        memory_backend="memory",
+        tracing_enabled=True,
+        project_name="document-agent-studio",
+    )
+
+    agent = DocumentAgent(config=config)
+    agent.compile()
+
+    return agent._compiled_graph
+
