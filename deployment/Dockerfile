@@ -20,6 +20,16 @@ RUN uv pip install --no-cache .
 # Production stage
 FROM python:3.11-slim as production
 
+# Install system dependencies for Document Intelligence Agent
+# - tesseract-ocr: OCR for image processing
+# - poppler-utils: PDF to image conversion (pdf2image)
+# - libmagic1: File type detection
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    tesseract-ocr \
+    poppler-utils \
+    libmagic1 \
+    && rm -rf /var/lib/apt/lists/*
+
 # Security: Run as non-root user
 RUN useradd --create-home --shell /bin/bash appuser
 
