@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Literal
 
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.security import APIKeyHeader
@@ -1475,13 +1475,17 @@ async def data_analyst_invoke(request: DataAnalystRequest) -> EnterpriseAgentRes
 
 
 @app.post("/api/enterprise/data-analyst/upload", tags=["Enterprise Agents"])
-async def data_analyst_upload(file: UploadFile = File(...)) -> dict:
+async def data_analyst_upload(
+    file: UploadFile = File(...),
+    session_id: str | None = Form(None),
+) -> dict:
     """Upload a file for data analysis.
 
     Supports Excel (.xlsx, .xls) and CSV files.
 
     Args:
         file: The data file to upload.
+        session_id: Optional session ID for data isolation.
 
     Returns:
         Upload status and file information.
@@ -1514,13 +1518,13 @@ async def data_analyst_upload(file: UploadFile = File(...)) -> dict:
     try:
         from app.agents.data_analyst.data_analyst_agent import load_excel_file, load_csv_file, _dataframes
 
-        # Generate a session_id if not provided (for production, use proper session management)
-        session_id = "default_session"  # In production, extract from request headers/cookies
+        # Use provided session_id or default
+        effective_session_id = session_id or "default_session"
 
         if ext in [".xlsx", ".xls"]:
-            result = load_excel_file.invoke({"file_path": tmp_path, "session_id": session_id})
+            result = load_excel_file.invoke({"file_path": tmp_path, "session_id": effective_session_id})
         else:  # CSV
-            result = load_csv_file.invoke({"file_path": tmp_path, "session_id": session_id})
+            result = load_csv_file.invoke({"file_path": tmp_path, "session_id": effective_session_id})
 
         # Check if the tool returned an error
         if result.startswith("Error"):
@@ -1678,13 +1682,17 @@ async def rag_agent_invoke(request: RAGAgentRequest) -> EnterpriseAgentResponse:
 
 
 @app.post("/api/enterprise/rag/upload", tags=["Enterprise Agents"])
-async def rag_upload_document(file: UploadFile = File(...)) -> dict:
+async def rag_upload_document(
+    file: UploadFile = File(...),
+    session_id: str | None = Form(None),
+) -> dict:
     """Upload a document for RAG processing.
 
     Supports PDF, Word, and text files in multiple languages.
 
     Args:
         file: The document to upload.
+        session_id: Optional session ID (for future session-scoped storage).
 
     Returns:
         Upload status and document information.
@@ -1921,7 +1929,7 @@ async def document_intelligence_invoke(request: DocumentIntelligenceRequest) -> 
 @app.post("/api/enterprise/document-intelligence/upload", response_model=DocumentIntelligenceUploadResponse, tags=["Enterprise Agents"])
 async def document_intelligence_upload(
     file: UploadFile = File(...),
-    session_id: str | None = None,
+    session_id: str | None = Form(None),
 ) -> DocumentIntelligenceUploadResponse:
     """Upload a document for analysis.
 
