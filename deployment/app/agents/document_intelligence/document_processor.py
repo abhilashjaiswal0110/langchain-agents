@@ -278,7 +278,7 @@ class DocumentProcessor:
 
         Raises:
             ImportError: If pytesseract or Pillow not installed
-            ValueError: If no text extracted from image
+            RuntimeError: If OCR completely fails
         """
         try:
             import pytesseract
@@ -295,9 +295,17 @@ class DocumentProcessor:
             msg = f"OCR failed: {e}. Ensure Tesseract is installed on your system."
             raise RuntimeError(msg) from e
 
+        # Handle empty OCR result gracefully
+        ocr_note = ""
         if not text.strip():
-            msg = "No text could be extracted from the image via OCR"
-            raise ValueError(msg)
+            text = f"[Image: {filename}] OCR extracted no readable text from this image."
+            ocr_note = " (OCR found no text - image may be non-text content)"
+            logger.warning(f"OCR found no text in {filename}")
+        else:
+            # Clean up OCR text
+            text = text.strip()
+            char_count = len(text)
+            logger.info(f"OCR extracted {char_count} characters from {filename}")
 
         documents = [Document(
             page_content=text,
@@ -305,10 +313,17 @@ class DocumentProcessor:
                 "source_file": filename,
                 "image_size": f"{image.width}x{image.height}",
                 "image_mode": image.mode,
+                "ocr_note": ocr_note,
             }
         )]
         chunks = self.text_splitter.split_documents(documents)
-        return self._build_result(chunks, filename, "image")
+        result = self._build_result(chunks, filename, "image")
+
+        # Add OCR-specific metadata
+        if ocr_note:
+            result["ocr_note"] = ocr_note
+
+        return result
 
     def _build_result(
         self,

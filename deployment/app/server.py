@@ -378,9 +378,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     else:
         print("[--] LangSmith tracing disabled")
 
-    # Load chains
+    # Load chains and setup LangServe routes
     if load_chains():
         print("[OK] LangChain chains loaded (OpenAI)")
+        setup_langchain_routes()
+        print("[OK] LangServe routes registered")
     else:
         print("[--] LangChain chains not loaded (OPENAI_API_KEY not set)")
 
@@ -2099,16 +2101,9 @@ def setup_langchain_routes() -> None:
     )
 
 
-# Initialize routes at import time
-if os.getenv("OPENAI_API_KEY"):
-    load_chains()
-    setup_langchain_routes()
-    load_doc_rag()
-
-if os.getenv("OPENAI_API_KEY") or os.getenv("ANTHROPIC_API_KEY"):
-    load_langgraph_agent()
-    load_it_support_agents()
-    load_enterprise_agents()
+# NOTE: Agent loading is handled in the lifespan handler, not at module import time.
+# This prevents blocking during module import when using --reload mode.
+# LangServe routes are added dynamically after chains are loaded in lifespan.
 
 
 # ============================================================================

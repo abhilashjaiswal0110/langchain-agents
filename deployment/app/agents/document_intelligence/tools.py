@@ -59,7 +59,7 @@ def upload_document(
         filename: Original filename with extension (e.g., 'report.pdf')
 
     Returns:
-        Upload confirmation with document ID and statistics
+        Upload confirmation with document ID, statistics, and content preview
     """
     from app.agents.document_intelligence.document_processor import DocumentProcessor
     from app.agents.document_intelligence.vector_store import get_vector_store
@@ -91,15 +91,35 @@ def upload_document(
         language=result["detected_language"],
     )
 
-    return (
+    # Build response with content preview
+    response = (
         f"Document uploaded successfully!\n\n"
         f"**Document ID**: {doc_id}\n"
         f"**Filename**: {result['filename']}\n"
         f"**Type**: {result['file_type']}\n"
         f"**Language**: {result['detected_language']}\n"
         f"**Chunks created**: {result['chunk_count']}\n"
-        f"**Total characters**: {result['total_characters']}"
+        f"**Total characters**: {result['total_characters']}\n"
     )
+
+    # Add OCR note if applicable
+    if result.get("ocr_note"):
+        response += f"\n**Note**: {result['ocr_note']}\n"
+
+    # Add content preview (first 300 chars from first chunk)
+    if result["chunks"]:
+        preview = result["chunks"][0].page_content[:300]
+        if len(result["chunks"][0].page_content) > 300:
+            preview += "..."
+        response += f"\n**Content Preview**:\n{preview}\n"
+
+    response += (
+        f"\n---\n"
+        f"This document is now the **current document**. "
+        f"Questions about 'the document' or 'it' will search this file."
+    )
+
+    return response
 
 
 @tool

@@ -63,95 +63,136 @@ class DocumentIntelligenceAgent(BaseAgent):
 
         logger.info("DocumentIntelligenceAgent initialized with %d tools", len(ALL_TOOLS))
 
-    def _get_system_prompt(self) -> str:
-        """Get the agent's system prompt.
+    def _get_base_system_prompt(self) -> str:
+        """Get the base system prompt (without document context).
 
         Returns:
-            Comprehensive system prompt for document intelligence operations
+            Base system prompt for document intelligence operations
         """
         return """You are a Document Intelligence Agent specializing in document analysis,
 information retrieval, and multi-lingual support.
 
-## Your Capabilities:
+## Your Tools:
 
-### 1. Document Management
+### Document Management
 - **upload_document**: Process PDF, TXT, DOCX, PPTX, and images (PNG/JPG with OCR)
-- **list_documents**: View all uploaded documents with metadata (shows CURRENT document)
+- **list_documents**: View all uploaded documents with metadata
 - **clear_documents**: Remove documents from the session
 
-### 2. Document Analysis
-- **search_documents**: Semantic search with SCOPE control (see below)
-- **summarize_document**: Generate brief, detailed, or executive summaries
+### Document Analysis
+- **search_documents**: Semantic search across documents (ALWAYS use this for document questions!)
+- **summarize_document**: Generate summaries (brief/detailed/executive)
 
-### 3. Web Research
-- **web_search**: Search the web within allowed domains
-  (Restricted to domains configured by the administrator)
+### Web Research
+- **web_search**: Search allowed web domains
 
-### 4. Language Support
-- **translate_text**: Translate text between 25+ languages
-- **detect_language**: Identify the language of any text
+### Language Support
+- **translate_text**: Translate between 25+ languages
+- **detect_language**: Identify text language
 
-## CRITICAL: Understanding Document Context
+## CRITICAL RULES - FOLLOW EXACTLY:
 
-When users refer to documents, use the `scope` parameter in search_documents:
+### RULE 1: ALWAYS USE search_documents FOR DOCUMENT QUESTIONS
+When the user asks ANY question about document content:
+- You MUST call search_documents FIRST
+- NEVER answer from memory or make assumptions
+- NEVER guess what's in a document - ALWAYS search
+- NEVER say "please upload" if documents already exist (check CURRENT DOCUMENT STATUS below)
 
-| User Says | Scope to Use | Meaning |
-|-----------|-------------|---------|
-| "this document", "the document", "it" | scope='current' | Most recently uploaded document |
-| "the image I uploaded", "this image" | scope='current' | The image they just uploaded |
-| "the PDF", "my document" | scope='current' | Current/recent document |
-| "recent documents", "my files" | scope='recent' | Last 3 uploaded documents |
-| "all documents", "everything", "across all" | scope='all' | Search all documents |
-| General question (no document reference) | scope='current' | Default to current document |
+### RULE 2: SCOPE DEFAULTS TO 'current'
+Use scope='current' by default. Only use scope='all' if user says "all documents".
 
-**DEFAULT BEHAVIOR**: Always use scope='current' unless the user explicitly asks about multiple documents or all documents.
+### RULE 3: IMAGE/OCR DOCUMENTS
+For uploaded images (PNG/JPG):
+1. Text was extracted via OCR during upload
+2. Search it like any document using search_documents
+3. If OCR found no text, inform the user
 
-## Process Guidelines:
+## Response Format:
+1. For document questions: Call search_documents FIRST, then respond with excerpts
+2. For web questions: Use web_search, cite URLs
+3. For translation: First search document, then translate"""
 
-1. **For document questions** (IMPORTANT):
-   - When a NEW document is uploaded, queries about "this", "the document", "it" refer to the NEW document
-   - Use scope='current' by default to focus on the most recently uploaded document
-   - Use scope='all' only when user explicitly wants to search across all documents
-   - Always cite which document the information came from
+    def _get_document_context(self, session_id: str) -> str:
+        """Get current document context for the session.
 
-2. **After a document upload**:
-   - The uploaded document becomes the "current" document automatically
-   - Immediately focus on that document for subsequent questions
-   - If user asks about a previous document, they'll specify it explicitly
+        Args:
+            session_id: Session identifier
 
-3. **For web questions**:
-   - Use web_search for current information
-   - Combine with document search if relevant
-   - Note when information comes from web vs documents
+        Returns:
+            Document context string to inject into system prompt
+        """
+        from app.agents.document_intelligence.vector_store import get_vector_store
 
-4. **For translation requests**:
-   - Detect source language if not specified
-   - Translate accurately while preserving meaning
-   - Note the language pair used
+        try:
+            vector_store = get_vector_store()
+            docs = vector_store.get_documents(session_id)
+            current_doc_id = vector_store.get_current_document_id(session_id)
 
-5. **For summarization**:
-   - Use appropriate summary type (brief/detailed/executive)
-   - Offer to translate summaries if user's language differs
+            if not docs:
+                return "\n\n## CURRENT DOCUMENT STATUS:\nNo documents uploaded yet. Ask user to upload a document first."
 
-## Response Guidelines:
+            # Find current document
+            current_doc = None
+            for doc in docs:
+                if doc.get("doc_id") == current_doc_id:
+                    current_doc = doc
+                    break
 
-- Start with a direct answer to the user's question
-- Include relevant quotes/excerpts when appropriate
-- Always cite sources (document names or web URLs)
-- Mention which document you searched (current document name)
-- Offer to elaborate, translate, or search further
-- Be clear about limitations (e.g., if no documents loaded, if domain not in allowed list)
+            if current_doc:
+                doc_type = current_doc.get("file_type", "unknown")
+                is_image = doc_type in ("image", "png", "jpg", "jpeg")
+                type_label = "IMAGE (OCR text extracted)" if is_image else doc_type.upper()
 
-## Language Support:
+                context = f"""
 
-You can process and respond in multiple languages. Supported languages include:
-English, Spanish, French, German, Italian, Portuguese, Dutch, Russian,
-Chinese, Japanese, Korean, Arabic, Hindi, and many more.
+## CURRENT DOCUMENT STATUS:
+**A DOCUMENT IS UPLOADED AND READY!**
 
-If the user writes in a non-English language:
-1. Detect their language
-2. Respond in the same language
-3. Search documents in their language when possible"""
+- **Current Document**: {current_doc.get('filename', 'Unknown')}
+- **Document ID**: {current_doc_id}
+- **Type**: {type_label}
+- **Language**: {current_doc.get('language', 'en')}
+- **Total Documents in Session**: {len(docs)}
+
+**IMPORTANT**: When user asks about "the document", "this file", "the image", "it", or asks to summarize/analyze:
+1. DO NOT say "please upload" - A DOCUMENT IS ALREADY UPLOADED
+2. IMMEDIATELY call search_documents(query="<user's question>", scope="current")
+3. Use the search results to answer the question"""
+                return context
+            else:
+                # Have docs but no current set
+                latest = docs[-1] if docs else None
+                if latest:
+                    return f"""
+
+## CURRENT DOCUMENT STATUS:
+**Documents are uploaded!** Most recent: {latest.get('filename', 'Unknown')}
+Total documents: {len(docs)}
+
+When user asks about documents, call search_documents with scope='current'."""
+
+        except Exception as e:
+            logger.warning(f"Failed to get document context: {e}")
+
+        return ""
+
+    def _get_system_prompt(self, session_id: str | None = None) -> str:
+        """Get the complete system prompt with document context.
+
+        Args:
+            session_id: Session identifier for document context
+
+        Returns:
+            Complete system prompt including current document status
+        """
+        base_prompt = self._get_base_system_prompt()
+
+        if session_id:
+            doc_context = self._get_document_context(session_id)
+            return base_prompt + doc_context
+
+        return base_prompt
 
     def _build_graph(self) -> StateGraph:
         """Build the agent's workflow graph.
@@ -159,12 +200,21 @@ If the user writes in a non-English language:
         Returns:
             Configured StateGraph with ReAct pattern
         """
+        # Store reference to self for use in nested functions
+        agent_self = self
 
         def call_model(state: DocumentIntelligenceState) -> dict[str, Any]:
-            """Call the LLM with the current state."""
-            system_prompt = SystemMessage(content=self._get_system_prompt())
+            """Call the LLM with the current state and dynamic document context."""
+            # Get session_id from state for dynamic system prompt
+            session_id = state.session_id
+
+            # Generate system prompt WITH current document context
+            # This tells the LLM what documents are available
+            system_prompt_content = agent_self._get_system_prompt(session_id)
+            system_prompt = SystemMessage(content=system_prompt_content)
+
             messages = [system_prompt] + list(state.messages)
-            response = self.llm_with_tools.invoke(messages)
+            response = agent_self.llm_with_tools.invoke(messages)
             return {"messages": [response]}
 
         def should_continue(state: DocumentIntelligenceState) -> str:
