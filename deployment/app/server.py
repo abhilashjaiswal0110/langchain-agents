@@ -15,7 +15,7 @@ from typing import Literal
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.security import APIKeyHeader
 from fastapi.staticfiles import StaticFiles
 from langserve import add_routes
@@ -109,6 +109,14 @@ API_KEY_HEADER = "X-API-Key"
 # Paths that don't require authentication
 PUBLIC_PATHS = {"/", "/docs", "/redoc", "/openapi.json", "/health", "/ready"}
 
+# API paths accessible from internal web UI (no API key required)
+# These are secured by same-origin policy since they're accessed from /chat
+UI_API_PREFIXES = (
+    "/api/conversation",
+    "/api/deepagent",
+    "/api/enterprise",
+)
+
 
 class APIKeyMiddleware(BaseHTTPMiddleware):
     """Middleware to validate API key for protected endpoints."""
@@ -124,6 +132,10 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
 
         # Skip static files and chat UI
         if request.url.path.startswith("/static") or request.url.path == "/chat":
+            return await call_next(request)
+
+        # Skip UI API endpoints (accessed from internal web UI)
+        if request.url.path.startswith(UI_API_PREFIXES):
             return await call_next(request)
 
         # Validate API key (use constant-time comparison to prevent timing attacks)
@@ -374,18 +386,33 @@ def load_deep_agent() -> bool:
     has_anthropic = bool(os.getenv("ANTHROPIC_API_KEY"))
 
     if not (has_openai or has_anthropic):
+        print("[DEBUG] Deep Agent: No API keys found (OPENAI_API_KEY or ANTHROPIC_API_KEY)")
         return False
 
     try:
         from app.deepagents import create_it_operations_agent
+
+        # Get model configuration from environment
+        provider = os.getenv("DEEP_AGENT_PROVIDER", "auto")
+        model_name = os.getenv("DEEP_AGENT_MODEL") or None
+
         it_operations_deep_agent = create_it_operations_agent(
-            model_provider="auto",
+            model_provider=provider,
+            model_name=model_name,
             storage_path="./data/deepagent_context",
         )
         deep_agent_loaded = True
+
+        # Log model info
+        model_info = model_name or "default"
+        print(f"[DEBUG] Deep Agent using provider={provider}, model={model_info}")
+
         return True
     except Exception as e:
-        print(f"Failed to load Deep Agent: {e}")
+        import traceback
+
+        print(f"[ERROR] Failed to load Deep Agent: {e}")
+        traceback.print_exc()
         return False
 
 
@@ -2207,6 +2234,80 @@ async def deep_agent_chat(request: DeepAgentChatRequest) -> DeepAgentChatRespons
             session_id=request.session_id,
             error=str(e),
         )
+
+
+@app.post("/api/deepagent/chat/stream", tags=["Deep Agent"])
+async def deep_agent_chat_stream(request: DeepAgentChatRequest):
+    """Stream chat with the IT Operations Deep Agent.
+
+    Uses Server-Sent Events (SSE) to stream:
+    - thinking: Agent's reasoning steps
+    - tool_start: When a tool is being called
+    - tool_result: Tool execution results
+    - todo_update: Todo list changes
+    - token: Streaming response tokens
+    - complete: Final response with all context
+
+    Args:
+        request: Chat message and session ID.
+
+    Returns:
+        SSE stream of events.
+    """
+    import json
+    import traceback
+
+    def serialize_event(event: dict) -> str:
+        """Serialize event to JSON, handling datetime and other types."""
+        def default_serializer(obj):
+            if hasattr(obj, "isoformat"):
+                return obj.isoformat()
+            if hasattr(obj, "model_dump"):
+                return obj.model_dump()
+            if hasattr(obj, "__dict__"):
+                return str(obj)
+            return str(obj)
+        return json.dumps(event, default=default_serializer)
+
+    if not deep_agent_loaded or it_operations_deep_agent is None:
+        async def error_generator():
+            yield f"data: {serialize_event({'type': 'error', 'data': {'error': 'Deep Agent not available. Set OPENAI_API_KEY or ANTHROPIC_API_KEY.'}})}\n\n"
+
+        return StreamingResponse(
+            error_generator(),
+            media_type="text/event-stream",
+        )
+
+    async def event_generator():
+        try:
+            print(f"[DEBUG] Starting stream for session: {request.session_id}")
+            async for event in it_operations_deep_agent.astream_chat(
+                message=request.message,
+                session_id=request.session_id,
+                user_id=request.user_id,
+            ):
+                try:
+                    yield f"data: {serialize_event(event)}\n\n"
+                except Exception as serialize_err:
+                    print(f"[ERROR] Failed to serialize event: {serialize_err}")
+                    yield f"data: {serialize_event({'type': 'error', 'data': {'error': f'Serialization error: {serialize_err}'}})}\n\n"
+            print(f"[DEBUG] Stream completed for session: {request.session_id}")
+        except GeneratorExit:
+            print(f"[DEBUG] Client disconnected from stream: {request.session_id}")
+        except Exception as e:
+            print(f"[ERROR] Stream error for session {request.session_id}: {e}")
+            traceback.print_exc()
+            yield f"data: {serialize_event({'type': 'error', 'data': {'error': str(e)}})}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @app.get("/api/deepagent/context/{session_id}", response_model=DeepAgentContextResponse, tags=["Deep Agent"])

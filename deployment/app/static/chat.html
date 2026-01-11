@@ -527,6 +527,124 @@
             margin: 2px;
         }
 
+        /* Thinking Indicator Styles */
+        .thinking-indicator {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+            border-radius: 8px;
+            margin-bottom: 10px;
+            border-left: 3px solid var(--primary);
+        }
+
+        .thinking-dots {
+            display: flex;
+            gap: 4px;
+        }
+
+        .thinking-dots span {
+            width: 8px;
+            height: 8px;
+            background: var(--primary);
+            border-radius: 50%;
+            animation: thinking-bounce 1.4s infinite ease-in-out both;
+        }
+
+        .thinking-dots span:nth-child(1) { animation-delay: -0.32s; }
+        .thinking-dots span:nth-child(2) { animation-delay: -0.16s; }
+        .thinking-dots span:nth-child(3) { animation-delay: 0s; }
+
+        @keyframes thinking-bounce {
+            0%, 80%, 100% { transform: scale(0.6); opacity: 0.5; }
+            40% { transform: scale(1); opacity: 1; }
+        }
+
+        .thinking-status {
+            font-size: 0.9rem;
+            color: var(--text-primary);
+        }
+
+        /* Tool Activity Styles */
+        .tool-activity {
+            padding: 8px 0;
+            border-top: 1px solid var(--border-color);
+            margin-top: 8px;
+        }
+
+        .tool-entry {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 12px;
+            font-size: 0.85rem;
+            margin-bottom: 4px;
+            background: #fefce8;
+            border-radius: 4px;
+            transition: all 0.3s ease;
+        }
+
+        .tool-entry.executing {
+            background: #fef3c7;
+            animation: tool-pulse 1.5s infinite;
+        }
+
+        .tool-entry.completed {
+            background: #dcfce7;
+        }
+
+        @keyframes tool-pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        .tool-icon {
+            font-size: 14px;
+            width: 20px;
+            text-align: center;
+        }
+
+        .tool-entry.executing .tool-icon {
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .tool-entry.completed .tool-icon {
+            color: var(--success);
+        }
+
+        .tool-name {
+            font-weight: 500;
+            color: var(--primary);
+        }
+
+        .tool-status {
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+        }
+
+        /* Streamed Response */
+        .streamed-response {
+            padding: 12px;
+            background: var(--bg-primary);
+            border-radius: 6px;
+            white-space: pre-wrap;
+            font-size: 0.9rem;
+            line-height: 1.5;
+        }
+
+        .message-content.error {
+            color: var(--error);
+            background: #fef2f2;
+            padding: 12px;
+            border-radius: 6px;
+        }
+
         .context-info {
             font-size: 0.8rem;
             color: var(--text-secondary);
@@ -955,6 +1073,13 @@
 
                 const data = await response.json();
 
+                // Check for HTTP errors first
+                if (!response.ok) {
+                    const errorMsg = data.detail || data.error || `HTTP ${response.status}`;
+                    alert('Failed to start Deep Agent session: ' + errorMsg);
+                    return;
+                }
+
                 if (data.session_id) {
                     sessionId = data.session_id;
                     currentAgent = agentType;
@@ -979,16 +1104,194 @@
                     showDeepAgentPanels(true);
 
                     // Add welcome message
-                    addMessage(data.welcome_message || 'Hello! I\'m your IT Operations Deep Agent. I can help with complex IT tasks including incident analysis, change management, problem investigation, CMDB queries, and SLA monitoring. I break down complex tasks and coordinate specialized subagents. What can I help you with today?', 'assistant');
+                    addMessage(data.welcome_message || data.message || 'Hello! I\'m your IT Operations Deep Agent. I can help with complex IT tasks including incident analysis, change management, problem investigation, CMDB queries, and SLA monitoring. I break down complex tasks and coordinate specialized subagents. What can I help you with today?', 'assistant');
 
                     // Start polling for todos
                     startTodoPolling();
                 } else {
-                    alert('Failed to start Deep Agent session: ' + (data.error || 'Unknown error'));
+                    alert('Failed to start Deep Agent session: ' + (data.error || data.detail || 'Unknown error'));
                 }
             } catch (error) {
                 console.error('Error starting Deep Agent session:', error);
                 alert('Failed to connect to Deep Agent server');
+            }
+        }
+
+        // Stream Deep Agent chat with thinking and progress updates
+        async function streamDeepAgentChat(message, sessionId) {
+            return new Promise((resolve, reject) => {
+                // Create a progress message element
+                const progressDiv = document.createElement('div');
+                progressDiv.className = 'message assistant';
+                progressDiv.innerHTML = `
+                    <div class="thinking-indicator">
+                        <div class="thinking-dots">
+                            <span></span><span></span><span></span>
+                        </div>
+                        <div class="thinking-status">Processing your request...</div>
+                    </div>
+                    <div class="tool-activity" style="display:none;"></div>
+                    <div class="streamed-response" style="display:none;"></div>
+                `;
+                messagesEl.appendChild(progressDiv);
+                messagesEl.scrollTop = messagesEl.scrollHeight;
+
+                const thinkingStatus = progressDiv.querySelector('.thinking-status');
+                const toolActivity = progressDiv.querySelector('.tool-activity');
+                const streamedResponse = progressDiv.querySelector('.streamed-response');
+                const thinkingIndicator = progressDiv.querySelector('.thinking-indicator');
+
+                let receivedComplete = false;
+                let lastResponse = '';
+
+                // Use fetch with streaming
+                fetch('/api/deepagent/chat/stream', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        session_id: sessionId,
+                        message: message
+                    })
+                }).then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+                    const reader = response.body.getReader();
+                    const decoder = new TextDecoder();
+                    let buffer = '';
+
+                    function processEvents() {
+                        reader.read().then(({ done, value }) => {
+                            if (done) {
+                                // Stream ended - if we didn't receive a complete event, show accumulated response
+                                if (!receivedComplete && lastResponse) {
+                                    thinkingIndicator.style.display = 'none';
+                                    progressDiv.innerHTML = `<div class="message-content">${formatMessage(lastResponse)}</div>`;
+                                } else if (!receivedComplete && streamedResponse.textContent) {
+                                    thinkingIndicator.style.display = 'none';
+                                    progressDiv.innerHTML = `<div class="message-content">${formatMessage(streamedResponse.textContent)}</div>`;
+                                }
+                                resolve();
+                                return;
+                            }
+
+                            buffer += decoder.decode(value, { stream: true });
+                            const lines = buffer.split('\n');
+                            buffer = lines.pop(); // Keep incomplete line in buffer
+
+                            for (const line of lines) {
+                                if (line.startsWith('data: ')) {
+                                    try {
+                                        const event = JSON.parse(line.slice(6));
+                                        if (event.type === 'complete' && event.data && event.data.response) {
+                                            receivedComplete = true;
+                                            lastResponse = event.data.response;
+                                        } else if (event.type === 'token' && event.data && event.data.content) {
+                                            lastResponse += event.data.content;
+                                        }
+                                        handleStreamEvent(event, progressDiv, thinkingStatus, toolActivity, streamedResponse, thinkingIndicator);
+                                    } catch (e) {
+                                        console.error('Error parsing SSE event:', e, 'Line:', line);
+                                    }
+                                }
+                            }
+
+                            processEvents();
+                        }).catch(err => {
+                            console.error('Stream read error:', err);
+                            // Show whatever response we accumulated
+                            if (lastResponse) {
+                                thinkingIndicator.style.display = 'none';
+                                progressDiv.innerHTML = `<div class="message-content">${formatMessage(lastResponse)}</div>`;
+                                resolve();
+                            } else {
+                                progressDiv.innerHTML = '<div class="message-content error">Connection interrupted. Please try again.</div>';
+                                reject(err);
+                            }
+                        });
+                    }
+
+                    processEvents();
+                }).catch(err => {
+                    console.error('Fetch error:', err);
+                    progressDiv.innerHTML = `<div class="message-content error">Error: ${err.message || 'Failed to connect to agent'}</div>`;
+                    reject(err);
+                });
+            });
+        }
+
+        // Handle individual stream events
+        function handleStreamEvent(event, progressDiv, thinkingStatus, toolActivity, streamedResponse, thinkingIndicator) {
+            const type = event.type;
+            const data = event.data;
+
+            switch (type) {
+                case 'start':
+                    thinkingStatus.textContent = data.message || 'Starting...';
+                    break;
+
+                case 'thinking':
+                    thinkingStatus.innerHTML = `<strong>Step ${data.iteration}:</strong> ${data.message}`;
+                    break;
+
+                case 'tool_start':
+                    toolActivity.style.display = 'block';
+                    const toolEntry = document.createElement('div');
+                    toolEntry.className = 'tool-entry executing';
+                    toolEntry.innerHTML = `
+                        <span class="tool-icon">&#9881;</span>
+                        <span class="tool-name">${data.tool}</span>
+                        <span class="tool-status">${data.description}</span>
+                    `;
+                    toolActivity.appendChild(toolEntry);
+                    messagesEl.scrollTop = messagesEl.scrollHeight;
+                    break;
+
+                case 'tool_result':
+                    // Update the last tool entry to show completion
+                    const lastTool = toolActivity.querySelector('.tool-entry.executing:last-child');
+                    if (lastTool) {
+                        lastTool.classList.remove('executing');
+                        lastTool.classList.add('completed');
+                        lastTool.querySelector('.tool-icon').innerHTML = '&#10003;';
+                    }
+                    break;
+
+                case 'todo_update':
+                    // Update the todo panel in real-time
+                    if (data.todos) {
+                        updateTodoDisplay(data.todos);
+                    }
+                    break;
+
+                case 'token':
+                    // Stream response tokens
+                    streamedResponse.style.display = 'block';
+                    streamedResponse.textContent += data.content;
+                    messagesEl.scrollTop = messagesEl.scrollHeight;
+                    break;
+
+                case 'complete':
+                    // Hide thinking indicator, show final response
+                    thinkingIndicator.style.display = 'none';
+
+                    // Replace progress div with final message
+                    progressDiv.innerHTML = `<div class="message-content">${formatMessage(data.response || 'Task completed.')}</div>`;
+
+                    // Update todos and files
+                    if (data.todos) {
+                        updateTodoDisplay(data.todos);
+                    }
+                    if (data.files) {
+                        updateFilesDisplay(data.files);
+                    }
+                    messagesEl.scrollTop = messagesEl.scrollHeight;
+                    break;
+
+                case 'error':
+                    thinkingIndicator.style.display = 'none';
+                    progressDiv.innerHTML = `<div class="message-content error">Error: ${data.error}</div>`;
+                    break;
             }
         }
 
@@ -1050,7 +1353,7 @@
             todoList.innerHTML = todos.map(todo => `
                 <div class="todo-item ${todo.status}">
                     <span class="todo-status-icon">${statusIcons[todo.status] || '⏳'}</span>
-                    <span>${todo.title}</span>
+                    <span>${todo.content || todo.title || 'Unknown task'}</span>
                 </div>
             `).join('');
         }
@@ -1112,28 +1415,10 @@
                 let response, data;
 
                 if (isDeepAgent) {
-                    // Use Deep Agent endpoint
-                    response = await fetch('/api/deepagent/chat', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            session_id: sessionId,
-                            message: message
-                        })
-                    });
-                    data = await response.json();
-
+                    // Use Deep Agent streaming endpoint
+                    await streamDeepAgentChat(message, sessionId);
                     typingIndicator.classList.remove('visible');
                     sendButton.disabled = false;
-
-                    if (data.response) {
-                        addMessage(data.response, 'assistant');
-                        // Refresh todos and files after response
-                        await refreshTodos();
-                        await refreshFiles();
-                    } else if (data.error) {
-                        addMessage('Error: ' + data.error, 'assistant');
-                    }
                 } else if (isEnterpriseAgent && enterpriseEndpoints[currentAgent]) {
                     // Use enterprise agent endpoint
                     const endpoint = enterpriseEndpoints[currentAgent];

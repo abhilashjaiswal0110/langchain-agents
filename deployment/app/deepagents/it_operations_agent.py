@@ -4,10 +4,11 @@ This is the main Deep Agent for IT Managed Services (Atos-style).
 It coordinates specialized subagents to handle complex IT operations workflows.
 """
 
+import json
 import os
 import uuid
 from datetime import datetime
-from typing import Any, Literal
+from typing import Any, AsyncGenerator, Literal
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.tools import tool
@@ -184,7 +185,11 @@ class ITOperationsDeepAgent:
         model_name: str | None,
         temperature: float,
     ) -> ChatOpenAI | ChatAnthropic:
-        """Create LLM instance."""
+        """Create LLM instance.
+
+        Note: OpenAI reasoning models (o1, o3-mini, o4-mini) do not support
+        the temperature parameter - they only accept the default value of 1.
+        """
         has_openai = bool(os.getenv("OPENAI_API_KEY"))
         has_anthropic = bool(os.getenv("ANTHROPIC_API_KEY"))
 
@@ -202,10 +207,24 @@ class ITOperationsDeepAgent:
                 temperature=temperature,
             )
         else:
-            return ChatOpenAI(
-                model=model_name or "gpt-4o-mini",
-                temperature=temperature,
+            # Determine actual model name
+            actual_model = model_name or "gpt-4o-mini"
+
+            # OpenAI reasoning models (o1, o3, o4 series) don't support temperature
+            # They only accept the default value of 1
+            reasoning_models = ("o1", "o3", "o4", "o1-mini", "o3-mini", "o4-mini")
+            is_reasoning_model = any(
+                actual_model.startswith(prefix) for prefix in reasoning_models
             )
+
+            if is_reasoning_model:
+                print(f"[DEBUG] Using reasoning model {actual_model} (temperature not supported)")
+                return ChatOpenAI(model=actual_model)
+            else:
+                return ChatOpenAI(
+                    model=actual_model,
+                    temperature=temperature,
+                )
 
     def _collect_tools(self) -> list:
         """Collect all tools for the agent."""
@@ -527,7 +546,7 @@ class ITOperationsDeepAgent:
 
     def _should_continue(self, state: DeepAgentState) -> Literal["continue", "end"]:
         """Determine if we should continue to tools or end."""
-        if state.iteration_count > 30:  # Safety limit
+        if state.iteration_count > 40:  # Safety limit (below recursion_limit of 50)
             return "end"
 
         last_message = state.messages[-1] if state.messages else None
@@ -557,7 +576,10 @@ class ITOperationsDeepAgent:
         if session_id is None:
             session_id = str(uuid.uuid4())
 
-        config = {"configurable": {"thread_id": session_id}}
+        config = {
+            "configurable": {"thread_id": session_id},
+            "recursion_limit": 50,  # Allow complex multi-tool workflows
+        }
 
         result = self.graph.invoke(
             {
@@ -594,7 +616,10 @@ class ITOperationsDeepAgent:
         if session_id is None:
             session_id = str(uuid.uuid4())
 
-        config = {"configurable": {"thread_id": session_id}}
+        config = {
+            "configurable": {"thread_id": session_id},
+            "recursion_limit": 50,  # Allow complex multi-tool workflows
+        }
 
         result = await self.graph.ainvoke(
             {
@@ -608,11 +633,224 @@ class ITOperationsDeepAgent:
         last_message = result["messages"][-1] if result.get("messages") else None
         response_text = last_message.content if last_message else ""
 
+        # Get updated context
+        files = self.storage.list_files(session_id)
+        todos = self.storage.get_todos(session_id)
+
         return {
             "response": response_text,
             "session_id": session_id,
+            "todos": [t.model_dump() for t in todos],
+            "files": files,
             "tool_calls": getattr(last_message, "tool_calls", []),
         }
+
+    async def astream_chat(
+        self,
+        message: str,
+        session_id: str | None = None,
+        user_id: str | None = None,
+    ) -> AsyncGenerator[dict[str, Any], None]:
+        """Stream chat responses with thinking and progress updates.
+
+        Yields events for:
+        - thinking: Agent's reasoning process
+        - tool_start: When a tool is being called
+        - tool_result: Tool execution result
+        - todo_update: Todo list changes
+        - token: Streaming tokens
+        - complete: Final response
+
+        Args:
+            message: User message.
+            session_id: Session identifier.
+            user_id: User identifier.
+
+        Yields:
+            Event dictionaries with type and data.
+        """
+        if session_id is None:
+            session_id = str(uuid.uuid4())
+
+        config = {
+            "configurable": {"thread_id": session_id},
+            "recursion_limit": 50,  # Allow complex multi-tool workflows
+        }
+
+        # Initial event
+        yield {
+            "type": "start",
+            "data": {
+                "session_id": session_id,
+                "message": "Processing your request...",
+            },
+        }
+
+        iteration = 0
+        final_response = ""
+        accumulated_tokens = ""
+
+        try:
+            async for event in self.graph.astream_events(
+                {
+                    "messages": [HumanMessage(content=message)],
+                    "session_id": session_id,
+                    "user_id": user_id,
+                },
+                config=config,
+                version="v2",
+            ):
+                event_type = event.get("event")
+                event_name = event.get("name", "")
+                event_data = event.get("data", {})
+
+                # Agent thinking/reasoning
+                if event_type == "on_chat_model_start":
+                    iteration += 1
+                    yield {
+                        "type": "thinking",
+                        "data": {
+                            "iteration": iteration,
+                            "message": f"Analyzing request (step {iteration})...",
+                        },
+                    }
+
+                # Streaming tokens from LLM
+                elif event_type == "on_chat_model_stream":
+                    chunk = event_data.get("chunk")
+                    if chunk and hasattr(chunk, "content") and chunk.content:
+                        accumulated_tokens += chunk.content
+                        yield {
+                            "type": "token",
+                            "data": {"content": chunk.content},
+                        }
+
+                # Tool call initiated
+                elif event_type == "on_tool_start":
+                    tool_name = event_name
+                    tool_input = event_data.get("input", {})
+
+                    # Format tool description for user
+                    tool_desc = self._get_tool_description(tool_name, tool_input)
+
+                    # Safely serialize tool_input (may contain non-serializable objects)
+                    safe_input = {}
+                    if isinstance(tool_input, dict):
+                        for k, v in tool_input.items():
+                            try:
+                                if hasattr(v, "model_dump"):
+                                    safe_input[k] = v.model_dump()
+                                elif hasattr(v, "isoformat"):
+                                    safe_input[k] = v.isoformat()
+                                else:
+                                    safe_input[k] = str(v) if not isinstance(v, (str, int, float, bool, list, dict, type(None))) else v
+                            except Exception:
+                                safe_input[k] = str(v)
+                    else:
+                        safe_input = str(tool_input)
+
+                    yield {
+                        "type": "tool_start",
+                        "data": {
+                            "tool": tool_name,
+                            "input": safe_input,
+                            "description": tool_desc,
+                        },
+                    }
+
+                # Tool execution complete
+                elif event_type == "on_tool_end":
+                    tool_name = event_name
+                    output = event_data.get("output", "")
+
+                    yield {
+                        "type": "tool_result",
+                        "data": {
+                            "tool": tool_name,
+                            "result": str(output)[:500],  # Truncate long results
+                        },
+                    }
+
+                    # Update todos after any todo-related tool
+                    if tool_name in ("write_todos", "update_todo"):
+                        try:
+                            todos = self.storage.get_todos(session_id)
+                            yield {
+                                "type": "todo_update",
+                                "data": {
+                                    "todos": [t.model_dump(mode="json") for t in todos],
+                                    "action": "updated",
+                                },
+                            }
+                        except Exception as todo_err:
+                            print(f"[WARN] Failed to serialize todos: {todo_err}")
+
+                # Chain/Graph completion
+                elif event_type == "on_chain_end" and event_name == "LangGraph":
+                    output = event_data.get("output", {})
+                    messages = output.get("messages", [])
+                    if messages:
+                        last_msg = messages[-1]
+                        if hasattr(last_msg, "content"):
+                            final_response = last_msg.content
+
+            # Get final context
+            try:
+                files = self.storage.list_files(session_id)
+            except Exception as file_err:
+                print(f"[WARN] Failed to list files: {file_err}")
+                files = []
+
+            try:
+                todos = self.storage.get_todos(session_id)
+                todo_list = [t.model_dump(mode="json") for t in todos]
+            except Exception as todo_err:
+                print(f"[WARN] Failed to get todos: {todo_err}")
+                todo_list = []
+
+            # Final complete event
+            yield {
+                "type": "complete",
+                "data": {
+                    "response": final_response,
+                    "session_id": session_id,
+                    "todos": todo_list,
+                    "files": files,
+                    "iterations": iteration,
+                },
+            }
+
+        except Exception as e:
+            import traceback
+            print(f"[ERROR] Stream error: {e}")
+            traceback.print_exc()
+            yield {
+                "type": "error",
+                "data": {
+                    "error": str(e),
+                    "session_id": session_id,
+                },
+            }
+
+    def _get_tool_description(self, tool_name: str, tool_input: dict) -> str:
+        """Generate human-readable description for tool execution."""
+        descriptions = {
+            "write_todos": "Creating task plan...",
+            "update_todo": f"Updating task status...",
+            "write_file": f"Saving to {tool_input.get('path', 'file')}...",
+            "read_file": f"Reading {tool_input.get('path', 'file')}...",
+            "ls": "Listing workspace files...",
+            "task": f"Delegating to {tool_input.get('subagent_type', 'subagent')}...",
+            "search_incidents": "Searching incidents...",
+            "get_incident_details": f"Getting incident {tool_input.get('incident_id', '')}...",
+            "create_incident": "Creating new incident...",
+            "search_changes": "Searching change requests...",
+            "search_problems": "Searching problems...",
+            "search_cmdb": "Querying CMDB...",
+            "get_sla_status": "Checking SLA status...",
+            "search_knowledge_base": "Searching knowledge base...",
+        }
+        return descriptions.get(tool_name, f"Executing {tool_name}...")
 
     def get_session_context(self, session_id: str) -> dict[str, Any]:
         """Get context for a session.
