@@ -79,11 +79,20 @@ def get_llm(
     if provider == "openai":
         from langchain_openai import ChatOpenAI
 
-        llm = ChatOpenAI(
-            model=model,
-            temperature=temperature,
-            **kwargs,
-        )
+        # OpenAI reasoning models (o1, o3, o4 series) don't support temperature
+        # They only accept the default value of 1
+        reasoning_models = ("o1", "o3", "o4", "o1-mini", "o3-mini", "o4-mini")
+        is_reasoning_model = any(model.startswith(prefix) for prefix in reasoning_models)
+
+        if is_reasoning_model:
+            print(f"[DEBUG] Using reasoning model {model} (temperature not supported)")
+            llm = ChatOpenAI(model=model, **kwargs)
+        else:
+            llm = ChatOpenAI(
+                model=model,
+                temperature=temperature,
+                **kwargs,
+            )
     elif provider == "anthropic":
         from langchain_anthropic import ChatAnthropic
 

@@ -2,7 +2,7 @@
 
 > **Purpose**: This document serves as the authoritative knowledge source for AI agents working on this repository. It contains architectural decisions, implementation patterns, and guidelines that must be followed when making changes or enhancements.
 
-**Last Updated**: 2026-01-06 (v3.15 - ServiceNow Change/Service Request Tools)
+**Last Updated**: 2026-01-12 (v3.17 - Deep Agent with Streaming & Reasoning Models)
 
 ---
 
@@ -21,14 +21,15 @@
 11. [Governance Framework](#governance-framework)
 12. [MCP Integration](#mcp-integration)
 13. [DeepSearch Research](#deepsearch-research)
-14. [Dependencies](#dependencies)
-15. [Development Patterns](#development-patterns)
-16. [Testing Strategy](#testing-strategy)
-17. [Deployment](#deployment)
-18. [Common Tasks](#common-tasks)
-19. [Troubleshooting](#troubleshooting)
-20. [Production Certification](#production-certification)
-21. [Change Log](#change-log)
+14. [Deep Agents](#deep-agents)
+15. [Dependencies](#dependencies)
+16. [Development Patterns](#development-patterns)
+17. [Testing Strategy](#testing-strategy)
+18. [Deployment](#deployment)
+19. [Common Tasks](#common-tasks)
+20. [Troubleshooting](#troubleshooting)
+21. [Production Certification](#production-certification)
+22. [Change Log](#change-log)
 
 ---
 
@@ -2603,7 +2604,528 @@ LANGCHAIN_PROJECT=langchain-platform-prod
 
 ---
 
+## Deep Agents
+
+### Overview
+
+Deep Agents are advanced AI agents with planning capabilities, file-based context management, and the ability to spawn specialized subagents. The IT Operations Deep Agent is designed for enterprise IT Managed Services use cases with **production-ready streaming capabilities** and **OpenAI reasoning model support** (o1, o3, o4 series).
+
+### Key Features
+
+- **🎯 Advanced Planning**: Multi-step task decomposition with todo management
+- **📁 Context Management**: Virtual file system for maintaining context across conversations
+- **🤖 Specialized Subagents**: Six domain-specific agents for IT operations
+- **⚡ Real-time Streaming**: Server-Sent Events (SSE) for live progress updates
+- **🧠 Reasoning Model Support**: Native support for OpenAI o1/o3/o4 reasoning models
+- **💾 Persistent Storage**: File-based session storage with isolation
+- **🔧 ServiceNow Integration**: Live and simulation modes for ITSM operations
+- **📊 Progress Tracking**: Real-time visibility into agent thinking and tool usage
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                    IT Operations Deep Agent                                   │
+│  ┌────────────────────────────────────────────────────────────────────────┐ │
+│  │                         Core Capabilities                              │ │
+│  │  ┌─────────────────┐  ┌─────────────────┐  ┌─────────────────────┐   │ │
+│  │  │  TodoList       │  │  Filesystem     │  │  SubAgent           │   │ │
+│  │  │  (Planning)     │  │  (Context)      │  │  (Delegation)       │   │ │
+│  │  │  - write_todos  │  │  - read_file    │  │  - spawn subagent   │   │ │
+│  │  │  - update_todo  │  │  - write_file   │  │  - collect results  │   │ │
+│  │  │  - get_todos    │  │  - ls           │  │                     │   │ │
+│  │  └─────────────────┘  └─────────────────┘  └─────────────────────┘   │ │
+│  └────────────────────────────────────────────────────────────────────────┘ │
+│                                    │                                          │
+│  ┌─────────────────────────────────┴──────────────────────────────────────┐ │
+│  │                     Specialized Subagents                              │ │
+│  │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌─────────────┐ │ │
+│  │  │ Incident │ │ Change   │ │ Problem  │ │ Asset    │ │ SLA         │ │ │
+│  │  │ Agent    │ │ Agent    │ │ Agent    │ │ Agent    │ │ Agent       │ │ │
+│  │  └──────────┘ └──────────┘ └──────────┘ └──────────┘ └─────────────┘ │ │
+│  │  ┌──────────────────────────────────────────────────────────────────┐ │ │
+│  │  │                      Knowledge Agent                             │ │ │
+│  │  └──────────────────────────────────────────────────────────────────┘ │ │
+│  └────────────────────────────────────────────────────────────────────────┘ │
+│                                    │                                          │
+│  ┌─────────────────────────────────┴──────────────────────────────────────┐ │
+│  │                      LLM Layer (Enhanced)                              │ │
+│  │  ┌───────────────────┐  ┌──────────────────────────────────────────┐  │ │
+│  │  │ Standard Models   │  │ Reasoning Models (NEW)                   │  │ │
+│  │  │ - gpt-4o          │  │ - o1-preview, o1, o1-mini                │  │ │
+│  │  │ - gpt-4o-mini     │  │ - o3, o3-mini                            │  │ │
+│  │  │ - claude-3.5      │  │ - o4, o4-mini                            │  │ │
+│  │  │ (with temperature)│  │ (temperature bypass)                     │  │ │
+│  │  └───────────────────┘  └──────────────────────────────────────────┘  │ │
+│  └────────────────────────────────────────────────────────────────────────┘ │
+│                                    │                                          │
+│  ┌─────────────────────────────────┴──────────────────────────────────────┐ │
+│  │                      Storage Backend                                   │ │
+│  │  ┌─────────────────────────────────────────────────────────────────┐  │ │
+│  │  │  Persistent Storage (File-based)                                │  │ │
+│  │  │  - Session files & todos                                        │  │ │
+│  │  │  - Context files                                                │  │ │
+│  │  │  - Metadata                                                     │  │ │
+│  │  └─────────────────────────────────────────────────────────────────┘  │ │
+│  └────────────────────────────────────────────────────────────────────────┘ │
+│                                    │                                          │
+│  ┌─────────────────────────────────┴──────────────────────────────────────┐ │
+│  │                   Streaming Layer (NEW)                                │ │
+│  │  ┌─────────────────────────────────────────────────────────────────┐  │ │
+│  │  │  Server-Sent Events (SSE) for Real-time Updates                │  │ │
+│  │  │  - thinking: Agent reasoning steps                             │  │ │
+│  │  │  - tool_call: Tool invocation progress                         │  │ │
+│  │  │  - tool_result: Tool execution results                         │  │ │
+│  │  │  - content: Final response content                             │  │ │
+│  │  │  - error: Error handling with stack traces                     │  │ │
+│  │  └─────────────────────────────────────────────────────────────────┘  │ │
+│  └────────────────────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Directory Structure
+
+```
+app/deepagents/
+├── __init__.py                 # Main exports
+├── it_operations_agent.py      # IT Operations Deep Agent
+├── core/
+│   ├── __init__.py
+│   ├── types.py               # Type definitions (Todo, FileEntry, etc.)
+│   ├── state.py               # DeepAgentState management
+│   ├── middleware.py          # TodoList, Filesystem, SubAgent middleware
+│   └── deep_agent.py          # Base DeepAgent class
+├── storage/
+│   ├── __init__.py
+│   ├── base.py                # BaseStorage interface
+│   ├── memory_backend.py      # In-memory storage
+│   └── persistent_backend.py  # File-based storage
+├── tools/
+│   ├── __init__.py
+│   ├── incident_tools.py      # Incident management tools
+│   ├── change_tools.py        # Change management tools
+│   ├── problem_tools.py       # Problem management tools
+│   ├── asset_tools.py         # CMDB/Asset tools
+│   ├── sla_tools.py           # SLA monitoring tools
+│   └── knowledge_tools.py     # Knowledge base tools
+└── subagents/
+    ├── __init__.py
+    └── definitions.py         # Subagent definitions
+```
+
+### Key Components
+
+#### 1. Core Types (`core/types.py`)
+
+```python
+from app.deepagents.core.types import (
+    Todo,           # Task with status, priority, dependencies
+    TodoStatus,     # PENDING, IN_PROGRESS, COMPLETED
+    FileEntry,      # Virtual file with content and metadata
+    SubAgentDefinition,  # Subagent configuration
+    SubAgentResult,      # Result from subagent execution
+    DeepAgentConfig,     # Agent configuration
+)
+```
+
+#### 2. Deep Agent State (`core/state.py`)
+
+```python
+from app.deepagents.core.state import DeepAgentState
+
+state = DeepAgentState(
+    messages=[],           # Conversation history
+    todos=[],              # Planning tasks
+    files={},              # Virtual file system
+    subagent_results=[],   # Results from subagents
+    session_id="...",      # Session identifier
+    current_incident=None, # IT context
+    current_change=None,
+    current_problem=None,
+    affected_cis=[],
+)
+```
+
+#### 3. Middleware Components
+
+**TodoList Middleware** - Task planning and tracking:
+- `write_todos(todos)` - Create multiple todos
+- `update_todo(id, status, notes)` - Update todo status
+- `get_todos()` - Retrieve all todos
+
+**Filesystem Middleware** - Context management:
+- `ls(directory)` - List files
+- `read_file(path)` - Read file content
+- `write_file(path, content)` - Write file
+- `edit_file(path, changes)` - Edit existing file
+
+**SubAgent Middleware** - Delegation:
+- `task(subagent_name, task)` - Delegate to subagent
+
+#### 4. Storage Backends
+
+**Persistent Storage** (Production):
+```python
+from app.deepagents.storage.persistent_backend import PersistentStorage
+
+storage = PersistentStorage(base_path="./data/deepagent_context")
+```
+
+**Memory Storage** (Testing):
+```python
+from app.deepagents.storage.memory_backend import MemoryStorage
+
+storage = MemoryStorage()
+```
+
+### Subagents
+
+| Subagent | Purpose | Key Tools |
+|----------|---------|-----------|
+| incident_agent | Incident management | search_incidents, create_incident, update_incident |
+| change_agent | Change request handling | search_changes, validate_change, assess_change_risk |
+| problem_agent | Problem investigation | search_problems, create_problem, link_incidents_to_problem |
+| asset_agent | CMDB queries | search_cmdb, get_ci_details, get_ci_relationships |
+| sla_agent | SLA monitoring | get_sla_status, predict_sla_breach, get_sla_report |
+| knowledge_agent | Knowledge base | search_knowledge_base, create_kb_article |
+
+### API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/deepagent/start` | POST | Start a Deep Agent session |
+| `/api/deepagent/chat` | POST | Send message to Deep Agent |
+| `/api/deepagent/chat/stream` | POST | **Stream Deep Agent response (SSE)** |
+| `/api/deepagent/context/{session_id}` | GET | Get session context |
+| `/api/deepagent/todos/{session_id}` | GET | Get session todos |
+| `/api/deepagent/files/{session_id}` | GET | List session files |
+| `/api/deepagent/subagents` | GET | List available subagents |
+
+#### Start Session
+
+```bash
+curl -X POST http://localhost:8000/api/deepagent/start \
+  -H "Content-Type: application/json" \
+  -d '{"user_id": "user123"}'
+```
+
+Response:
+```json
+{
+  "session_id": "deepagent-abc123...",
+  "welcome_message": "Hello! I'm your IT Operations Deep Agent...",
+  "available_subagents": ["incident_agent", "change_agent", ...]
+}
+```
+
+#### Chat with Agent
+
+```bash
+curl -X POST http://localhost:8000/api/deepagent/chat \
+  -H "Content-Type: application/json" \
+  -d '{
+    "session_id": "deepagent-abc123...",
+    "message": "Analyze recent P1 incidents and identify patterns"
+  }'
+```
+
+Response:
+```json
+{
+  "response": "I'll analyze the P1 incidents. Let me break this down...",
+  "tool_calls": ["search_incidents", "write_todos"],
+  "todos_updated": true,
+  "files_updated": false
+}
+```
+
+#### Stream Agent Response (NEW)
+
+**Server-Sent Events (SSE)** endpoint for real-time progress updates:
+
+```bash
+curl -N -X POST http://localhost:8000/api/deepagent/chat/stream \
+  -H "Content-Type: application/json" \
+  -d '{
+    "session_id": "deepagent-abc123...",
+    "message": "Investigate INC0010001 and check for related incidents"
+  }'
+```
+
+**Event Stream Response:**
+```
+event: thinking
+data: {"content": "I'll investigate this incident and search for related cases..."}
+
+event: tool_call
+data: {"tool": "search_incidents", "args": {"incident_number": "INC0010001"}, "description": "Retrieving incident details"}
+
+event: tool_result
+data: {"tool": "search_incidents", "result": "Incident found: P1 - Database connectivity issue"}
+
+event: thinking
+data: {"content": "Found the incident. Now checking for similar issues in the past 7 days..."}
+
+event: tool_call
+data: {"tool": "search_incidents", "args": {"query": "database connectivity", "priority": "1"}, "description": "Searching for related P1 incidents"}
+
+event: tool_result
+data: {"tool": "search_incidents", "result": "Found 3 related incidents"}
+
+event: content
+data: {"response": "Analysis complete. INC0010001 is part of a pattern of 4 database connectivity incidents this week. I recommend creating a problem record to investigate the root cause."}
+
+event: done
+data: {"session_id": "deepagent-abc123...", "todos_updated": true, "files_updated": true}
+```
+
+**Event Types:**
+- `thinking`: Agent reasoning and planning steps
+- `tool_call`: Tool invocation with arguments and description
+- `tool_result`: Results from tool execution
+- `content`: Final response content (can be streamed in chunks)
+- `error`: Error occurred with details
+- `done`: Stream complete with metadata
+
+### Web UI Integration
+
+The Deep Agent is available in the Web UI at `/chat`:
+
+1. Select "IT Ops Deep Agent" from the agent dropdown
+2. The Task Progress panel shows active todos
+3. The Context Files panel shows files created by the agent
+4. Quick actions include: "Analyze Incidents", "Check SLA Risk", "Review Changes"
+
+### Configuration
+
+Environment variables for Deep Agent:
+
+```env
+# ServiceNow Integration (for live mode)
+SERVICENOW_INSTANCE=your-instance.service-now.com
+SERVICENOW_USERNAME=admin
+SERVICENOW_PASSWORD=password
+SERVICENOW_MODE=simulation  # or 'live'
+
+# Deep Agent Storage
+DEEP_AGENT_STORAGE_PATH=/app/data/deepagent_context
+
+# Deep Agent LLM Configuration (NEW)
+DEEP_AGENT_PROVIDER=openai  # Options: openai, anthropic
+DEEP_AGENT_MODEL=gpt-4o     # Standard models: gpt-4o, gpt-4o-mini, claude-3-5-sonnet-20241022
+                            # Reasoning models: o1, o1-mini, o1-preview, o3-mini, o4-mini
+                            # Note: Reasoning models automatically bypass temperature settings
+
+# Required API Keys (based on provider)
+OPENAI_API_KEY=sk-...
+ANTHROPIC_API_KEY=sk-ant-...
+```
+
+**Model Selection Guide:**
+
+| Model Category | Models | Use Case | Temperature Support |
+|----------------|--------|----------|--------------------|
+| **Standard** | gpt-4o, gpt-4o-mini | General tasks, faster response | ✅ Yes |
+| **Reasoning** | o1, o3, o4, o1-mini, o3-mini, o4-mini | Complex analysis, planning | ❌ No (auto-bypassed) |
+| **Anthropic** | claude-3-5-sonnet-20241022 | Alternative provider | ✅ Yes |
+
+**Reasoning Model Features:**
+- Extended thinking time for complex problems
+- Superior planning and multi-step reasoning
+- Automatically detected by model name prefix
+- Temperature parameter bypassed automatically
+- Recommended for: Root cause analysis, change impact assessment, complex incident investigations
+
+### Usage Examples
+
+#### Complex Incident Analysis
+
+```
+User: We've had 3 P1 incidents this week related to the payment gateway.
+      Investigate if there's a pattern and create a problem record if needed.
+
+Deep Agent Response:
+1. Creates todos:
+   - Search for P1 incidents related to payment gateway
+   - Analyze incident patterns and timeline
+   - Check CMDB for payment gateway dependencies
+   - Create problem record if pattern found
+
+2. Delegates to subagents:
+   - incident_agent: Searches and retrieves incident details
+   - asset_agent: Gets CMDB relationships for payment gateway
+   - problem_agent: Creates problem record linking incidents
+
+3. Updates context files:
+   - /analysis/payment_gateway_incidents.md
+   - /findings/root_cause_hypothesis.md
+```
+
+#### Change Risk Assessment
+
+```
+User: Assess the risk of CHG0000009 and check if any critical services are affected.
+
+Deep Agent Response:
+1. Creates todos:
+   - Get change request details
+   - Identify affected CIs
+   - Map service dependencies
+   - Calculate risk score
+
+2. Uses tools:
+   - get_change_details(CHG0000009)
+   - get_affected_services()
+   - assess_change_risk()
+
+3. Provides comprehensive risk assessment with recommendations
+```
+
+### Testing
+
+Run Deep Agent tests:
+
+```bash
+pytest tests/test_deep_agent.py -v
+```
+
+Test categories:
+- `TestDeepAgentTypes` - Type definitions
+- `TestDeepAgentState` - State management
+- `TestPersistentStorage` - File-based storage
+- `TestMemoryStorage` - In-memory storage
+- `TestKnowledgeTools` - Knowledge base tools
+- `TestIncidentTools` - Incident management
+- `TestITOperationsAgent` - Main agent
+
+### Docker Deployment
+
+The Deep Agent is included in the Docker deployment with persistent storage:
+
+```yaml
+# docker-compose.yml
+services:
+  langchain-platform:
+    environment:
+      - SERVICENOW_INSTANCE=${SERVICENOW_INSTANCE:-}
+      - SERVICENOW_USERNAME=${SERVICENOW_USERNAME:-}
+      - SERVICENOW_PASSWORD=${SERVICENOW_PASSWORD:-}
+      - SERVICENOW_MODE=${SERVICENOW_MODE:-simulation}
+      - DEEP_AGENT_STORAGE_PATH=/app/data/deepagent_context
+    volumes:
+      - deepagent_data:/app/data/deepagent_context
+
+volumes:
+  deepagent_data:
+    driver: local
+```
+
+### LangGraph Studio Integration
+
+The Deep Agent provides a `get_graph()` function for LangGraph Studio:
+
+```python
+# langgraph.json
+{
+  "graphs": {
+    "it_operations": "./app/deepagents/it_operations_agent.py:get_graph"
+  }
+}
+```
+
+---
+
 ## Change Log
+
+### 2026-01-09 - IT Operations Deep Agent (v3.16)
+
+**Added**:
+- **Deep Agents Framework**:
+  - Core types: `Todo`, `TodoStatus`, `FileEntry`, `SubAgentDefinition`, `DeepAgentConfig`
+  - State management: `DeepAgentState` with todo/file tracking
+  - Middleware: TodoList, Filesystem, SubAgent capabilities
+  - Base `DeepAgent` class with planning and context management
+
+- **Storage Backends**:
+  - `PersistentStorage` - File-based storage for production
+  - `MemoryStorage` - In-memory storage for testing
+  - Session isolation and metadata support
+
+- **IT Operations Tools**:
+  - Incident tools: search, create, update, escalate
+  - Change tools: search, validate, risk assessment
+  - Problem tools: search, create, link incidents, known errors
+  - Asset tools: CMDB search, CI details, relationships
+  - SLA tools: status, breach prediction, reports
+  - Knowledge tools: search, create articles, suggestions
+
+- **Specialized Subagents**:
+  - `incident_agent` - Incident management specialist
+  - `change_agent` - Change request handling
+  - `problem_agent` - Problem investigation
+  - `asset_agent` - CMDB/Asset management
+  - `sla_agent` - SLA monitoring
+  - `knowledge_agent` - Knowledge base management
+
+- **IT Operations Deep Agent**:
+  - Main coordinator for IT managed services
+  - Complex task decomposition with planning
+  - Multi-domain ITSM operations
+  - Context persistence across sessions
+
+- **API Endpoints**:
+  - POST `/api/deepagent/start` - Start session
+  - POST `/api/deepagent/chat` - Chat with agent
+  - GET `/api/deepagent/context/{session_id}` - Get context
+  - GET `/api/deepagent/todos/{session_id}` - Get todos
+  - GET `/api/deepagent/files/{session_id}` - List files
+  - GET `/api/deepagent/subagents` - List subagents
+
+- **Web UI Updates**:
+  - "IT Ops Deep Agent" in agent selector
+  - Task Progress panel for todo tracking
+  - Context Files panel for file management
+  - Deep Agent quick actions
+
+- **Docker Compose Updates**:
+  - Persistent volume for Deep Agent context
+  - ServiceNow environment variables
+  - Increased memory limits for agent operations
+
+- **Test Suite**:
+  - `tests/test_deep_agent.py` with comprehensive coverage
+  - Type, state, storage, tools, and API tests
+
+**Files Added**:
+- `app/deepagents/__init__.py`
+- `app/deepagents/core/__init__.py`
+- `app/deepagents/core/types.py`
+- `app/deepagents/core/state.py`
+- `app/deepagents/core/middleware.py`
+- `app/deepagents/core/deep_agent.py`
+- `app/deepagents/storage/__init__.py`
+- `app/deepagents/storage/base.py`
+- `app/deepagents/storage/memory_backend.py`
+- `app/deepagents/storage/persistent_backend.py`
+- `app/deepagents/tools/__init__.py`
+- `app/deepagents/tools/incident_tools.py`
+- `app/deepagents/tools/change_tools.py`
+- `app/deepagents/tools/problem_tools.py`
+- `app/deepagents/tools/asset_tools.py`
+- `app/deepagents/tools/sla_tools.py`
+- `app/deepagents/tools/knowledge_tools.py`
+- `app/deepagents/subagents/__init__.py`
+- `app/deepagents/subagents/definitions.py`
+- `app/deepagents/it_operations_agent.py`
+- `tests/test_deep_agent.py`
+
+**Files Modified**:
+- `app/server.py` - Added Deep Agent loading and API endpoints
+- `app/static/chat.html` - Added Deep Agent UI support
+- `docker-compose.yml` - Added Deep Agent configuration
+- `KNOWLEDGE.md` - Added Deep Agent documentation
+
+---
 
 ### 2026-01-06 - ServiceNow Change/Service Request Tools (v3.15)
 

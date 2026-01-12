@@ -74,7 +74,10 @@ This repository includes a production-ready **Enterprise Agents Platform** in th
 ### 🚀 Key Features
 
 - **8 Production Agents**: Research, Content Generation (HITL), Data Analysis, Document Processing, Multilingual RAG, IT Support (HITL), ServiceNow ITSM, Code Assistant
-- **ServiceNow Integration**: Full ITSM operations with 10 tools - incidents, change requests, service requests, CMDB
+- **🆕 IT Operations Deep Agent**: Advanced planning agent with 6 specialized subagents, streaming responses, and reasoning model support
+- **⚡ Real-time Streaming**: Server-Sent Events (SSE) for live progress updates and tool execution visibility
+- **🧠 Reasoning Models**: Native support for OpenAI o1/o3/o4 series with automatic temperature bypass
+- **ServiceNow Integration**: Full ITSM operations with 10 tools - incidents, change requests, service requests, CMDB, SLA monitoring, knowledge base
 - **LangGraph Orchestration**: State-based agent workflows with human-in-the-loop capabilities
 - **REST API**: FastAPI server with LangServe endpoints for seamless integration
 - **Microsoft Copilot Studio**: Ready-to-use webhooks for enterprise chatbot integration
@@ -148,6 +151,89 @@ Infrastructure Layer (LLM providers, Vector stores, External APIs)
 ```
 
 **Design Patterns**: Template Method (agent base), Abstract Factory (agent creation), State Pattern (LangGraph), Strategy (tool selection), Decorator (middleware), Facade (API), Observer (tracing)
+
+### 🤖 Deep Agent Architecture
+
+The **IT Operations Deep Agent** represents the next generation of enterprise AI agents with advanced capabilities:
+
+#### Core Features
+
+- **📋 Planning & Task Management**: Multi-step task decomposition with todo tracking and status updates
+- **📁 Context Management**: Virtual file system for maintaining analysis context across conversations
+- **🔀 Subagent Delegation**: Six specialized subagents for domain-specific operations:
+  - **Incident Agent**: Incident search, creation, updates, and escalation
+  - **Change Agent**: Change request validation and risk assessment
+  - **Problem Agent**: Problem investigation and known error management
+  - **Asset Agent**: CMDB queries and CI relationship mapping
+  - **SLA Agent**: SLA monitoring, breach prediction, and reporting
+  - **Knowledge Agent**: Knowledge base search and article creation
+- **⚡ Real-time Streaming**: SSE endpoint for live progress visibility
+- **🧠 Reasoning Model Support**: Automatic detection and configuration for OpenAI o1/o3/o4 models
+- **💾 Persistent Storage**: File-based session storage with context isolation
+
+#### Streaming API
+
+```javascript
+const eventSource = new EventSource('/api/deepagent/chat/stream', {
+  method: 'POST',
+  body: JSON.stringify({
+    session_id: 'deepagent-123',
+    message: 'Analyze P1 incidents this week'
+  })
+});
+
+eventSource.addEventListener('thinking', (e) => {
+  console.log('Agent thinking:', JSON.parse(e.data).content);
+});
+
+eventSource.addEventListener('tool_call', (e) => {
+  const { tool, args, description } = JSON.parse(e.data);
+  console.log(`Executing ${tool}:`, description);
+});
+
+eventSource.addEventListener('content', (e) => {
+  console.log('Response:', JSON.parse(e.data).response);
+});
+```
+
+#### LLM Configuration
+
+```env
+# Standard Models (with temperature control)
+DEEP_AGENT_MODEL=gpt-4o        # Fast, cost-effective
+DEEP_AGENT_MODEL=gpt-4o-mini   # Lightweight option
+
+# Reasoning Models (temperature auto-bypassed)
+DEEP_AGENT_MODEL=o1            # Advanced reasoning
+DEEP_AGENT_MODEL=o3-mini       # Balanced reasoning
+DEEP_AGENT_MODEL=o4-mini       # Latest reasoning model
+```
+
+The agent automatically detects reasoning models by prefix (o1, o3, o4) and bypasses temperature settings to comply with OpenAI API requirements.
+
+#### Usage Example
+
+```bash
+# Start session
+curl -X POST http://localhost:8000/api/deepagent/start \
+  -H "Content-Type: application/json" \
+  -d '{"user_id": "ops_user"}'
+
+# Stream agent response
+curl -N -X POST http://localhost:8000/api/deepagent/chat/stream \
+  -H "Content-Type: application/json" \
+  -d '{
+    "session_id": "deepagent-abc123",
+    "message": "Investigate INC0010001 and check for related incidents"
+  }'
+```
+
+**Real-world Scenarios:**
+- Complex incident pattern analysis across multiple systems
+- Change impact assessment with CI dependency mapping
+- Root cause investigation with automated problem record creation
+- SLA breach prediction and proactive escalation
+- Knowledge base enrichment from resolved incidents
 
 ### 🎯 Use Cases
 

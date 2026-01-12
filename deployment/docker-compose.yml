@@ -18,8 +18,18 @@ services:
       - API_KEY_ENABLED=${API_KEY_ENABLED:-false}
       - API_KEY=${API_KEY:-}
       - CORS_ORIGINS=${CORS_ORIGINS:-*}
+      # ServiceNow settings for Deep Agent
+      - SERVICENOW_INSTANCE=${SERVICENOW_INSTANCE:-}
+      - SERVICENOW_USERNAME=${SERVICENOW_USERNAME:-}
+      - SERVICENOW_PASSWORD=${SERVICENOW_PASSWORD:-}
+      - SERVICENOW_MODE=${SERVICENOW_MODE:-simulation}
+      # Deep Agent settings
+      - DEEP_AGENT_STORAGE_PATH=/app/data/deepagent_context
     env_file:
       - .env
+    volumes:
+      # Persistent storage for Deep Agent context
+      - deepagent_data:/app/data/deepagent_context
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
@@ -31,10 +41,10 @@ services:
       resources:
         limits:
           cpus: "2"
-          memory: 2G
+          memory: 4G
         reservations:
           cpus: "0.5"
-          memory: 512M
+          memory: 1G
 
   # Optional: Redis for caching (uncomment if needed)
   # redis:
@@ -56,7 +66,9 @@ services:
   #     - qdrant_data:/qdrant/storage
   #   restart: unless-stopped
 
-# volumes:
+volumes:
+  deepagent_data:
+    driver: local
 #   redis_data:
 #   qdrant_data:
 

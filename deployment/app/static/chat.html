@@ -451,6 +451,208 @@
             margin-bottom: 0;
         }
 
+        /* Deep Agent Panel */
+        .deep-agent-panel {
+            display: none;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .deep-agent-panel.visible {
+            display: flex;
+        }
+
+        .todo-list {
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .todo-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            background: var(--bg-primary);
+            border-radius: 6px;
+            font-size: 0.85rem;
+            margin-bottom: 6px;
+        }
+
+        .todo-item.completed {
+            opacity: 0.6;
+            text-decoration: line-through;
+        }
+
+        .todo-item.in_progress {
+            background: #fef3c7;
+            border-left: 3px solid var(--warning);
+        }
+
+        .todo-item.pending {
+            background: var(--bg-primary);
+        }
+
+        .todo-status-icon {
+            font-size: 14px;
+        }
+
+        .files-list {
+            max-height: 150px;
+            overflow-y: auto;
+        }
+
+        .file-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 10px;
+            background: var(--bg-primary);
+            border-radius: 4px;
+            font-size: 0.8rem;
+            margin-bottom: 4px;
+            cursor: pointer;
+        }
+
+        .file-item:hover {
+            background: #eff6ff;
+        }
+
+        .subagent-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            background: var(--primary);
+            color: white;
+            border-radius: 12px;
+            font-size: 0.7rem;
+            margin: 2px;
+        }
+
+        /* Thinking Indicator Styles */
+        .thinking-indicator {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+            border-radius: 8px;
+            margin-bottom: 10px;
+            border-left: 3px solid var(--primary);
+        }
+
+        .thinking-dots {
+            display: flex;
+            gap: 4px;
+        }
+
+        .thinking-dots span {
+            width: 8px;
+            height: 8px;
+            background: var(--primary);
+            border-radius: 50%;
+            animation: thinking-bounce 1.4s infinite ease-in-out both;
+        }
+
+        .thinking-dots span:nth-child(1) { animation-delay: -0.32s; }
+        .thinking-dots span:nth-child(2) { animation-delay: -0.16s; }
+        .thinking-dots span:nth-child(3) { animation-delay: 0s; }
+
+        @keyframes thinking-bounce {
+            0%, 80%, 100% { transform: scale(0.6); opacity: 0.5; }
+            40% { transform: scale(1); opacity: 1; }
+        }
+
+        .thinking-status {
+            font-size: 0.9rem;
+            color: var(--text-primary);
+        }
+
+        /* Tool Activity Styles */
+        .tool-activity {
+            padding: 8px 0;
+            border-top: 1px solid var(--border-color);
+            margin-top: 8px;
+        }
+
+        .tool-entry {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 12px;
+            font-size: 0.85rem;
+            margin-bottom: 4px;
+            background: #fefce8;
+            border-radius: 4px;
+            transition: all 0.3s ease;
+        }
+
+        .tool-entry.executing {
+            background: #fef3c7;
+            animation: tool-pulse 1.5s infinite;
+        }
+
+        .tool-entry.completed {
+            background: #dcfce7;
+        }
+
+        @keyframes tool-pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        .tool-icon {
+            font-size: 14px;
+            width: 20px;
+            text-align: center;
+        }
+
+        .tool-entry.executing .tool-icon {
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .tool-entry.completed .tool-icon {
+            color: var(--success);
+        }
+
+        .tool-name {
+            font-weight: 500;
+            color: var(--primary);
+        }
+
+        .tool-status {
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+        }
+
+        /* Streamed Response */
+        .streamed-response {
+            padding: 12px;
+            background: var(--bg-primary);
+            border-radius: 6px;
+            white-space: pre-wrap;
+            font-size: 0.9rem;
+            line-height: 1.5;
+        }
+
+        .message-content.error {
+            color: var(--error);
+            background: #fef2f2;
+            padding: 12px;
+            border-radius: 6px;
+        }
+
+        .context-info {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            padding: 8px;
+            background: var(--bg-primary);
+            border-radius: 6px;
+        }
+
         /* Responsive */
         @media (max-width: 768px) {
             .side-panel {
@@ -471,6 +673,9 @@
                 <label>Agent:</label>
                 <select id="agentSelect">
                     <option value="">Select an agent...</option>
+                    <optgroup label="Deep Agents">
+                        <option value="it_operations_deep">IT Operations Deep Agent</option>
+                    </optgroup>
                     <optgroup label="IT Support">
                         <option value="it_helpdesk">IT Helpdesk</option>
                         <option value="servicenow">ServiceNow ITSM</option>
@@ -481,7 +686,7 @@
                         <option value="data_analyst">Data Analyst</option>
                         <option value="document">Document Generator</option>
                         <option value="multilingual_rag">Multilingual RAG</option>
-                        <option value="hitl_support">HITL IT Support</option> <!-- MOVED HERE -->
+                        <option value="hitl_support">HITL IT Support</option>
                         <option value="code_assistant">Code Assistant</option>
                         <option value="document_intelligence">Document Intelligence</option>
                     </optgroup>
@@ -509,6 +714,10 @@
                         <h2>Welcome to Enterprise AI Agents</h2>
                         <p>Select an agent to start your session</p>
                         <div class="agent-cards" style="flex-wrap: wrap; justify-content: center;">
+                            <div class="agent-card" onclick="startDeepAgentSession('it_operations_deep')" style="border-color: var(--primary); background: #eff6ff;">
+                                <h3>IT Ops Deep Agent</h3>
+                                <p>Planning, multi-domain ITSM with task tracking</p>
+                            </div>
                             <div class="agent-card" onclick="startSession('it_helpdesk')">
                                 <h3>IT Helpdesk</h3>
                                 <p>Password resets, software help, network issues</p>
@@ -567,6 +776,33 @@
             </div>
 
             <div class="side-panel">
+                <!-- Deep Agent Panel (visible only for deep agents) -->
+                <div class="panel-card deep-agent-panel" id="deepAgentPanel">
+                    <h3>Task Progress</h3>
+                    <div class="todo-list" id="todoList">
+                        <div class="context-info">No active tasks</div>
+                    </div>
+                </div>
+
+                <div class="panel-card deep-agent-panel" id="filesPanel">
+                    <h3>Context Files</h3>
+                    <div class="files-list" id="filesList">
+                        <div class="context-info">No files in context</div>
+                    </div>
+                </div>
+
+                <div class="panel-card deep-agent-panel" id="subagentsPanel">
+                    <h3>Available Subagents</h3>
+                    <div id="subagentsList">
+                        <span class="subagent-badge">Incident</span>
+                        <span class="subagent-badge">Change</span>
+                        <span class="subagent-badge">Problem</span>
+                        <span class="subagent-badge">Asset</span>
+                        <span class="subagent-badge">SLA</span>
+                        <span class="subagent-badge">Knowledge</span>
+                    </div>
+                </div>
+
                 <div class="panel-card">
                     <h3>Quick Actions</h3>
                     <div class="quick-actions" id="quickActions">
@@ -629,6 +865,8 @@
         let sessionId = null;
         let currentAgent = null;
         let isEnterpriseAgent = false;
+        let isDeepAgent = false;
+        let todoRefreshInterval = null;
 
         // Enterprise agent endpoints
         const enterpriseEndpoints = {
@@ -644,6 +882,12 @@
 
         // Quick actions for each agent type
         const agentQuickActions = {
+            'it_operations_deep': [
+                { text: 'Analyze Incidents', action: 'Analyze recent P1/P2 incidents and identify patterns' },
+                { text: 'Check SLA Risk', action: 'Which tickets are at risk of SLA breach?' },
+                { text: 'Review Changes', action: 'Review pending change requests and assess risk' },
+                { text: 'CMDB Check', action: 'Check CMDB health and identify gaps' }
+            ],
             'it_helpdesk': [
                 { text: 'Reset Password', action: 'I need to reset my password' },
                 { text: 'VPN Issues', action: 'My VPN is not connecting' },
@@ -711,7 +955,9 @@
         // Event Listeners
         agentSelect.addEventListener('change', (e) => {
             if (e.target.value) {
-                if (enterpriseEndpoints[e.target.value]) {
+                if (e.target.value === 'it_operations_deep') {
+                    startDeepAgentSession(e.target.value);
+                } else if (enterpriseEndpoints[e.target.value]) {
                     startEnterpriseAgent(e.target.value);
                 } else {
                     startSession(e.target.value);
@@ -816,11 +1062,343 @@
             addMessage(welcomeMessages[agentType] || 'Hello! How can I help you today?', 'assistant');
         }
 
+        // Start Deep Agent Session
+        async function startDeepAgentSession(agentType) {
+            try {
+                const response = await fetch('/api/deepagent/start', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ user_id: 'web-user-' + Date.now() })
+                });
+
+                const data = await response.json();
+
+                // Check for HTTP errors first
+                if (!response.ok) {
+                    const errorMsg = data.detail || data.error || `HTTP ${response.status}`;
+                    alert('Failed to start Deep Agent session: ' + errorMsg);
+                    return;
+                }
+
+                if (data.session_id) {
+                    sessionId = data.session_id;
+                    currentAgent = agentType;
+                    isEnterpriseAgent = false;
+                    isDeepAgent = true;
+
+                    // Update UI
+                    welcomeScreen.style.display = 'none';
+                    messageInput.disabled = false;
+                    sendButton.disabled = false;
+                    agentSelect.value = agentType;
+
+                    statusBadge.className = 'status-badge connected';
+                    statusBadge.innerHTML = '<span class="status-dot green"></span> Connected';
+
+                    sessionInfo.textContent = `Session: ${sessionId.slice(0, 8)}... | Agent: IT Operations Deep Agent`;
+
+                    // Update quick actions
+                    updateQuickActions(agentType);
+
+                    // Show Deep Agent panels
+                    showDeepAgentPanels(true);
+
+                    // Add welcome message
+                    addMessage(data.welcome_message || data.message || 'Hello! I\'m your IT Operations Deep Agent. I can help with complex IT tasks including incident analysis, change management, problem investigation, CMDB queries, and SLA monitoring. I break down complex tasks and coordinate specialized subagents. What can I help you with today?', 'assistant');
+
+                    // Start polling for todos
+                    startTodoPolling();
+                } else {
+                    alert('Failed to start Deep Agent session: ' + (data.error || data.detail || 'Unknown error'));
+                }
+            } catch (error) {
+                console.error('Error starting Deep Agent session:', error);
+                alert('Failed to connect to Deep Agent server');
+            }
+        }
+
+        // Stream Deep Agent chat with thinking and progress updates
+        async function streamDeepAgentChat(message, sessionId) {
+            return new Promise((resolve, reject) => {
+                // Create a progress message element
+                const progressDiv = document.createElement('div');
+                progressDiv.className = 'message assistant';
+                progressDiv.innerHTML = `
+                    <div class="thinking-indicator">
+                        <div class="thinking-dots">
+                            <span></span><span></span><span></span>
+                        </div>
+                        <div class="thinking-status">Processing your request...</div>
+                    </div>
+                    <div class="tool-activity" style="display:none;"></div>
+                    <div class="streamed-response" style="display:none;"></div>
+                `;
+                messagesEl.appendChild(progressDiv);
+                messagesEl.scrollTop = messagesEl.scrollHeight;
+
+                const thinkingStatus = progressDiv.querySelector('.thinking-status');
+                const toolActivity = progressDiv.querySelector('.tool-activity');
+                const streamedResponse = progressDiv.querySelector('.streamed-response');
+                const thinkingIndicator = progressDiv.querySelector('.thinking-indicator');
+
+                let receivedComplete = false;
+                let lastResponse = '';
+
+                // Use fetch with streaming
+                fetch('/api/deepagent/chat/stream', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        session_id: sessionId,
+                        message: message
+                    })
+                }).then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+                    const reader = response.body.getReader();
+                    const decoder = new TextDecoder();
+                    let buffer = '';
+
+                    function processEvents() {
+                        reader.read().then(({ done, value }) => {
+                            if (done) {
+                                // Stream ended - if we didn't receive a complete event, show accumulated response
+                                if (!receivedComplete && lastResponse) {
+                                    thinkingIndicator.style.display = 'none';
+                                    progressDiv.innerHTML = `<div class="message-content">${formatMessage(lastResponse)}</div>`;
+                                } else if (!receivedComplete && streamedResponse.textContent) {
+                                    thinkingIndicator.style.display = 'none';
+                                    progressDiv.innerHTML = `<div class="message-content">${formatMessage(streamedResponse.textContent)}</div>`;
+                                }
+                                resolve();
+                                return;
+                            }
+
+                            buffer += decoder.decode(value, { stream: true });
+                            const lines = buffer.split('\n');
+                            buffer = lines.pop(); // Keep incomplete line in buffer
+
+                            for (const line of lines) {
+                                if (line.startsWith('data: ')) {
+                                    try {
+                                        const event = JSON.parse(line.slice(6));
+                                        if (event.type === 'complete' && event.data && event.data.response) {
+                                            receivedComplete = true;
+                                            lastResponse = event.data.response;
+                                        } else if (event.type === 'token' && event.data && event.data.content) {
+                                            lastResponse += event.data.content;
+                                        }
+                                        handleStreamEvent(event, progressDiv, thinkingStatus, toolActivity, streamedResponse, thinkingIndicator);
+                                    } catch (e) {
+                                        console.error('Error parsing SSE event:', e, 'Line:', line);
+                                    }
+                                }
+                            }
+
+                            processEvents();
+                        }).catch(err => {
+                            console.error('Stream read error:', err);
+                            // Show whatever response we accumulated
+                            if (lastResponse) {
+                                thinkingIndicator.style.display = 'none';
+                                progressDiv.innerHTML = `<div class="message-content">${formatMessage(lastResponse)}</div>`;
+                                resolve();
+                            } else {
+                                progressDiv.innerHTML = '<div class="message-content error">Connection interrupted. Please try again.</div>';
+                                reject(err);
+                            }
+                        });
+                    }
+
+                    processEvents();
+                }).catch(err => {
+                    console.error('Fetch error:', err);
+                    progressDiv.innerHTML = `<div class="message-content error">Error: ${err.message || 'Failed to connect to agent'}</div>`;
+                    reject(err);
+                });
+            });
+        }
+
+        // Handle individual stream events
+        function handleStreamEvent(event, progressDiv, thinkingStatus, toolActivity, streamedResponse, thinkingIndicator) {
+            const type = event.type;
+            const data = event.data;
+
+            switch (type) {
+                case 'start':
+                    thinkingStatus.textContent = data.message || 'Starting...';
+                    break;
+
+                case 'thinking':
+                    thinkingStatus.innerHTML = `<strong>Step ${data.iteration}:</strong> ${data.message}`;
+                    break;
+
+                case 'tool_start':
+                    toolActivity.style.display = 'block';
+                    const toolEntry = document.createElement('div');
+                    toolEntry.className = 'tool-entry executing';
+                    toolEntry.innerHTML = `
+                        <span class="tool-icon">&#9881;</span>
+                        <span class="tool-name">${data.tool}</span>
+                        <span class="tool-status">${data.description}</span>
+                    `;
+                    toolActivity.appendChild(toolEntry);
+                    messagesEl.scrollTop = messagesEl.scrollHeight;
+                    break;
+
+                case 'tool_result':
+                    // Update the last tool entry to show completion
+                    const lastTool = toolActivity.querySelector('.tool-entry.executing:last-child');
+                    if (lastTool) {
+                        lastTool.classList.remove('executing');
+                        lastTool.classList.add('completed');
+                        lastTool.querySelector('.tool-icon').innerHTML = '&#10003;';
+                    }
+                    break;
+
+                case 'todo_update':
+                    // Update the todo panel in real-time
+                    if (data.todos) {
+                        updateTodoDisplay(data.todos);
+                    }
+                    break;
+
+                case 'token':
+                    // Stream response tokens
+                    streamedResponse.style.display = 'block';
+                    streamedResponse.textContent += data.content;
+                    messagesEl.scrollTop = messagesEl.scrollHeight;
+                    break;
+
+                case 'complete':
+                    // Hide thinking indicator, show final response
+                    thinkingIndicator.style.display = 'none';
+
+                    // Replace progress div with final message
+                    progressDiv.innerHTML = `<div class="message-content">${formatMessage(data.response || 'Task completed.')}</div>`;
+
+                    // Update todos and files
+                    if (data.todos) {
+                        updateTodoDisplay(data.todos);
+                    }
+                    if (data.files) {
+                        updateFilesDisplay(data.files);
+                    }
+                    messagesEl.scrollTop = messagesEl.scrollHeight;
+                    break;
+
+                case 'error':
+                    thinkingIndicator.style.display = 'none';
+                    progressDiv.innerHTML = `<div class="message-content error">Error: ${data.error}</div>`;
+                    break;
+            }
+        }
+
+        // Show/hide Deep Agent panels
+        function showDeepAgentPanels(show) {
+            const panels = document.querySelectorAll('.deep-agent-panel');
+            panels.forEach(panel => {
+                if (show) {
+                    panel.classList.add('visible');
+                } else {
+                    panel.classList.remove('visible');
+                }
+            });
+        }
+
+        // Start polling for todos
+        function startTodoPolling() {
+            // Stop any existing polling
+            if (todoRefreshInterval) {
+                clearInterval(todoRefreshInterval);
+            }
+            // Poll every 3 seconds
+            todoRefreshInterval = setInterval(async () => {
+                if (isDeepAgent && sessionId) {
+                    await refreshTodos();
+                    await refreshFiles();
+                }
+            }, 3000);
+        }
+
+        // Refresh todos from server
+        async function refreshTodos() {
+            if (!sessionId) return;
+            try {
+                const response = await fetch(`/api/deepagent/todos/${sessionId}`);
+                const data = await response.json();
+                if (data.todos) {
+                    updateTodoDisplay(data.todos);
+                }
+            } catch (error) {
+                console.error('Error refreshing todos:', error);
+            }
+        }
+
+        // Update todo display
+        function updateTodoDisplay(todos) {
+            const todoList = document.getElementById('todoList');
+            if (!todos || todos.length === 0) {
+                todoList.innerHTML = '<div class="context-info">No active tasks</div>';
+                return;
+            }
+
+            const statusIcons = {
+                'pending': '⏳',
+                'in_progress': '🔄',
+                'completed': '✅'
+            };
+
+            todoList.innerHTML = todos.map(todo => `
+                <div class="todo-item ${todo.status}">
+                    <span class="todo-status-icon">${statusIcons[todo.status] || '⏳'}</span>
+                    <span>${todo.content || todo.title || 'Unknown task'}</span>
+                </div>
+            `).join('');
+        }
+
+        // Refresh files from server
+        async function refreshFiles() {
+            if (!sessionId) return;
+            try {
+                const response = await fetch(`/api/deepagent/files/${sessionId}`);
+                const data = await response.json();
+                if (data.files) {
+                    updateFilesDisplay(data.files);
+                }
+            } catch (error) {
+                console.error('Error refreshing files:', error);
+            }
+        }
+
+        // Update files display
+        function updateFilesDisplay(files) {
+            const filesList = document.getElementById('filesList');
+            if (!files || files.length === 0) {
+                filesList.innerHTML = '<div class="context-info">No files in context</div>';
+                return;
+            }
+
+            filesList.innerHTML = files.map(file => `
+                <div class="file-item" onclick="viewFile('${file}')">
+                    <span>📄</span>
+                    <span>${file}</span>
+                </div>
+            `).join('');
+        }
+
+        // View file content (placeholder for future implementation)
+        function viewFile(path) {
+            console.log('View file:', path);
+            // Could show a modal with file content
+        }
+
         // Send Message
         async function sendMessage() {
             const message = messageInput.value.trim();
             if (!message) return;
-            if (!sessionId && !isEnterpriseAgent) {
+            if (!sessionId && !isEnterpriseAgent && !isDeepAgent) {
                 alert('Please start a session first');
                 return;
             }
@@ -836,7 +1414,12 @@
             try {
                 let response, data;
 
-                if (isEnterpriseAgent && enterpriseEndpoints[currentAgent]) {
+                if (isDeepAgent) {
+                    // Use Deep Agent streaming endpoint
+                    await streamDeepAgentChat(message, sessionId);
+                    typingIndicator.classList.remove('visible');
+                    sendButton.disabled = false;
+                } else if (isEnterpriseAgent && enterpriseEndpoints[currentAgent]) {
                     // Use enterprise agent endpoint
                     const endpoint = enterpriseEndpoints[currentAgent];
                     const requestBody = buildEnterpriseRequest(currentAgent, message);
@@ -967,13 +1550,38 @@
 
         // Clear Chat
         function clearChat() {
-            if (sessionId) {
+            if (sessionId && !isDeepAgent) {
                 messageInput.value = '/clear';
                 sendMessage();
             }
             // Clear UI except welcome
             const messages = messagesEl.querySelectorAll('.message');
             messages.forEach(m => m.remove());
+
+            // Reset Deep Agent state
+            if (isDeepAgent) {
+                isDeepAgent = false;
+                showDeepAgentPanels(false);
+                if (todoRefreshInterval) {
+                    clearInterval(todoRefreshInterval);
+                    todoRefreshInterval = null;
+                }
+            }
+
+            // Reset session state
+            sessionId = null;
+            currentAgent = null;
+            isEnterpriseAgent = false;
+
+            // Reset UI
+            welcomeScreen.style.display = 'flex';
+            messageInput.disabled = true;
+            sendButton.disabled = true;
+            uploadButton.style.display = 'none';
+            agentSelect.value = '';
+            statusBadge.className = 'status-badge disconnected';
+            statusBadge.innerHTML = '<span class="status-dot red"></span> Disconnected';
+            sessionInfo.textContent = 'No active session';
         }
 
         // Handle File Upload

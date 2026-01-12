@@ -15,7 +15,7 @@ from typing import Literal
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.security import APIKeyHeader
 from fastapi.staticfiles import StaticFiles
 from langserve import add_routes
@@ -109,6 +109,14 @@ API_KEY_HEADER = "X-API-Key"
 # Paths that don't require authentication
 PUBLIC_PATHS = {"/", "/docs", "/redoc", "/openapi.json", "/health", "/ready"}
 
+# API paths accessible from internal web UI (no API key required)
+# These are secured by same-origin policy since they're accessed from /chat
+UI_API_PREFIXES = (
+    "/api/conversation",
+    "/api/deepagent",
+    "/api/enterprise",
+)
+
 
 class APIKeyMiddleware(BaseHTTPMiddleware):
     """Middleware to validate API key for protected endpoints."""
@@ -124,6 +132,10 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
 
         # Skip static files and chat UI
         if request.url.path.startswith("/static") or request.url.path == "/chat":
+            return await call_next(request)
+
+        # Skip UI API endpoints (accessed from internal web UI)
+        if request.url.path.startswith(UI_API_PREFIXES):
             return await call_next(request)
 
         # Validate API key (use constant-time comparison to prevent timing attacks)
@@ -147,6 +159,7 @@ langgraph_loaded = False
 doc_rag_loaded = False
 it_support_loaded = False
 enterprise_agents_loaded = False
+deep_agent_loaded = False
 chat_chain = None
 rag_chain = None
 agent_executor = None
@@ -163,6 +176,9 @@ multilingual_rag_agent = None
 hitl_support_agent = None
 code_assistant_agent = None
 document_intelligence_agent = None
+
+# Deep Agent
+it_operations_deep_agent = None
 
 
 def load_chains() -> bool:
@@ -358,6 +374,48 @@ def load_enterprise_agents() -> dict[str, bool]:
     return status
 
 
+def load_deep_agent() -> bool:
+    """Load the IT Operations Deep Agent.
+
+    Returns:
+        True if Deep Agent loaded successfully, False otherwise.
+    """
+    global deep_agent_loaded, it_operations_deep_agent
+
+    has_openai = bool(os.getenv("OPENAI_API_KEY"))
+    has_anthropic = bool(os.getenv("ANTHROPIC_API_KEY"))
+
+    if not (has_openai or has_anthropic):
+        print("[DEBUG] Deep Agent: No API keys found (OPENAI_API_KEY or ANTHROPIC_API_KEY)")
+        return False
+
+    try:
+        from app.deepagents import create_it_operations_agent
+
+        # Get model configuration from environment
+        provider = os.getenv("DEEP_AGENT_PROVIDER", "auto")
+        model_name = os.getenv("DEEP_AGENT_MODEL") or None
+
+        it_operations_deep_agent = create_it_operations_agent(
+            model_provider=provider,
+            model_name=model_name,
+            storage_path="./data/deepagent_context",
+        )
+        deep_agent_loaded = True
+
+        # Log model info
+        model_info = model_name or "default"
+        print(f"[DEBUG] Deep Agent using provider={provider}, model={model_info}")
+
+        return True
+    except Exception as e:
+        import traceback
+
+        print(f"[ERROR] Failed to load Deep Agent: {e}")
+        traceback.print_exc()
+        return False
+
+
 # ============================================================================
 # Application Lifespan
 # ============================================================================
@@ -413,6 +471,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         print(f"[OK] Enterprise agents loaded: {', '.join(loaded_agents)}")
     else:
         print("[--] Enterprise agents not loaded (no API keys set)")
+
+    # Load Deep Agent
+    if load_deep_agent():
+        print("[OK] IT Operations Deep Agent loaded")
+    else:
+        print("[--] Deep Agent not loaded (no API keys set)")
 
     print("=" * 60)
     print("Platform ready!")
@@ -501,6 +565,7 @@ class HealthResponse(BaseModel):
     doc_rag_loaded: bool
     it_support_loaded: bool
     enterprise_agents_loaded: bool
+    deep_agent_loaded: bool
     tracing_enabled: bool
     langsmith_project: str | None
 
@@ -775,6 +840,58 @@ class DocumentIntelligenceUploadResponse(BaseModel):
 
 
 # ============================================================================
+# Deep Agent Models
+# ============================================================================
+
+class DeepAgentStartRequest(BaseModel):
+    """Request to start a Deep Agent session."""
+
+    user_id: str | None = None
+    metadata: dict | None = None
+
+
+class DeepAgentStartResponse(BaseModel):
+    """Response from starting a Deep Agent session."""
+
+    success: bool
+    session_id: str | None = None
+    message: str | None = None
+    error: str | None = None
+
+
+class DeepAgentChatRequest(BaseModel):
+    """Request to chat with Deep Agent."""
+
+    message: str
+    session_id: str | None = None
+    user_id: str | None = None
+
+
+class DeepAgentChatResponse(BaseModel):
+    """Response from Deep Agent chat."""
+
+    success: bool
+    response: str | None = None
+    session_id: str | None = None
+    todos: list[dict] | None = None
+    files: list[str] | None = None
+    tool_calls: list | None = None
+    iteration_count: int | None = None
+    error: str | None = None
+
+
+class DeepAgentContextResponse(BaseModel):
+    """Response with Deep Agent session context."""
+
+    success: bool
+    session_id: str
+    todos: list[dict] | None = None
+    files: list[str] | None = None
+    metadata: dict | None = None
+    error: str | None = None
+
+
+# ============================================================================
 # API Endpoints
 # ============================================================================
 
@@ -795,6 +912,7 @@ async def health_check() -> HealthResponse:
         doc_rag_loaded=doc_rag_loaded,
         it_support_loaded=it_support_loaded,
         enterprise_agents_loaded=enterprise_agents_loaded,
+        deep_agent_loaded=deep_agent_loaded,
         tracing_enabled=tracing_enabled,
         langsmith_project=os.getenv("LANGCHAIN_PROJECT") if tracing_enabled else None,
     )
@@ -2038,6 +2156,300 @@ async def document_intelligence_clear_documents(
         "success": True,
         "session_id": session_id,
         "cleared_count": count,
+    }
+
+
+# ============================================================================
+# Deep Agent Endpoints
+# ============================================================================
+
+@app.post("/api/deepagent/start", response_model=DeepAgentStartResponse, tags=["Deep Agent"])
+async def deep_agent_start(request: DeepAgentStartRequest) -> DeepAgentStartResponse:
+    """Start a new Deep Agent session.
+
+    The IT Operations Deep Agent can handle complex IT managed services tasks
+    including incident management, change management, problem management,
+    asset management, SLA monitoring, and knowledge management.
+
+    Returns:
+        Session ID and welcome message.
+    """
+    if not deep_agent_loaded or it_operations_deep_agent is None:
+        return DeepAgentStartResponse(
+            success=False,
+            error="Deep Agent not available. Set OPENAI_API_KEY or ANTHROPIC_API_KEY.",
+        )
+
+    import uuid
+    session_id = str(uuid.uuid4())
+
+    return DeepAgentStartResponse(
+        success=True,
+        session_id=session_id,
+        message="IT Operations Deep Agent session started. I can help with incident management, change requests, problem analysis, CMDB queries, SLA tracking, and knowledge base operations.",
+    )
+
+
+@app.post("/api/deepagent/chat", response_model=DeepAgentChatResponse, tags=["Deep Agent"])
+async def deep_agent_chat(request: DeepAgentChatRequest) -> DeepAgentChatResponse:
+    """Chat with the IT Operations Deep Agent.
+
+    The Deep Agent will:
+    1. Plan complex tasks using todos
+    2. Delegate to specialized subagents
+    3. Query ServiceNow for ITSM data
+    4. Store context in workspace files
+
+    Args:
+        request: Chat message and optional session ID.
+
+    Returns:
+        Agent response with todos, files, and tool calls.
+    """
+    if not deep_agent_loaded or it_operations_deep_agent is None:
+        return DeepAgentChatResponse(
+            success=False,
+            error="Deep Agent not available. Set OPENAI_API_KEY or ANTHROPIC_API_KEY.",
+        )
+
+    try:
+        result = await it_operations_deep_agent.achat(
+            message=request.message,
+            session_id=request.session_id,
+            user_id=request.user_id,
+        )
+
+        return DeepAgentChatResponse(
+            success=True,
+            response=result.get("response"),
+            session_id=result.get("session_id"),
+            todos=result.get("todos"),
+            files=result.get("files"),
+            tool_calls=result.get("tool_calls"),
+            iteration_count=result.get("iteration_count"),
+        )
+    except Exception as e:
+        return DeepAgentChatResponse(
+            success=False,
+            session_id=request.session_id,
+            error=str(e),
+        )
+
+
+@app.post("/api/deepagent/chat/stream", tags=["Deep Agent"])
+async def deep_agent_chat_stream(request: DeepAgentChatRequest):
+    """Stream chat with the IT Operations Deep Agent.
+
+    Uses Server-Sent Events (SSE) to stream:
+    - thinking: Agent's reasoning steps
+    - tool_start: When a tool is being called
+    - tool_result: Tool execution results
+    - todo_update: Todo list changes
+    - token: Streaming response tokens
+    - complete: Final response with all context
+
+    Args:
+        request: Chat message and session ID.
+
+    Returns:
+        SSE stream of events.
+    """
+    import json
+    import traceback
+
+    def serialize_event(event: dict) -> str:
+        """Serialize event to JSON, handling datetime and other types."""
+        def default_serializer(obj):
+            if hasattr(obj, "isoformat"):
+                return obj.isoformat()
+            if hasattr(obj, "model_dump"):
+                return obj.model_dump()
+            if hasattr(obj, "__dict__"):
+                return str(obj)
+            return str(obj)
+        return json.dumps(event, default=default_serializer)
+
+    if not deep_agent_loaded or it_operations_deep_agent is None:
+        async def error_generator():
+            yield f"data: {serialize_event({'type': 'error', 'data': {'error': 'Deep Agent not available. Set OPENAI_API_KEY or ANTHROPIC_API_KEY.'}})}\n\n"
+
+        return StreamingResponse(
+            error_generator(),
+            media_type="text/event-stream",
+        )
+
+    async def event_generator():
+        try:
+            print(f"[DEBUG] Starting stream for session: {request.session_id}")
+            async for event in it_operations_deep_agent.astream_chat(
+                message=request.message,
+                session_id=request.session_id,
+                user_id=request.user_id,
+            ):
+                try:
+                    yield f"data: {serialize_event(event)}\n\n"
+                except Exception as serialize_err:
+                    print(f"[ERROR] Failed to serialize event: {serialize_err}")
+                    yield f"data: {serialize_event({'type': 'error', 'data': {'error': f'Serialization error: {serialize_err}'}})}\n\n"
+            print(f"[DEBUG] Stream completed for session: {request.session_id}")
+        except GeneratorExit:
+            print(f"[DEBUG] Client disconnected from stream: {request.session_id}")
+        except Exception as e:
+            print(f"[ERROR] Stream error for session {request.session_id}: {e}")
+            traceback.print_exc()
+            yield f"data: {serialize_event({'type': 'error', 'data': {'error': str(e)}})}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@app.get("/api/deepagent/context/{session_id}", response_model=DeepAgentContextResponse, tags=["Deep Agent"])
+async def deep_agent_context(session_id: str) -> DeepAgentContextResponse:
+    """Get the current context for a Deep Agent session.
+
+    Returns todos, workspace files, and session metadata.
+
+    Args:
+        session_id: The session identifier.
+
+    Returns:
+        Session context including todos and files.
+    """
+    if not deep_agent_loaded or it_operations_deep_agent is None:
+        return DeepAgentContextResponse(
+            success=False,
+            session_id=session_id,
+            error="Deep Agent not available.",
+        )
+
+    try:
+        context = it_operations_deep_agent.get_session_context(session_id)
+        return DeepAgentContextResponse(
+            success=True,
+            session_id=session_id,
+            todos=context.get("todos"),
+            files=context.get("files"),
+            metadata=context.get("metadata"),
+        )
+    except Exception as e:
+        return DeepAgentContextResponse(
+            success=False,
+            session_id=session_id,
+            error=str(e),
+        )
+
+
+@app.get("/api/deepagent/todos/{session_id}", tags=["Deep Agent"])
+async def deep_agent_todos(session_id: str) -> dict:
+    """Get the todo list for a Deep Agent session.
+
+    Args:
+        session_id: The session identifier.
+
+    Returns:
+        List of todos with their status.
+    """
+    if not deep_agent_loaded or it_operations_deep_agent is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Deep Agent not available.",
+        )
+
+    context = it_operations_deep_agent.get_session_context(session_id)
+    todos = context.get("todos", [])
+
+    summary = {
+        "total": len(todos),
+        "pending": len([t for t in todos if t.get("status") == "pending"]),
+        "in_progress": len([t for t in todos if t.get("status") == "in_progress"]),
+        "completed": len([t for t in todos if t.get("status") == "completed"]),
+    }
+
+    return {
+        "success": True,
+        "session_id": session_id,
+        "todos": todos,
+        "summary": summary,
+    }
+
+
+@app.get("/api/deepagent/files/{session_id}", tags=["Deep Agent"])
+async def deep_agent_files(session_id: str) -> dict:
+    """Get the workspace files for a Deep Agent session.
+
+    Args:
+        session_id: The session identifier.
+
+    Returns:
+        List of file paths in the session workspace.
+    """
+    if not deep_agent_loaded or it_operations_deep_agent is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Deep Agent not available.",
+        )
+
+    context = it_operations_deep_agent.get_session_context(session_id)
+
+    return {
+        "success": True,
+        "session_id": session_id,
+        "files": context.get("files", []),
+        "count": len(context.get("files", [])),
+    }
+
+
+@app.get("/api/deepagent/subagents", tags=["Deep Agent"])
+async def deep_agent_subagents() -> dict:
+    """Get available subagents for the Deep Agent.
+
+    Returns:
+        List of available subagents with descriptions.
+    """
+    if not deep_agent_loaded:
+        raise HTTPException(
+            status_code=503,
+            detail="Deep Agent not available.",
+        )
+
+    subagents = [
+        {
+            "name": "incident-manager",
+            "description": "Incident lifecycle management - create, update, escalate incidents",
+        },
+        {
+            "name": "change-manager",
+            "description": "Change request validation and risk assessment",
+        },
+        {
+            "name": "problem-manager",
+            "description": "Root cause analysis and known error management",
+        },
+        {
+            "name": "asset-manager",
+            "description": "CMDB queries and CI relationship mapping",
+        },
+        {
+            "name": "sla-monitor",
+            "description": "SLA tracking and breach prediction",
+        },
+        {
+            "name": "knowledge-manager",
+            "description": "Knowledge base search and article management",
+        },
+    ]
+
+    return {
+        "success": True,
+        "subagents": subagents,
+        "count": len(subagents),
     }
 
 
