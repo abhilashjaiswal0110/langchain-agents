@@ -372,7 +372,7 @@ class ITOperationsDeepAgent:
             Returns:
                 Confirmation message.
             """
-            entry = storage.save_file(session_id, path, content)
+            storage.save_file(session_id, path, content)
             return f"File saved: {path} ({len(content)} characters)"
 
         return write_file
