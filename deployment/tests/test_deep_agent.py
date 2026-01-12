@@ -5,8 +5,6 @@ import pytest
 import tempfile
 import shutil
 import uuid
-from datetime import datetime
-from unittest.mock import patch, MagicMock
 
 # Set up mock API keys before importing app modules
 os.environ["OPENAI_API_KEY"] = "sk-test-key-for-testing"
@@ -622,7 +620,6 @@ class TestSecurityConsiderations:
     def test_session_id_sanitization(self):
         """Test that session IDs are sanitized in storage."""
         from app.deepagents.storage.persistent_backend import PersistentStorage
-        import tempfile
 
         temp_dir = tempfile.mkdtemp()
         try:
@@ -642,7 +639,6 @@ class TestSecurityConsiderations:
     def test_file_path_sanitization(self):
         """Test that file paths are sanitized against directory traversal."""
         from app.deepagents.storage.persistent_backend import PersistentStorage
-        import tempfile
 
         temp_dir = tempfile.mkdtemp()
         try:
@@ -659,7 +655,7 @@ class TestSecurityConsiderations:
 
             # Test with directory traversal attempt (/../ pattern)
             # The storage should either strip the traversal or prevent it
-            entry2 = storage.save_file(
+            storage.save_file(
                 session_id,
                 "/data/../../../etc/passwd",
                 "malicious content"

@@ -3,15 +3,12 @@
 Integrates with ServiceNow for real incident operations.
 """
 
-import os
-from datetime import datetime
 from typing import Literal
 
 from langchain_core.tools import tool
 
 # Import ServiceNow API from existing agent
 from app.agents.servicenow_agent import (
-    ServiceNowAPI,
     get_api_client,
     is_live_mode,
     INCIDENTS_DB,

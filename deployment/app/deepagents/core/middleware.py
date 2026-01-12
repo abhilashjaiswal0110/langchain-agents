@@ -7,19 +7,14 @@ Middleware provides modular capabilities to Deep Agents:
 """
 
 import uuid
-from datetime import datetime
-from typing import Any
 
 from langchain_core.tools import tool
 
 from app.deepagents.core.types import (
     Todo,
     TodoStatus,
-    FileEntry,
     SubAgentDefinition,
-    SubAgentResult,
 )
-from app.deepagents.core.state import DeepAgentState
 
 
 class TodoListMiddleware:
@@ -187,8 +182,6 @@ class FilesystemMiddleware:
 
     def _create_read_file_tool(self):
         """Create the read_file tool."""
-        max_size = self.max_file_size
-
         @tool
         def read_file(path: str) -> str:
             """Read a file from the workspace.

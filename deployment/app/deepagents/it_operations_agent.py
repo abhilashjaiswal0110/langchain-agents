@@ -4,7 +4,6 @@ This is the main Deep Agent for IT Managed Services (Atos-style).
 It coordinates specialized subagents to handle complex IT operations workflows.
 """
 
-import json
 import os
 import uuid
 from datetime import datetime
@@ -20,22 +19,13 @@ from langgraph.prebuilt import ToolNode
 from langsmith import traceable
 
 from app.deepagents.core.types import (
-    DeepAgentConfig,
     Todo,
     TodoStatus,
-    FileEntry,
-    SubAgentResult,
 )
 from app.deepagents.core.state import DeepAgentState
 from app.deepagents.subagents.definitions import (
     get_all_subagents,
     get_subagent_tools,
-    INCIDENT_AGENT,
-    CHANGE_AGENT,
-    PROBLEM_AGENT,
-    ASSET_AGENT,
-    SLA_AGENT,
-    KNOWLEDGE_AGENT,
 )
 from app.deepagents.tools import (
     # All IT Operations tools

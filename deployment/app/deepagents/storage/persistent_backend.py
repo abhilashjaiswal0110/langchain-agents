@@ -1,7 +1,6 @@
 """Persistent file-based storage backend for Deep Agent."""
 
 import json
-import os
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -72,6 +71,7 @@ class PersistentStorage(BaseStorage):
                         existing_meta = json.load(f)
                         created_at = datetime.fromisoformat(existing_meta.get("created_at", now.isoformat()))
                 except (json.JSONDecodeError, ValueError):
+                    # If existing metadata is corrupt or has invalid date format, use current timestamp.
                     pass
 
         # Write content
@@ -131,6 +131,7 @@ class PersistentStorage(BaseStorage):
                     file_type = meta.get("file_type", file_type)
                     metadata = meta.get("metadata", {})
             except (json.JSONDecodeError, ValueError):
+                # If metadata file is corrupt or has invalid format, use default values.
                 pass
 
         return FileEntry(
@@ -211,6 +212,7 @@ class PersistentStorage(BaseStorage):
                 with open(meta_path, "r", encoding="utf-8") as f:
                     existing = json.load(f)
             except json.JSONDecodeError:
+                # If the existing metadata file is corrupt, create new metadata from scratch.
                 pass
 
         existing.update(metadata)

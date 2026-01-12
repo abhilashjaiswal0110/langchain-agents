@@ -3,9 +3,6 @@
 Integrates with ServiceNow for change request operations.
 """
 
-from datetime import datetime
-from typing import Literal
-
 from langchain_core.tools import tool
 
 from app.agents.servicenow_agent import (

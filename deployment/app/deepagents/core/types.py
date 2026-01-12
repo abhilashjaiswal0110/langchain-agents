@@ -5,7 +5,7 @@ This module defines the core data structures used throughout the Deep Agents sys
 
 from datetime import datetime
 from enum import Enum
-from typing import Any, Callable, Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
