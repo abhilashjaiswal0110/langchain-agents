@@ -2,7 +2,7 @@
 
 > **Purpose**: This document serves as the authoritative knowledge source for AI agents working on this repository. It contains architectural decisions, implementation patterns, and guidelines that must be followed when making changes or enhancements.
 
-**Last Updated**: 2026-01-09 (v3.16 - IT Operations Deep Agent)
+**Last Updated**: 2026-01-12 (v3.17 - Deep Agent with Streaming & Reasoning Models)
 
 ---
 
@@ -2608,7 +2608,18 @@ LANGCHAIN_PROJECT=langchain-platform-prod
 
 ### Overview
 
-Deep Agents are advanced AI agents with planning capabilities, file-based context management, and the ability to spawn specialized subagents. The IT Operations Deep Agent is designed for enterprise IT Managed Services use cases.
+Deep Agents are advanced AI agents with planning capabilities, file-based context management, and the ability to spawn specialized subagents. The IT Operations Deep Agent is designed for enterprise IT Managed Services use cases with **production-ready streaming capabilities** and **OpenAI reasoning model support** (o1, o3, o4 series).
+
+### Key Features
+
+- **🎯 Advanced Planning**: Multi-step task decomposition with todo management
+- **📁 Context Management**: Virtual file system for maintaining context across conversations
+- **🤖 Specialized Subagents**: Six domain-specific agents for IT operations
+- **⚡ Real-time Streaming**: Server-Sent Events (SSE) for live progress updates
+- **🧠 Reasoning Model Support**: Native support for OpenAI o1/o3/o4 reasoning models
+- **💾 Persistent Storage**: File-based session storage with isolation
+- **🔧 ServiceNow Integration**: Live and simulation modes for ITSM operations
+- **📊 Progress Tracking**: Real-time visibility into agent thinking and tool usage
 
 ### Architecture
 
@@ -2638,12 +2649,35 @@ Deep Agents are advanced AI agents with planning capabilities, file-based contex
 │  └────────────────────────────────────────────────────────────────────────┘ │
 │                                    │                                          │
 │  ┌─────────────────────────────────┴──────────────────────────────────────┐ │
+│  │                      LLM Layer (Enhanced)                              │ │
+│  │  ┌───────────────────┐  ┌──────────────────────────────────────────┐  │ │
+│  │  │ Standard Models   │  │ Reasoning Models (NEW)                   │  │ │
+│  │  │ - gpt-4o          │  │ - o1-preview, o1, o1-mini                │  │ │
+│  │  │ - gpt-4o-mini     │  │ - o3, o3-mini                            │  │ │
+│  │  │ - claude-3.5      │  │ - o4, o4-mini                            │  │ │
+│  │  │ (with temperature)│  │ (temperature bypass)                     │  │ │
+│  │  └───────────────────┘  └──────────────────────────────────────────┘  │ │
+│  └────────────────────────────────────────────────────────────────────────┘ │
+│                                    │                                          │
+│  ┌─────────────────────────────────┴──────────────────────────────────────┐ │
 │  │                      Storage Backend                                   │ │
 │  │  ┌─────────────────────────────────────────────────────────────────┐  │ │
 │  │  │  Persistent Storage (File-based)                                │  │ │
 │  │  │  - Session files & todos                                        │  │ │
 │  │  │  - Context files                                                │  │ │
 │  │  │  - Metadata                                                     │  │ │
+│  │  └─────────────────────────────────────────────────────────────────┘  │ │
+│  └────────────────────────────────────────────────────────────────────────┘ │
+│                                    │                                          │
+│  ┌─────────────────────────────────┴──────────────────────────────────────┐ │
+│  │                   Streaming Layer (NEW)                                │ │
+│  │  ┌─────────────────────────────────────────────────────────────────┐  │ │
+│  │  │  Server-Sent Events (SSE) for Real-time Updates                │  │ │
+│  │  │  - thinking: Agent reasoning steps                             │  │ │
+│  │  │  - tool_call: Tool invocation progress                         │  │ │
+│  │  │  - tool_result: Tool execution results                         │  │ │
+│  │  │  - content: Final response content                             │  │ │
+│  │  │  - error: Error handling with stack traces                     │  │ │
 │  │  └─────────────────────────────────────────────────────────────────┘  │ │
 │  └────────────────────────────────────────────────────────────────────────┘ │
 └─────────────────────────────────────────────────────────────────────────────┘
@@ -2761,6 +2795,7 @@ storage = MemoryStorage()
 |----------|--------|-------------|
 | `/api/deepagent/start` | POST | Start a Deep Agent session |
 | `/api/deepagent/chat` | POST | Send message to Deep Agent |
+| `/api/deepagent/chat/stream` | POST | **Stream Deep Agent response (SSE)** |
 | `/api/deepagent/context/{session_id}` | GET | Get session context |
 | `/api/deepagent/todos/{session_id}` | GET | Get session todos |
 | `/api/deepagent/files/{session_id}` | GET | List session files |
@@ -2804,6 +2839,54 @@ Response:
 }
 ```
 
+#### Stream Agent Response (NEW)
+
+**Server-Sent Events (SSE)** endpoint for real-time progress updates:
+
+```bash
+curl -N -X POST http://localhost:8000/api/deepagent/chat/stream \
+  -H "Content-Type: application/json" \
+  -d '{
+    "session_id": "deepagent-abc123...",
+    "message": "Investigate INC0010001 and check for related incidents"
+  }'
+```
+
+**Event Stream Response:**
+```
+event: thinking
+data: {"content": "I'll investigate this incident and search for related cases..."}
+
+event: tool_call
+data: {"tool": "search_incidents", "args": {"incident_number": "INC0010001"}, "description": "Retrieving incident details"}
+
+event: tool_result
+data: {"tool": "search_incidents", "result": "Incident found: P1 - Database connectivity issue"}
+
+event: thinking
+data: {"content": "Found the incident. Now checking for similar issues in the past 7 days..."}
+
+event: tool_call
+data: {"tool": "search_incidents", "args": {"query": "database connectivity", "priority": "1"}, "description": "Searching for related P1 incidents"}
+
+event: tool_result
+data: {"tool": "search_incidents", "result": "Found 3 related incidents"}
+
+event: content
+data: {"response": "Analysis complete. INC0010001 is part of a pattern of 4 database connectivity incidents this week. I recommend creating a problem record to investigate the root cause."}
+
+event: done
+data: {"session_id": "deepagent-abc123...", "todos_updated": true, "files_updated": true}
+```
+
+**Event Types:**
+- `thinking`: Agent reasoning and planning steps
+- `tool_call`: Tool invocation with arguments and description
+- `tool_result`: Results from tool execution
+- `content`: Final response content (can be streamed in chunks)
+- `error`: Error occurred with details
+- `done`: Stream complete with metadata
+
 ### Web UI Integration
 
 The Deep Agent is available in the Web UI at `/chat`:
@@ -2826,7 +2909,32 @@ SERVICENOW_MODE=simulation  # or 'live'
 
 # Deep Agent Storage
 DEEP_AGENT_STORAGE_PATH=/app/data/deepagent_context
+
+# Deep Agent LLM Configuration (NEW)
+DEEP_AGENT_PROVIDER=openai  # Options: openai, anthropic
+DEEP_AGENT_MODEL=gpt-4o     # Standard models: gpt-4o, gpt-4o-mini, claude-3-5-sonnet-20241022
+                            # Reasoning models: o1, o1-mini, o1-preview, o3-mini, o4-mini
+                            # Note: Reasoning models automatically bypass temperature settings
+
+# Required API Keys (based on provider)
+OPENAI_API_KEY=sk-...
+ANTHROPIC_API_KEY=sk-ant-...
 ```
+
+**Model Selection Guide:**
+
+| Model Category | Models | Use Case | Temperature Support |
+|----------------|--------|----------|--------------------|
+| **Standard** | gpt-4o, gpt-4o-mini | General tasks, faster response | ✅ Yes |
+| **Reasoning** | o1, o3, o4, o1-mini, o3-mini, o4-mini | Complex analysis, planning | ❌ No (auto-bypassed) |
+| **Anthropic** | claude-3-5-sonnet-20241022 | Alternative provider | ✅ Yes |
+
+**Reasoning Model Features:**
+- Extended thinking time for complex problems
+- Superior planning and multi-step reasoning
+- Automatically detected by model name prefix
+- Temperature parameter bypassed automatically
+- Recommended for: Root cause analysis, change impact assessment, complex incident investigations
 
 ### Usage Examples
 
