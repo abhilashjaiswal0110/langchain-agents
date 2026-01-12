@@ -50,9 +50,12 @@ class PersistentStorage(BaseStorage):
         """Save a file to disk."""
         files_dir = self._get_files_dir(session_id)
 
-        # Sanitize path
-        safe_path = path.lstrip("/").replace("..", "")
-        file_path = files_dir / safe_path
+        # Build and validate path to prevent directory traversal
+        base_dir = files_dir.resolve()
+        requested_path = (files_dir / path.lstrip("/")).resolve()
+        if base_dir != requested_path and base_dir not in requested_path.parents:
+            raise ValueError(f"Invalid file path outside of session directory: {path!r}")
+        file_path = requested_path
 
         # Create parent directories
         file_path.parent.mkdir(parents=True, exist_ok=True)
