@@ -210,7 +210,7 @@ class PersistentStorage(BaseStorage):
                 with open(meta_path, "r", encoding="utf-8") as f:
                     existing = json.load(f)
             except json.JSONDecodeError:
-                # If the existing metadata file is corrupt, ignore it and rebuild from scratch.
+                # If the existing metadata file is corrupt, create new metadata from scratch.
                 pass
 
         existing.update(metadata)
