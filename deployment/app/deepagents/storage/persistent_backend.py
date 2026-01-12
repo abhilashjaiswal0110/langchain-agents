@@ -71,6 +71,7 @@ class PersistentStorage(BaseStorage):
                         existing_meta = json.load(f)
                         created_at = datetime.fromisoformat(existing_meta.get("created_at", now.isoformat()))
                 except (json.JSONDecodeError, ValueError):
+                    # If existing metadata is corrupt or has invalid date format, use current timestamp.
                     pass
 
         # Write content
@@ -130,6 +131,7 @@ class PersistentStorage(BaseStorage):
                     file_type = meta.get("file_type", file_type)
                     metadata = meta.get("metadata", {})
             except (json.JSONDecodeError, ValueError):
+                # If metadata file is corrupt or has invalid format, use default values.
                 pass
 
         return FileEntry(
