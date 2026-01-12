@@ -314,6 +314,44 @@ class TestPersistentStorage:
         assert storage.read_file(session_id, "/test.txt") is None
         assert storage.get_session_metadata(session_id) is None
 
+    def test_path_traversal_prevention_read(self):
+        """Test that path traversal attempts are blocked in read_file."""
+        from app.deepagents.storage.persistent_backend import PersistentStorage
+
+        storage = PersistentStorage(base_path=self.temp_dir)
+        session_id = "test-session"
+
+        # Test actual path traversal patterns that use .. to escape directory
+        traversal_patterns = [
+            "../../../etc/passwd",
+            "../../etc/passwd",
+            "/../../../etc/passwd",
+            "normal/../../../etc/passwd",
+        ]
+
+        for pattern in traversal_patterns:
+            with pytest.raises(ValueError, match="Invalid file path outside of session directory"):
+                storage.read_file(session_id, pattern)
+
+    def test_path_traversal_prevention_delete(self):
+        """Test that path traversal attempts are blocked in delete_file."""
+        from app.deepagents.storage.persistent_backend import PersistentStorage
+
+        storage = PersistentStorage(base_path=self.temp_dir)
+        session_id = "test-session"
+
+        # Test actual path traversal patterns that use .. to escape directory
+        traversal_patterns = [
+            "../../../etc/passwd",
+            "../../etc/passwd",
+            "/../../../etc/passwd",
+            "normal/../../../etc/passwd",
+        ]
+
+        for pattern in traversal_patterns:
+            with pytest.raises(ValueError, match="Invalid file path outside of session directory"):
+                storage.delete_file(session_id, pattern)
+
 
 class TestMemoryStorage:
     """Tests for in-memory storage backend."""

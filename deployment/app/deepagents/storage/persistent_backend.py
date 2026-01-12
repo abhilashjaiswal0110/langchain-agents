@@ -105,8 +105,13 @@ class PersistentStorage(BaseStorage):
     def read_file(self, session_id: str, path: str) -> FileEntry | None:
         """Read a file from disk."""
         files_dir = self._get_files_dir(session_id)
-        safe_path = path.lstrip("/").replace("..", "")
-        file_path = files_dir / safe_path
+
+        # Build and validate path to prevent directory traversal
+        base_dir = files_dir.resolve()
+        requested_path = (files_dir / path.lstrip("/")).resolve()
+        if base_dir != requested_path and base_dir not in requested_path.parents:
+            raise ValueError(f"Invalid file path outside of session directory: {path!r}")
+        file_path = requested_path
 
         if not file_path.exists():
             return None
@@ -145,8 +150,13 @@ class PersistentStorage(BaseStorage):
     def delete_file(self, session_id: str, path: str) -> bool:
         """Delete a file from disk."""
         files_dir = self._get_files_dir(session_id)
-        safe_path = path.lstrip("/").replace("..", "")
-        file_path = files_dir / safe_path
+
+        # Build and validate path to prevent directory traversal
+        base_dir = files_dir.resolve()
+        requested_path = (files_dir / path.lstrip("/")).resolve()
+        if base_dir != requested_path and base_dir not in requested_path.parents:
+            raise ValueError(f"Invalid file path outside of session directory: {path!r}")
+        file_path = requested_path
 
         if not file_path.exists():
             return False
