@@ -22,8 +22,6 @@ from app.deepagents.core.types import (
     SubAgentDefinition,
     Todo,
     TodoStatus,
-    FileEntry,
-    SubAgentResult,
 )
 from app.deepagents.core.state import DeepAgentState
 from app.deepagents.core.middleware import (
@@ -216,7 +214,6 @@ Model: {self.config.model}
             # Append context to the last human message
             for i in range(len(messages) - 1, -1, -1):
                 if isinstance(messages[i], HumanMessage):
-                    context_info = "\n".join(context_parts)
                     # Don't modify original, create new message
                     break
 

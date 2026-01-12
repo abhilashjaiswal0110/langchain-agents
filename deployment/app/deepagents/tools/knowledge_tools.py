@@ -4,7 +4,6 @@ Tools for searching and managing knowledge articles.
 """
 
 import uuid
-from datetime import datetime
 
 from langchain_core.tools import tool
 
