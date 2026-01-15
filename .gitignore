@@ -175,6 +175,9 @@ deployment/server_startup.log
 # Enhancement Plan (AI Agent Reference - excluded from commits)
 deployment/docs/ENHANCEMENT_PLAN.md
 
+# Doc templates directory
+/doctemplates
+
 # Temporary/data files
 nul
 deployment/nul

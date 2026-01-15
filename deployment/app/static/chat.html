@@ -990,7 +990,10 @@
             try {
                 const response = await fetch('/api/conversation/start', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'ngrok-skip-browser-warning': 'true'
+                    },
                     body: JSON.stringify({ agent_type: agentType })
                 });
 
@@ -1107,7 +1110,10 @@
             try {
                 const response = await fetch(endpoints.start, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'ngrok-skip-browser-warning': 'true'
+                    },
                     body: JSON.stringify({ user_id: 'web-user-' + Date.now() })
                 });
 
@@ -1217,7 +1223,10 @@
                 // Use fetch with streaming
                 fetch(streamEndpoint, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'ngrok-skip-browser-warning': 'true'
+                    },
                     body: JSON.stringify({
                         session_id: sessionId,
                         message: message
@@ -1400,7 +1409,9 @@
                 const baseEndpoint = currentAgent === 'sales_intelligence_deep'
                     ? '/api/sales-agent/todos'
                     : '/api/deepagent/todos';
-                const response = await fetch(`${baseEndpoint}/${sessionId}`);
+                const response = await fetch(`${baseEndpoint}/${sessionId}`, {
+                    headers: { 'ngrok-skip-browser-warning': 'true' }
+                });
                 const data = await response.json();
                 if (data.todos) {
                     updateTodoDisplay(data.todos);
@@ -1440,7 +1451,9 @@
                 const baseEndpoint = currentAgent === 'sales_intelligence_deep'
                     ? '/api/sales-agent/files'
                     : '/api/deepagent/files';
-                const response = await fetch(`${baseEndpoint}/${sessionId}`);
+                const response = await fetch(`${baseEndpoint}/${sessionId}`, {
+                    headers: { 'ngrok-skip-browser-warning': 'true' }
+                });
                 const data = await response.json();
                 if (data.files) {
                     updateFilesDisplay(data.files);
@@ -1504,7 +1517,10 @@
 
                     response = await fetch(endpoint, {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'ngrok-skip-browser-warning': 'true'
+                        },
                         body: JSON.stringify(requestBody)
                     });
                     data = await response.json();
@@ -1523,7 +1539,10 @@
                     // Use conversation API for IT support agents
                     response = await fetch('/api/conversation/chat', {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'ngrok-skip-browser-warning': 'true'
+                        },
                         body: JSON.stringify({
                             session_id: sessionId,
                             message: message
@@ -1693,6 +1712,9 @@
 
                 const response = await fetch(endpoint, {
                     method: 'POST',
+                    headers: {
+                        'ngrok-skip-browser-warning': 'true'
+                    },
                     body: formData
                 });
 
