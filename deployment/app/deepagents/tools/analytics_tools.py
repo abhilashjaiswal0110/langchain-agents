@@ -193,16 +193,12 @@ def calculate_win_probability(
     # Determine rating
     if prob_pct >= 75:
         rating = "🌟 Strong"
-        color = "green"
     elif prob_pct >= 50:
         rating = "✅ Good"
-        color = "yellow"
     elif prob_pct >= 30:
         rating = "⚠️ Moderate"
-        color = "orange"
     else:
         rating = "🔴 At Risk"
-        color = "red"
 
     output = f"""
 **Win Probability Analysis**
