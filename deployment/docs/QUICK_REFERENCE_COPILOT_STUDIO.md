@@ -2,11 +2,13 @@
 
 **Last Updated:** January 12, 2026
 
+> **⚠️ Important:** Replace `your-subdomain` in all URLs below with your actual ngrok subdomain. Get your ngrok URL by running `curl http://localhost:4040/api/tunnels` or checking the ngrok dashboard.
+
 ## 🚀 Essential Information
 
 ### Ngrok URL (Public Endpoint)
 ```
-https://unappositely-unvested-chieko.ngrok-free.dev
+https://your-subdomain.ngrok-free.dev
 ```
 
 ### API Key Location
@@ -18,7 +20,7 @@ Look for: API_KEY=your-key-here
 ### CORS Configuration
 ```
 deployment/.env
-CORS_ORIGINS=http://localhost:8000,http://localhost:3000,https://unappositely-unvested-chieko.ngrok-free.dev
+CORS_ORIGINS=http://localhost:8000,http://localhost:3000,https://your-subdomain.ngrok-free.dev
 ```
 
 ---
@@ -27,7 +29,7 @@ CORS_ORIGINS=http://localhost:8000,http://localhost:3000,https://unappositely-un
 
 ### 1. Copilot Studio Webhook (Recommended)
 
-**URL:** `https://unappositely-unvested-chieko.ngrok-free.dev/api/webhooks/copilot-studio`
+**URL:** `https://your-subdomain.ngrok-free.dev/api/webhooks/copilot-studio`
 
 **Method:** POST
 
@@ -64,7 +66,7 @@ CORS_ORIGINS=http://localhost:8000,http://localhost:3000,https://unappositely-un
 
 **Base URL Pattern:**
 ```
-https://unappositely-unvested-chieko.ngrok-free.dev/api/enterprise/{agent}/invoke
+https://your-subdomain.ngrok-free.dev/api/enterprise/{agent}/invoke
 ```
 
 **Examples:**
@@ -121,13 +123,13 @@ Body: {"session_id": "uuid", "message": "Help with password"}
 ### Test 1: Health Check
 ```powershell
 curl -H "ngrok-skip-browser-warning: true" `
-  https://unappositely-unvested-chieko.ngrok-free.dev/health
+  https://your-subdomain.ngrok-free.dev/health
 ```
 
 ### Test 2: List Agents
 ```powershell
 curl -H "ngrok-skip-browser-warning: true" `
-  https://unappositely-unvested-chieko.ngrok-free.dev/api/enterprise/agents
+  https://your-subdomain.ngrok-free.dev/api/enterprise/agents
 ```
 
 ### Test 3: Copilot Studio Webhook
@@ -141,7 +143,7 @@ $body = @{
 } | ConvertTo-Json
 
 Invoke-RestMethod `
-  -Uri "https://unappositely-unvested-chieko.ngrok-free.dev/api/webhooks/copilot-studio" `
+  -Uri "https://your-subdomain.ngrok-free.dev/api/webhooks/copilot-studio" `
   -Method POST `
   -Headers @{
       "Content-Type" = "application/json"
@@ -166,7 +168,7 @@ Invoke-RestMethod `
 **Method:** POST
 **URL:**
 ```
-https://unappositely-unvested-chieko.ngrok-free.dev/api/webhooks/copilot-studio
+https://your-subdomain.ngrok-free.dev/api/webhooks/copilot-studio
 ```
 
 **Headers (Add 3 headers):**
