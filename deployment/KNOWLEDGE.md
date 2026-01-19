@@ -618,17 +618,19 @@ __all__ = [..., "YourAgent"]
 | `/health` | GET | Health check with component status |
 | `/ready` | GET | Kubernetes readiness probe |
 
-### LangChain Endpoints (via LangServe)
+### LangServe Endpoints (API)
+
+All LangServe endpoints are prefixed with `/api/langserve/` for clean separation from UI routes.
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/chat/invoke` | POST | Chat completion |
-| `/chat/stream` | POST | Streaming chat |
-| `/chat/batch` | POST | Batch chat requests |
-| `/rag/invoke` | POST | RAG query |
-| `/rag/stream` | POST | Streaming RAG |
-| `/agent/invoke` | POST | Agent execution |
-| `/agent/stream` | POST | Streaming agent |
+| `/api/langserve/chat/invoke` | POST | Chat completion |
+| `/api/langserve/chat/stream` | POST | Streaming chat |
+| `/api/langserve/chat/batch` | POST | Batch chat requests |
+| `/api/langserve/rag/invoke` | POST | RAG query |
+| `/api/langserve/rag/stream` | POST | Streaming RAG |
+| `/api/langserve/agent/invoke` | POST | Agent execution |
+| `/api/langserve/agent/stream` | POST | Streaming agent |
 
 ### LangGraph Endpoint (Custom)
 
@@ -2102,21 +2104,78 @@ def test_endpoint_name():
 
 ## Deployment
 
+### IMPORTANT: Docker vs Local Development
+
+**You CANNOT run Docker and local development simultaneously on the same port.**
+
+The Docker container and local uvicorn server both use port 8000. Running both causes:
+- Port conflict errors
+- "Invalid or missing API key" errors (wrong server responding)
+- UI showing stale content
+
+#### Choose ONE Mode:
+
+| Mode | When to Use | Command |
+|------|-------------|---------|
+| **Local** | Active development, debugging, hot-reload | `restart_server.bat` or `make run-reload` |
+| **Docker** | Deployment, production testing, demos | `docker-compose up -d` |
+
+#### Switching Between Modes
+
+**Before switching to Local Development:**
+```bash
+# Stop Docker container first
+docker-compose down
+
+# Then start local server
+cd deployment
+restart_server.bat
+```
+
+**Before switching to Docker:**
+```bash
+# Stop local server first (Ctrl+C or kill python processes)
+taskkill /f /im python.exe  # Windows
+pkill python                 # Linux/Mac
+
+# Then start Docker
+docker-compose up -d
+```
+
 ### Local Development
 
 ```bash
 cd deployment
 cp .env.example .env
 # Edit .env with your API keys
+
+# Option 1: Use the restart script (recommended)
+restart_server.bat
+
+# Option 2: Use Make
 make run-reload
+
+# Option 3: Direct uvicorn
+.venv\Scripts\python -m uvicorn app.server:app --host 0.0.0.0 --port 8000 --reload
 ```
+
+**Verify server is running:**
+- Chat UI: http://localhost:8000/chat
+- API Docs: http://localhost:8000/docs
+- Health: http://localhost:8000/health
 
 ### Docker Deployment
 
 ```bash
+# Ensure local server is stopped first!
 cp .env.example .env
 # Edit .env with your API keys
 docker-compose up -d
+```
+
+**Check Docker logs:**
+```bash
+docker-compose logs -f
 ```
 
 ### Kubernetes

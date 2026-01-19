@@ -6,6 +6,7 @@ as REST API endpoints using LangServe with LangSmith tracing enabled.
 
 import os
 import secrets
+import time
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
@@ -22,8 +23,11 @@ from langserve import add_routes
 from pydantic import BaseModel
 from starlette.middleware.base import BaseHTTPMiddleware
 
-# Load environment variables from .env file
-load_dotenv()
+# Load environment variables from .env file (explicit path for reliability)
+_ENV_FILE = Path(__file__).parent.parent / ".env"
+_env_loaded = load_dotenv(_ENV_FILE, override=True)
+print(f"[Startup] Loading .env from: {_ENV_FILE}")
+print(f"[Startup] .env file exists: {_ENV_FILE.exists()}, loaded: {_env_loaded}")
 
 # Import AIMessage for response extraction
 from langchain_core.messages import AIMessage
@@ -106,8 +110,18 @@ API_KEY_ENABLED = os.getenv("API_KEY_ENABLED", "true").lower() == "true"
 API_KEY = os.getenv("API_KEY", "")
 API_KEY_HEADER = "X-API-Key"
 
+# Log API key configuration at startup for debugging
+print(f"[Security] API_KEY_ENABLED={API_KEY_ENABLED} (env: '{os.getenv('API_KEY_ENABLED', 'not set')}')")
+if API_KEY_ENABLED:
+    print(f"[Security] API key authentication is ENABLED - protected endpoints require X-API-Key header")
+else:
+    print(f"[Security] API key authentication is DISABLED - all endpoints are open")
+
 # Paths that don't require authentication
-PUBLIC_PATHS = {"/", "/docs", "/redoc", "/openapi.json", "/health", "/ready"}
+PUBLIC_PATHS = {"/", "/docs", "/redoc", "/openapi.json", "/health", "/ready", "/chat", "/chatui"}
+
+# API paths that use LangServe (no API key required for demo purposes)
+LANGSERVE_PREFIXES = ("/api/langserve/",)
 
 # API paths accessible from internal web UI (no API key required)
 # These are secured by same-origin policy since they're accessed from /chat
@@ -123,25 +137,41 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
     """Middleware to validate API key for protected endpoints."""
 
     async def dispatch(self, request: Request, call_next):
+        import sys
+        # Normalize path (remove trailing slash for comparison)
+        path = request.url.path.rstrip("/") or "/"
+        
+        # Debug: Log every request through middleware
+        sys.stdout.write(f"[Middleware] Processing: {path}, API_KEY_ENABLED={API_KEY_ENABLED}\n")
+        sys.stdout.flush()
+
         # Skip if API key auth is disabled
         if not API_KEY_ENABLED:
+            sys.stdout.write(f"[Middleware] Auth disabled, allowing: {path}\n")
+            sys.stdout.flush()
             return await call_next(request)
 
-        # Skip public paths
-        if request.url.path in PUBLIC_PATHS:
+        # Skip public paths (check both with and without trailing slash)
+        if path in PUBLIC_PATHS or request.url.path in PUBLIC_PATHS:
             return await call_next(request)
 
-        # Skip static files and chat UI
-        if request.url.path.startswith("/static") or request.url.path == "/chat":
+        # Skip static files
+        if path.startswith("/static"):
             return await call_next(request)
 
         # Skip UI API endpoints (accessed from internal web UI)
-        if request.url.path.startswith(UI_API_PREFIXES):
+        if path.startswith(UI_API_PREFIXES):
+            return await call_next(request)
+
+        # Skip LangServe API endpoints (demo/testing)
+        if path.startswith(LANGSERVE_PREFIXES):
             return await call_next(request)
 
         # Validate API key (use constant-time comparison to prevent timing attacks)
         api_key = request.headers.get(API_KEY_HEADER)
         if not api_key or not API_KEY or not secrets.compare_digest(api_key, API_KEY):
+            # Log the rejection for debugging
+            print(f"[Security] Rejected request to {path} - API key missing/invalid")
             return HTMLResponse(
                 content='{"detail": "Invalid or missing API key"}',
                 status_code=401,
@@ -491,9 +521,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     print("=" * 60)
     print("Platform ready!")
-    print("  - API Docs: http://localhost:8000/docs")
     print("  - Chat UI:  http://localhost:8000/chat")
-    print("  - Enterprise Agents: http://localhost:8000/docs#/Enterprise%20Agents")
+    print("  - API Docs: http://localhost:8000/docs")
+    print("  - Health:   http://localhost:8000/health")
     print("=" * 60)
 
     yield
@@ -542,12 +572,17 @@ LangSmith tracing for full observability.
 # Configure CORS (restrict origins in production, never use "*")
 _cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:8000,http://localhost:3000")
 _allowed_origins = [origin.strip() for origin in _cors_origins.split(",") if origin.strip()]
+
+# SECURITY: Reject wildcard origins in production
+if any("*" in origin for origin in _allowed_origins):
+    print("[Security] WARNING: Wildcard CORS origins detected - not recommended for production")
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_allowed_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*", API_KEY_HEADER],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization", "Accept", API_KEY_HEADER],
 )
 
 # Add API key authentication middleware
@@ -899,6 +934,20 @@ class DeepAgentContextResponse(BaseModel):
     todos: list[dict] | None = None
     files: list[str] | None = None
     metadata: dict | None = None
+    error: str | None = None
+
+
+class DeepAgentUploadResponse(BaseModel):
+    """Response from Deep Agent document upload."""
+
+    success: bool
+    document_id: str | None = None
+    filename: str | None = None
+    file_type: str | None = None
+    chunks_created: int | None = None
+    detected_language: str | None = None
+    session_id: str | None = None
+    message: str | None = None
     error: str | None = None
 
 
@@ -2464,6 +2513,152 @@ async def deep_agent_subagents() -> dict:
     }
 
 
+@app.post("/api/deepagent/upload", response_model=DeepAgentUploadResponse, tags=["Deep Agent"])
+async def deep_agent_upload(
+    file: UploadFile = File(...),
+    session_id: str = Form(...),
+) -> DeepAgentUploadResponse:
+    """Upload a document to the IT Operations Deep Agent session.
+
+    Supported file types: PDF, TXT, DOCX, DOC, PPTX, PPT, PNG, JPG, JPEG
+    Documents are processed, chunked, and indexed for RAG-based search.
+    The agent can then use search_attachments tool to query document content.
+
+    Args:
+        file: Document file to upload
+        session_id: Session ID to associate the document with
+
+    Returns:
+        Upload response with document ID and metadata
+    """
+    if not deep_agent_loaded:
+        return DeepAgentUploadResponse(
+            success=False,
+            error="Deep Agent not available. Set OPENAI_API_KEY or ANTHROPIC_API_KEY.",
+        )
+
+    from app.deepagents.tools.document_tools import process_and_store_document
+
+    # Validate file extension
+    allowed_extensions = {".pdf", ".txt", ".docx", ".doc", ".pptx", ".ppt", ".png", ".jpg", ".jpeg"}
+    file_ext = "." + file.filename.split(".")[-1].lower() if "." in file.filename else ""
+
+    if file_ext not in allowed_extensions:
+        return DeepAgentUploadResponse(
+            success=False,
+            filename=file.filename,
+            error=f"Unsupported file type: {file_ext}. Supported: {', '.join(allowed_extensions)}",
+        )
+
+    try:
+        # Read file content
+        content = await file.read()
+
+        # Process and store document
+        result = process_and_store_document(
+            content=content,
+            filename=file.filename,
+            session_id=session_id,
+        )
+
+        return DeepAgentUploadResponse(
+            success=True,
+            document_id=result["doc_id"],
+            filename=result["filename"],
+            file_type=result["file_type"],
+            chunks_created=result["chunk_count"],
+            detected_language=result["language"],
+            session_id=session_id,
+            message=f"Document '{file.filename}' uploaded successfully with {result['chunk_count']} chunks. Use search_attachments tool to query content.",
+        )
+
+    except ValueError as ve:
+        return DeepAgentUploadResponse(
+            success=False,
+            filename=file.filename,
+            session_id=session_id,
+            error=str(ve),
+        )
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return DeepAgentUploadResponse(
+            success=False,
+            filename=file.filename,
+            session_id=session_id,
+            error=f"Failed to process document: {e}",
+        )
+
+
+@app.get("/api/deepagent/attachments/{session_id}", tags=["Deep Agent"])
+async def deep_agent_list_attachments(session_id: str) -> dict:
+    """List all uploaded documents for a Deep Agent session.
+
+    Args:
+        session_id: Session identifier
+
+    Returns:
+        List of uploaded documents with metadata
+    """
+    if not deep_agent_loaded:
+        raise HTTPException(
+            status_code=503,
+            detail="Deep Agent not available.",
+        )
+
+    from app.deepagents.tools.document_tools import _document_metadata, _current_document
+
+    docs = _document_metadata.get(session_id, {})
+    current_doc_id = _current_document.get(session_id)
+
+    documents = []
+    for doc_id, meta in docs.items():
+        documents.append({
+            **meta,
+            "is_current": doc_id == current_doc_id,
+        })
+
+    return {
+        "success": True,
+        "session_id": session_id,
+        "documents": documents,
+        "count": len(documents),
+        "current_document_id": current_doc_id,
+    }
+
+
+@app.delete("/api/deepagent/attachments/{session_id}", tags=["Deep Agent"])
+async def deep_agent_clear_attachments(
+    session_id: str,
+    document_ids: str | None = None,
+) -> dict:
+    """Clear uploaded documents from a Deep Agent session.
+
+    Args:
+        session_id: Session identifier
+        document_ids: Comma-separated document IDs to clear, or None for all
+
+    Returns:
+        Confirmation of cleared documents
+    """
+    if not deep_agent_loaded:
+        raise HTTPException(
+            status_code=503,
+            detail="Deep Agent not available.",
+        )
+
+    from app.deepagents.tools.document_tools import clear_attachments
+
+    doc_ids = document_ids.split(",") if document_ids else None
+    result = clear_attachments.invoke({"session_id": session_id, "doc_ids": doc_ids})
+
+    return {
+        "success": True,
+        "session_id": session_id,
+        "message": result,
+    }
+
+
 # ============================================================================
 # Sales Intelligence Deep Agent Endpoints
 # ============================================================================
@@ -2749,6 +2944,153 @@ async def sales_agent_subagents() -> dict:
     }
 
 
+@app.post("/api/sales-agent/upload", response_model=DeepAgentUploadResponse, tags=["Sales Agent"])
+async def sales_agent_upload(
+    file: UploadFile = File(...),
+    session_id: str = Form(...),
+) -> DeepAgentUploadResponse:
+    """Upload a document to the Sales Intelligence Deep Agent session.
+
+    Supported file types: PDF, TXT, DOCX, DOC, PPTX, PPT, PNG, JPG, JPEG
+    Documents are processed, chunked, and indexed for RAG-based search.
+    The agent can then use search_attachments tool to query document content.
+    Useful for RFP documents, customer requirements, competitive intel, etc.
+
+    Args:
+        file: Document file to upload
+        session_id: Session ID to associate the document with
+
+    Returns:
+        Upload response with document ID and metadata
+    """
+    if not deep_agent_loaded:
+        return DeepAgentUploadResponse(
+            success=False,
+            error="Sales Agent not available. Set OPENAI_API_KEY or ANTHROPIC_API_KEY.",
+        )
+
+    from app.deepagents.tools.document_tools import process_and_store_document
+
+    # Validate file extension
+    allowed_extensions = {".pdf", ".txt", ".docx", ".doc", ".pptx", ".ppt", ".png", ".jpg", ".jpeg"}
+    file_ext = "." + file.filename.split(".")[-1].lower() if "." in file.filename else ""
+
+    if file_ext not in allowed_extensions:
+        return DeepAgentUploadResponse(
+            success=False,
+            filename=file.filename,
+            error=f"Unsupported file type: {file_ext}. Supported: {', '.join(allowed_extensions)}",
+        )
+
+    try:
+        # Read file content
+        content = await file.read()
+
+        # Process and store document
+        result = process_and_store_document(
+            content=content,
+            filename=file.filename,
+            session_id=session_id,
+        )
+
+        return DeepAgentUploadResponse(
+            success=True,
+            document_id=result["doc_id"],
+            filename=result["filename"],
+            file_type=result["file_type"],
+            chunks_created=result["chunk_count"],
+            detected_language=result["language"],
+            session_id=session_id,
+            message=f"Document '{file.filename}' uploaded successfully with {result['chunk_count']} chunks. Use search_attachments tool to query content.",
+        )
+
+    except ValueError as ve:
+        return DeepAgentUploadResponse(
+            success=False,
+            filename=file.filename,
+            session_id=session_id,
+            error=str(ve),
+        )
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return DeepAgentUploadResponse(
+            success=False,
+            filename=file.filename,
+            session_id=session_id,
+            error=f"Failed to process document: {e}",
+        )
+
+
+@app.get("/api/sales-agent/attachments/{session_id}", tags=["Sales Agent"])
+async def sales_agent_list_attachments(session_id: str) -> dict:
+    """List all uploaded documents for a Sales Agent session.
+
+    Args:
+        session_id: Session identifier
+
+    Returns:
+        List of uploaded documents with metadata
+    """
+    if not deep_agent_loaded:
+        raise HTTPException(
+            status_code=503,
+            detail="Sales Agent not available.",
+        )
+
+    from app.deepagents.tools.document_tools import _document_metadata, _current_document
+
+    docs = _document_metadata.get(session_id, {})
+    current_doc_id = _current_document.get(session_id)
+
+    documents = []
+    for doc_id, meta in docs.items():
+        documents.append({
+            **meta,
+            "is_current": doc_id == current_doc_id,
+        })
+
+    return {
+        "success": True,
+        "session_id": session_id,
+        "documents": documents,
+        "count": len(documents),
+        "current_document_id": current_doc_id,
+    }
+
+
+@app.delete("/api/sales-agent/attachments/{session_id}", tags=["Sales Agent"])
+async def sales_agent_clear_attachments(
+    session_id: str,
+    document_ids: str | None = None,
+) -> dict:
+    """Clear uploaded documents from a Sales Agent session.
+
+    Args:
+        session_id: Session identifier
+        document_ids: Comma-separated document IDs to clear, or None for all
+
+    Returns:
+        Confirmation of cleared documents
+    """
+    if not deep_agent_loaded:
+        raise HTTPException(
+            status_code=503,
+            detail="Sales Agent not available.",
+        )
+
+    from app.deepagents.tools.document_tools import clear_attachments
+
+    doc_ids = document_ids.split(",") if document_ids else None
+    result = clear_attachments.invoke({"session_id": session_id, "doc_ids": doc_ids})
+
+    return {
+        "success": True,
+        "session_id": session_id,
+        "message": result,
+    }
+
+
 # ============================================================================
 # Chat UI (Static Files)
 # ============================================================================
@@ -2759,15 +3101,41 @@ STATIC_DIR = Path(__file__).parent / "static"
 
 @app.get("/chat", response_class=HTMLResponse)
 async def chat_ui() -> HTMLResponse:
-    """Serve the chat UI for demos."""
+    """Serve the chat UI at /chat.
+
+    Returns the HTML with no-cache headers and dynamic timestamp to ensure
+    the latest version is always served and verifiable.
+    """
     chat_file = STATIC_DIR / "chat.html"
     if chat_file.exists():
-        return HTMLResponse(content=chat_file.read_text(encoding="utf-8"))
+        # Read file fresh every time (no caching)
+        html_content = chat_file.read_text(encoding="utf-8")
+
+        # Inject server timestamp for cache verification (invisible to user)
+        server_timestamp = f"<!-- Server-rendered: {time.time()} -->\n"
+        html_content = server_timestamp + html_content
+
+        return HTMLResponse(
+            content=html_content,
+            headers={
+                "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0",
+                "Pragma": "no-cache",
+                "Expires": "0",
+                "X-Content-Type-Options": "nosniff",
+                "ETag": f'"{int(time.time())}"',
+            },
+        )
 
     return HTMLResponse(
         content="<h1>Chat UI not found</h1><p>Please ensure app/static/chat.html exists.</p>",
         status_code=404,
     )
+
+
+@app.get("/chatui")
+async def chatui_redirect() -> RedirectResponse:
+    """Redirect legacy /chatui to /chat for backwards compatibility."""
+    return RedirectResponse(url="/chat", status_code=301)
 
 
 # Mount static files if directory exists
@@ -2780,7 +3148,13 @@ if STATIC_DIR.exists():
 # ============================================================================
 
 def setup_langchain_routes() -> None:
-    """Set up LangServe routes for LangChain chains."""
+    """Set up LangServe routes for LangChain chains.
+
+    API routes are prefixed with /api/langserve/ for clean separation:
+    - /api/langserve/chat/invoke, /stream, /batch
+    - /api/langserve/rag/invoke, /stream, /batch
+    - /api/langserve/agent/invoke, /stream
+    """
     if not chains_loaded:
         return
 
@@ -2788,7 +3162,7 @@ def setup_langchain_routes() -> None:
     add_routes(
         app,
         chat_chain,
-        path="/chat",
+        path="/api/langserve/chat",
         enabled_endpoints=["invoke", "stream", "batch"],
     )
 
@@ -2796,7 +3170,7 @@ def setup_langchain_routes() -> None:
     add_routes(
         app,
         rag_chain,
-        path="/rag",
+        path="/api/langserve/rag",
         enabled_endpoints=["invoke", "stream", "batch"],
     )
 
@@ -2804,7 +3178,7 @@ def setup_langchain_routes() -> None:
     add_routes(
         app,
         agent_executor,
-        path="/agent",
+        path="/api/langserve/agent",
         enabled_endpoints=["invoke", "stream"],
     )
 
