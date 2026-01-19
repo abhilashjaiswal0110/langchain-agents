@@ -1,9 +1,13 @@
-"""IT Operations Tools for Deep Agents.
+"""Deep Agents Tools Module.
 
-This module provides specialized tools for IT Managed Services operations,
-integrating with ServiceNow for real ITSM data.
+This module provides specialized tools for Deep Agents including:
+- IT Managed Services operations (integrating with ServiceNow)
+- Sales & Pre-Sales Intelligence (CRM, proposals, pricing, analytics)
 """
 
+# =============================================================================
+# IT Operations Tools
+# =============================================================================
 from app.deepagents.tools.incident_tools import (
     search_incidents,
     get_incident_details,
@@ -43,7 +47,47 @@ from app.deepagents.tools.knowledge_tools import (
     suggest_kb_articles,
 )
 
+# =============================================================================
+# Sales & Pre-Sales Intelligence Tools
+# =============================================================================
+from app.deepagents.tools.crm_tools import (
+    search_opportunities,
+    get_deal_details,
+    update_opportunity_stage,
+    get_customer_history,
+    get_pipeline_summary,
+)
+from app.deepagents.tools.proposal_tools import (
+    search_rfp_templates,
+    get_template_details,
+    extract_requirements,
+    draft_proposal_section,
+    generate_executive_summary,
+    search_past_proposals,
+)
+from app.deepagents.tools.competitor_tools import (
+    get_competitive_analysis,
+    compare_solutions,
+    suggest_differentiators,
+    get_objection_handler,
+)
+from app.deepagents.tools.pricing_tools import (
+    calculate_pricing,
+    analyze_margin,
+    generate_pricing_options,
+    get_pricing_model_recommendation,
+)
+from app.deepagents.tools.analytics_tools import (
+    calculate_win_probability,
+    assess_deal_risk,
+    get_similar_deals,
+    get_sales_performance_summary,
+)
+
 __all__ = [
+    # ==========================================================================
+    # IT Operations Tools
+    # ==========================================================================
     # Incident tools
     "search_incidents",
     "get_incident_details",
@@ -76,4 +120,35 @@ __all__ = [
     "get_kb_article",
     "create_kb_article",
     "suggest_kb_articles",
+    # ==========================================================================
+    # Sales & Pre-Sales Intelligence Tools
+    # ==========================================================================
+    # CRM tools
+    "search_opportunities",
+    "get_deal_details",
+    "update_opportunity_stage",
+    "get_customer_history",
+    "get_pipeline_summary",
+    # Proposal tools
+    "search_rfp_templates",
+    "get_template_details",
+    "extract_requirements",
+    "draft_proposal_section",
+    "generate_executive_summary",
+    "search_past_proposals",
+    # Competitor tools
+    "get_competitive_analysis",
+    "compare_solutions",
+    "suggest_differentiators",
+    "get_objection_handler",
+    # Pricing tools
+    "calculate_pricing",
+    "analyze_margin",
+    "generate_pricing_options",
+    "get_pricing_model_recommendation",
+    # Analytics tools
+    "calculate_win_probability",
+    "assess_deal_risk",
+    "get_similar_deals",
+    "get_sales_performance_summary",
 ]

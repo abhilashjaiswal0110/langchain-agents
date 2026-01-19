@@ -675,6 +675,7 @@
                     <option value="">Select an agent...</option>
                     <optgroup label="Deep Agents">
                         <option value="it_operations_deep">IT Operations Deep Agent</option>
+                        <option value="sales_intelligence_deep">Sales Intelligence Deep Agent</option>
                     </optgroup>
                     <optgroup label="IT Support">
                         <option value="it_helpdesk">IT Helpdesk</option>
@@ -717,6 +718,10 @@
                             <div class="agent-card" onclick="startDeepAgentSession('it_operations_deep')" style="border-color: var(--primary); background: #eff6ff;">
                                 <h3>IT Ops Deep Agent</h3>
                                 <p>Planning, multi-domain ITSM with task tracking</p>
+                            </div>
+                            <div class="agent-card" onclick="startDeepAgentSession('sales_intelligence_deep')" style="border-color: #22c55e; background: #f0fdf4;">
+                                <h3>Sales Intelligence</h3>
+                                <p>Deal qualification, RFP, pricing, competitive analysis</p>
                             </div>
                             <div class="agent-card" onclick="startSession('it_helpdesk')">
                                 <h3>IT Helpdesk</h3>
@@ -888,6 +893,13 @@
                 { text: 'Review Changes', action: 'Review pending change requests and assess risk' },
                 { text: 'CMDB Check', action: 'Check CMDB health and identify gaps' }
             ],
+            'sales_intelligence_deep': [
+                { text: 'Search Opportunities', action: 'Search for all cloud-related opportunities in the pipeline' },
+                { text: 'Win Probability', action: 'Calculate win probability for the TechCorp Cloud Migration deal' },
+                { text: 'Competitive Analysis', action: 'Get competitive analysis for Accenture' },
+                { text: 'Draft Proposal', action: 'Draft an executive summary for a $2.5M cloud migration proposal' },
+                { text: 'Calculate Pricing', action: 'Calculate pricing for managed services with 6 consultants for 12 months' }
+            ],
             'it_helpdesk': [
                 { text: 'Reset Password', action: 'I need to reset my password' },
                 { text: 'VPN Issues', action: 'My VPN is not connecting' },
@@ -955,7 +967,7 @@
         // Event Listeners
         agentSelect.addEventListener('change', (e) => {
             if (e.target.value) {
-                if (e.target.value === 'it_operations_deep') {
+                if (e.target.value === 'it_operations_deep' || e.target.value === 'sales_intelligence_deep') {
                     startDeepAgentSession(e.target.value);
                 } else if (enterpriseEndpoints[e.target.value]) {
                     startEnterpriseAgent(e.target.value);
@@ -978,7 +990,10 @@
             try {
                 const response = await fetch('/api/conversation/start', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'ngrok-skip-browser-warning': 'true'
+                    },
                     body: JSON.stringify({ agent_type: agentType })
                 });
 
@@ -1062,12 +1077,43 @@
             addMessage(welcomeMessages[agentType] || 'Hello! How can I help you today?', 'assistant');
         }
 
+        // Deep Agent API endpoints mapping
+        const deepAgentEndpoints = {
+            'it_operations_deep': {
+                start: '/api/deepagent/start',
+                chat: '/api/deepagent/chat',
+                stream: '/api/deepagent/chat/stream',
+                context: '/api/deepagent/context',
+                subagents: '/api/deepagent/subagents',
+                name: 'IT Operations Deep Agent',
+                welcome: 'Hello! I\'m your IT Operations Deep Agent. I can help with complex IT tasks including incident analysis, change management, problem investigation, CMDB queries, and SLA monitoring. I break down complex tasks and coordinate specialized subagents. What can I help you with today?'
+            },
+            'sales_intelligence_deep': {
+                start: '/api/sales-agent/start',
+                chat: '/api/sales-agent/chat',
+                stream: '/api/sales-agent/chat/stream',
+                context: '/api/sales-agent/context',
+                subagents: '/api/sales-agent/subagents',
+                name: 'Sales Intelligence Deep Agent',
+                welcome: 'Hello! I\'m your Sales Intelligence Deep Agent. I can help with deal qualification (BANT/MEDDIC), RFP/RFI responses, solution mapping, competitive analysis, pricing optimization, and win probability assessment. What sales challenge can I help you with today?'
+            }
+        };
+
         // Start Deep Agent Session
         async function startDeepAgentSession(agentType) {
+            const endpoints = deepAgentEndpoints[agentType];
+            if (!endpoints) {
+                alert('Unknown deep agent type: ' + agentType);
+                return;
+            }
+
             try {
-                const response = await fetch('/api/deepagent/start', {
+                const response = await fetch(endpoints.start, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'ngrok-skip-browser-warning': 'true'
+                    },
                     body: JSON.stringify({ user_id: 'web-user-' + Date.now() })
                 });
 
@@ -1095,7 +1141,7 @@
                     statusBadge.className = 'status-badge connected';
                     statusBadge.innerHTML = '<span class="status-dot green"></span> Connected';
 
-                    sessionInfo.textContent = `Session: ${sessionId.slice(0, 8)}... | Agent: IT Operations Deep Agent`;
+                    sessionInfo.textContent = `Session: ${sessionId.slice(0, 8)}... | Agent: ${endpoints.name}`;
 
                     // Update quick actions
                     updateQuickActions(agentType);
@@ -1103,8 +1149,11 @@
                     // Show Deep Agent panels
                     showDeepAgentPanels(true);
 
+                    // Update subagents panel based on agent type
+                    updateSubagentsPanel(agentType);
+
                     // Add welcome message
-                    addMessage(data.welcome_message || data.message || 'Hello! I\'m your IT Operations Deep Agent. I can help with complex IT tasks including incident analysis, change management, problem investigation, CMDB queries, and SLA monitoring. I break down complex tasks and coordinate specialized subagents. What can I help you with today?', 'assistant');
+                    addMessage(data.welcome_message || data.message || endpoints.welcome, 'assistant');
 
                     // Start polling for todos
                     startTodoPolling();
@@ -1114,6 +1163,29 @@
             } catch (error) {
                 console.error('Error starting Deep Agent session:', error);
                 alert('Failed to connect to Deep Agent server');
+            }
+        }
+
+        // Update subagents panel based on agent type
+        function updateSubagentsPanel(agentType) {
+            const subagentsList = document.getElementById('subagentsList');
+            if (agentType === 'sales_intelligence_deep') {
+                subagentsList.innerHTML = `
+                    <span class="subagent-badge" style="background: #dcfce7; color: #166534;">Deal Qualifier</span>
+                    <span class="subagent-badge" style="background: #dbeafe; color: #1e40af;">Solution Architect</span>
+                    <span class="subagent-badge" style="background: #fef3c7; color: #92400e;">Proposal Writer</span>
+                    <span class="subagent-badge" style="background: #fce7f3; color: #9d174d;">Pricing Analyst</span>
+                    <span class="subagent-badge" style="background: #e0e7ff; color: #3730a3;">Competitive Strategist</span>
+                `;
+            } else {
+                subagentsList.innerHTML = `
+                    <span class="subagent-badge">Incident</span>
+                    <span class="subagent-badge">Change</span>
+                    <span class="subagent-badge">Problem</span>
+                    <span class="subagent-badge">Asset</span>
+                    <span class="subagent-badge">SLA</span>
+                    <span class="subagent-badge">Knowledge</span>
+                `;
             }
         }
 
@@ -1144,10 +1216,17 @@
                 let receivedComplete = false;
                 let lastResponse = '';
 
+                // Get the correct stream endpoint based on agent type
+                const endpoints = deepAgentEndpoints[currentAgent] || deepAgentEndpoints['it_operations_deep'];
+                const streamEndpoint = endpoints.stream;
+
                 // Use fetch with streaming
-                fetch('/api/deepagent/chat/stream', {
+                fetch(streamEndpoint, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'ngrok-skip-browser-warning': 'true'
+                    },
                     body: JSON.stringify({
                         session_id: sessionId,
                         message: message
@@ -1326,7 +1405,13 @@
         async function refreshTodos() {
             if (!sessionId) return;
             try {
-                const response = await fetch(`/api/deepagent/todos/${sessionId}`);
+                // Get the correct endpoint based on agent type
+                const baseEndpoint = currentAgent === 'sales_intelligence_deep'
+                    ? '/api/sales-agent/todos'
+                    : '/api/deepagent/todos';
+                const response = await fetch(`${baseEndpoint}/${sessionId}`, {
+                    headers: { 'ngrok-skip-browser-warning': 'true' }
+                });
                 const data = await response.json();
                 if (data.todos) {
                     updateTodoDisplay(data.todos);
@@ -1362,7 +1447,13 @@
         async function refreshFiles() {
             if (!sessionId) return;
             try {
-                const response = await fetch(`/api/deepagent/files/${sessionId}`);
+                // Get the correct endpoint based on agent type
+                const baseEndpoint = currentAgent === 'sales_intelligence_deep'
+                    ? '/api/sales-agent/files'
+                    : '/api/deepagent/files';
+                const response = await fetch(`${baseEndpoint}/${sessionId}`, {
+                    headers: { 'ngrok-skip-browser-warning': 'true' }
+                });
                 const data = await response.json();
                 if (data.files) {
                     updateFilesDisplay(data.files);
@@ -1426,7 +1517,10 @@
 
                     response = await fetch(endpoint, {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'ngrok-skip-browser-warning': 'true'
+                        },
                         body: JSON.stringify(requestBody)
                     });
                     data = await response.json();
@@ -1445,7 +1539,10 @@
                     // Use conversation API for IT support agents
                     response = await fetch('/api/conversation/chat', {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'ngrok-skip-browser-warning': 'true'
+                        },
                         body: JSON.stringify({
                             session_id: sessionId,
                             message: message
@@ -1615,6 +1712,9 @@
 
                 const response = await fetch(endpoint, {
                     method: 'POST',
+                    headers: {
+                        'ngrok-skip-browser-warning': 'true'
+                    },
                     body: formData
                 });
 

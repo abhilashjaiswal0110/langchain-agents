@@ -114,6 +114,7 @@ PUBLIC_PATHS = {"/", "/docs", "/redoc", "/openapi.json", "/health", "/ready"}
 UI_API_PREFIXES = (
     "/api/conversation",
     "/api/deepagent",
+    "/api/sales-agent",
     "/api/enterprise",
 )
 
@@ -179,6 +180,7 @@ document_intelligence_agent = None
 
 # Deep Agent
 it_operations_deep_agent = None
+sales_intelligence_deep_agent = None
 
 
 def load_chains() -> bool:
@@ -380,7 +382,7 @@ def load_deep_agent() -> bool:
     Returns:
         True if Deep Agent loaded successfully, False otherwise.
     """
-    global deep_agent_loaded, it_operations_deep_agent
+    global deep_agent_loaded, it_operations_deep_agent, sales_intelligence_deep_agent
 
     has_openai = bool(os.getenv("OPENAI_API_KEY"))
     has_anthropic = bool(os.getenv("ANTHROPIC_API_KEY"))
@@ -391,6 +393,7 @@ def load_deep_agent() -> bool:
 
     try:
         from app.deepagents import create_it_operations_agent
+        from app.deepagents.sales_intelligence_agent import create_sales_intelligence_agent
 
         # Get model configuration from environment
         provider = os.getenv("DEEP_AGENT_PROVIDER", "auto")
@@ -401,11 +404,19 @@ def load_deep_agent() -> bool:
             model_name=model_name,
             storage_path="./data/deepagent_context",
         )
+
+        sales_intelligence_deep_agent = create_sales_intelligence_agent(
+            model_provider=provider,
+            model_name=model_name,
+            storage_path="./data/deepagent_context",
+        )
+
         deep_agent_loaded = True
 
         # Log model info
         model_info = model_name or "default"
-        print(f"[DEBUG] Deep Agent using provider={provider}, model={model_info}")
+        print(f"[DEBUG] Deep Agents using provider={provider}, model={model_info}")
+        print(f"[DEBUG] Loaded: IT Operations, Sales Intelligence")
 
         return True
     except Exception as e:
@@ -2443,6 +2454,291 @@ async def deep_agent_subagents() -> dict:
         {
             "name": "knowledge-manager",
             "description": "Knowledge base search and article management",
+        },
+    ]
+
+    return {
+        "success": True,
+        "subagents": subagents,
+        "count": len(subagents),
+    }
+
+
+# ============================================================================
+# Sales Intelligence Deep Agent Endpoints
+# ============================================================================
+
+@app.post("/api/sales-agent/start", response_model=DeepAgentStartResponse, tags=["Sales Agent"])
+async def sales_agent_start(request: DeepAgentStartRequest) -> DeepAgentStartResponse:
+    """Start a new Sales Intelligence Deep Agent session.
+
+    The Sales Intelligence Deep Agent assists with deal qualification,
+    RFP/RFI responses, solution mapping, competitive positioning,
+    and pricing optimization.
+
+    Returns:
+        Session ID and welcome message.
+    """
+    if not deep_agent_loaded or sales_intelligence_deep_agent is None:
+        return DeepAgentStartResponse(
+            success=False,
+            error="Sales Agent not available. Set OPENAI_API_KEY or ANTHROPIC_API_KEY.",
+        )
+
+    import uuid
+    session_id = str(uuid.uuid4())
+
+    return DeepAgentStartResponse(
+        success=True,
+        session_id=session_id,
+        message="Sales Intelligence Deep Agent session started. I can help with deal qualification, RFP responses, solution mapping, competitive analysis, and pricing optimization.",
+    )
+
+
+@app.post("/api/sales-agent/chat", response_model=DeepAgentChatResponse, tags=["Sales Agent"])
+async def sales_agent_chat(request: DeepAgentChatRequest) -> DeepAgentChatResponse:
+    """Chat with the Sales Intelligence Deep Agent.
+
+    The Deep Agent will:
+    1. Qualify deals using BANT/MEDDIC frameworks
+    2. Draft RFP/RFI responses using templates
+    3. Analyze competitors and develop win strategies
+    4. Calculate pricing with margin analysis
+    5. Assess win probability and deal risks
+
+    Args:
+        request: Chat message and optional session ID.
+
+    Returns:
+        Agent response with todos, files, and tool calls.
+    """
+    if not deep_agent_loaded or sales_intelligence_deep_agent is None:
+        return DeepAgentChatResponse(
+            success=False,
+            error="Sales Agent not available. Set OPENAI_API_KEY or ANTHROPIC_API_KEY.",
+        )
+
+    try:
+        result = await sales_intelligence_deep_agent.achat(
+            message=request.message,
+            session_id=request.session_id,
+            user_id=request.user_id,
+        )
+
+        return DeepAgentChatResponse(
+            success=True,
+            response=result.get("response"),
+            session_id=result.get("session_id"),
+            todos=result.get("todos"),
+            files=result.get("files"),
+            tool_calls=result.get("tool_calls"),
+            iteration_count=result.get("iteration_count"),
+        )
+    except Exception as e:
+        return DeepAgentChatResponse(
+            success=False,
+            session_id=request.session_id,
+            error=str(e),
+        )
+
+
+@app.post("/api/sales-agent/chat/stream", tags=["Sales Agent"])
+async def sales_agent_chat_stream(request: DeepAgentChatRequest):
+    """Stream chat with the Sales Intelligence Deep Agent.
+
+    Uses Server-Sent Events (SSE) to stream:
+    - thinking: Agent's reasoning steps
+    - tool_start: When a tool is being called
+    - tool_result: Tool execution results
+    - todo_update: Todo list changes
+    - token: Streaming response tokens
+    - complete: Final response with all context
+
+    Args:
+        request: Chat message and session ID.
+
+    Returns:
+        SSE stream of events.
+    """
+    import json
+    import traceback
+
+    def serialize_event(event: dict) -> str:
+        """Serialize event to JSON, handling datetime and other types."""
+        def default_serializer(obj):
+            if hasattr(obj, "isoformat"):
+                return obj.isoformat()
+            if hasattr(obj, "model_dump"):
+                return obj.model_dump()
+            if hasattr(obj, "__dict__"):
+                return str(obj)
+            return str(obj)
+        return json.dumps(event, default=default_serializer)
+
+    async def event_generator():
+        if not deep_agent_loaded or sales_intelligence_deep_agent is None:
+            yield f"data: {serialize_event({'type': 'error', 'data': {'error': 'Sales Agent not available'}})}\n\n"
+            return
+
+        try:
+            print(f"[DEBUG] Starting Sales Agent stream for session: {request.session_id}")
+            async for event in sales_intelligence_deep_agent.astream_chat(
+                message=request.message,
+                session_id=request.session_id,
+                user_id=request.user_id,
+            ):
+                try:
+                    yield f"data: {serialize_event(event)}\n\n"
+                except Exception as serialize_err:
+                    print(f"[ERROR] Failed to serialize event: {serialize_err}")
+                    yield f"data: {serialize_event({'type': 'error', 'data': {'error': f'Serialization error: {serialize_err}'}})}\n\n"
+            print(f"[DEBUG] Sales Agent stream completed for session: {request.session_id}")
+        except GeneratorExit:
+            print(f"[DEBUG] Client disconnected from Sales Agent stream: {request.session_id}")
+        except Exception as e:
+            print(f"[ERROR] Sales Agent stream error for session {request.session_id}: {e}")
+            import traceback
+            traceback.print_exc()
+            yield f"data: {serialize_event({'type': 'error', 'data': {'error': str(e)}})}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@app.get("/api/sales-agent/context/{session_id}", response_model=DeepAgentContextResponse, tags=["Sales Agent"])
+async def sales_agent_context(session_id: str) -> DeepAgentContextResponse:
+    """Get context for a Sales Agent session.
+
+    Args:
+        session_id: Session identifier.
+
+    Returns:
+        Session context including todos and files.
+    """
+    if not deep_agent_loaded or sales_intelligence_deep_agent is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Sales Agent not available.",
+        )
+
+    try:
+        context = sales_intelligence_deep_agent.get_session_context(session_id)
+
+        return DeepAgentContextResponse(
+            success=True,
+            session_id=session_id,
+            todos=context.get("todos", []),
+            files=context.get("files", []),
+            metadata=context.get("metadata"),
+        )
+    except Exception as e:
+        return DeepAgentContextResponse(
+            success=False,
+            session_id=session_id,
+            error=str(e),
+        )
+
+
+@app.get("/api/sales-agent/todos/{session_id}", tags=["Sales Agent"])
+async def sales_agent_todos(session_id: str) -> dict:
+    """Get the todo list for a Sales Agent session.
+
+    Args:
+        session_id: The session identifier.
+
+    Returns:
+        List of todos with their status.
+    """
+    if not deep_agent_loaded or sales_intelligence_deep_agent is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Sales Agent not available.",
+        )
+
+    context = sales_intelligence_deep_agent.get_session_context(session_id)
+    todos = context.get("todos", [])
+
+    summary = {
+        "total": len(todos),
+        "pending": len([t for t in todos if t.get("status") == "pending"]),
+        "in_progress": len([t for t in todos if t.get("status") == "in_progress"]),
+        "completed": len([t for t in todos if t.get("status") == "completed"]),
+    }
+
+    return {
+        "success": True,
+        "session_id": session_id,
+        "todos": todos,
+        "summary": summary,
+    }
+
+
+@app.get("/api/sales-agent/files/{session_id}", tags=["Sales Agent"])
+async def sales_agent_files(session_id: str) -> dict:
+    """Get the workspace files for a Sales Agent session.
+
+    Args:
+        session_id: The session identifier.
+
+    Returns:
+        List of file paths in the session workspace.
+    """
+    if not deep_agent_loaded or sales_intelligence_deep_agent is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Sales Agent not available.",
+        )
+
+    context = sales_intelligence_deep_agent.get_session_context(session_id)
+
+    return {
+        "success": True,
+        "session_id": session_id,
+        "files": context.get("files", []),
+        "count": len(context.get("files", [])),
+    }
+
+
+@app.get("/api/sales-agent/subagents", tags=["Sales Agent"])
+async def sales_agent_subagents() -> dict:
+    """Get available subagents for the Sales Intelligence Agent.
+
+    Returns:
+        List of available subagents with descriptions.
+    """
+    if not deep_agent_loaded:
+        raise HTTPException(
+            status_code=503,
+            detail="Sales Agent not available.",
+        )
+
+    subagents = [
+        {
+            "name": "deal-qualifier",
+            "description": "Lead qualification using BANT/MEDDIC frameworks",
+        },
+        {
+            "name": "solution-architect",
+            "description": "Requirement mapping and solution design by business line",
+        },
+        {
+            "name": "proposal-writer",
+            "description": "RFP/RFI response drafting and executive summaries",
+        },
+        {
+            "name": "pricing-analyst",
+            "description": "Pricing strategy, margin analysis, and commercial modeling",
+        },
+        {
+            "name": "competitive-strategist",
+            "description": "Competitive positioning and objection handling",
         },
     ]
 
