@@ -4,7 +4,6 @@ This is the main Deep Agent for IT Managed Services (Atos-style).
 It coordinates specialized subagents to handle complex IT operations workflows.
 """
 
-import json
 import os
 import uuid
 from datetime import datetime
@@ -20,22 +19,13 @@ from langgraph.prebuilt import ToolNode
 from langsmith import traceable
 
 from app.deepagents.core.types import (
-    DeepAgentConfig,
     Todo,
     TodoStatus,
-    FileEntry,
-    SubAgentResult,
 )
 from app.deepagents.core.state import DeepAgentState
 from app.deepagents.subagents.definitions import (
     get_all_subagents,
     get_subagent_tools,
-    INCIDENT_AGENT,
-    CHANGE_AGENT,
-    PROBLEM_AGENT,
-    ASSET_AGENT,
-    SLA_AGENT,
-    KNOWLEDGE_AGENT,
 )
 from app.deepagents.tools import (
     # All IT Operations tools
@@ -479,27 +469,29 @@ class ITOperationsDeepAgent:
 
                 # If tool calls, execute them
                 if hasattr(response, "tool_calls") and response.tool_calls:
-                    tool_results = []
+                    tool_results = {}
                     for tool_call in response.tool_calls:
                         tool_name = tool_call["name"]
                         tool_args = tool_call["args"]
+                        tool_call_id = tool_call["id"]
 
                         # Find and execute the tool
                         for t in tools:
                             if t.name == tool_name:
                                 result = t.invoke(tool_args)
-                                tool_results.append(f"[{tool_name}]: {result}")
+                                tool_results[tool_call_id] = result
                                 break
 
                     if tool_results:
                         # Get final response with tool results
                         messages.append(response)
-                        for i, tc in enumerate(response.tool_calls):
-                            from langchain_core.messages import ToolMessage
-                            messages.append(ToolMessage(
-                                content=tool_results[i].split("]: ", 1)[1],
-                                tool_call_id=tc["id"],
-                            ))
+                        from langchain_core.messages import ToolMessage
+                        for tc in response.tool_calls:
+                            if tc["id"] in tool_results:
+                                messages.append(ToolMessage(
+                                    content=str(tool_results[tc["id"]]),
+                                    tool_call_id=tc["id"],
+                                ))
 
                         final_response = llm.invoke(messages)
                         return f"**[Subagent: {subagent_type}]**\n\n{final_response.content}"

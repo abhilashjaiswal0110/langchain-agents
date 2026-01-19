@@ -1,7 +1,6 @@
 """Persistent file-based storage backend for Deep Agent."""
 
 import json
-import os
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -72,6 +71,7 @@ class PersistentStorage(BaseStorage):
                         existing_meta = json.load(f)
                         created_at = datetime.fromisoformat(existing_meta.get("created_at", now.isoformat()))
                 except (json.JSONDecodeError, ValueError):
+                    # If existing metadata is corrupt or has invalid date format, use current timestamp.
                     pass
 
         # Write content
@@ -105,8 +105,13 @@ class PersistentStorage(BaseStorage):
     def read_file(self, session_id: str, path: str) -> FileEntry | None:
         """Read a file from disk."""
         files_dir = self._get_files_dir(session_id)
-        safe_path = path.lstrip("/").replace("..", "")
-        file_path = files_dir / safe_path
+
+        # Build and validate path to prevent directory traversal
+        base_dir = files_dir.resolve()
+        requested_path = (files_dir / path.lstrip("/")).resolve()
+        if base_dir != requested_path and base_dir not in requested_path.parents:
+            raise ValueError(f"Invalid file path outside of session directory: {path!r}")
+        file_path = requested_path
 
         if not file_path.exists():
             return None
@@ -131,6 +136,7 @@ class PersistentStorage(BaseStorage):
                     file_type = meta.get("file_type", file_type)
                     metadata = meta.get("metadata", {})
             except (json.JSONDecodeError, ValueError):
+                # If metadata file is corrupt or has invalid format, use default values.
                 pass
 
         return FileEntry(
@@ -145,8 +151,13 @@ class PersistentStorage(BaseStorage):
     def delete_file(self, session_id: str, path: str) -> bool:
         """Delete a file from disk."""
         files_dir = self._get_files_dir(session_id)
-        safe_path = path.lstrip("/").replace("..", "")
-        file_path = files_dir / safe_path
+
+        # Build and validate path to prevent directory traversal
+        base_dir = files_dir.resolve()
+        requested_path = (files_dir / path.lstrip("/")).resolve()
+        if base_dir != requested_path and base_dir not in requested_path.parents:
+            raise ValueError(f"Invalid file path outside of session directory: {path!r}")
+        file_path = requested_path
 
         if not file_path.exists():
             return False
@@ -211,6 +222,7 @@ class PersistentStorage(BaseStorage):
                 with open(meta_path, "r", encoding="utf-8") as f:
                     existing = json.load(f)
             except json.JSONDecodeError:
+                # If the existing metadata file is corrupt, create new metadata from scratch.
                 pass
 
         existing.update(metadata)

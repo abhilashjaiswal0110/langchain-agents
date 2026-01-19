@@ -3,8 +3,6 @@
 Tools for querying and managing Configuration Items.
 """
 
-from typing import Literal
-
 from langchain_core.tools import tool
 
 from app.agents.servicenow_agent import (

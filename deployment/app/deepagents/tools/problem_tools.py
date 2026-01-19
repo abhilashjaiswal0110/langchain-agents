@@ -4,7 +4,6 @@ Tools for root cause analysis and problem record management.
 """
 
 import uuid
-from datetime import datetime
 from typing import Literal
 
 from langchain_core.tools import tool

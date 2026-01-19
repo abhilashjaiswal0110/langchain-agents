@@ -5,8 +5,6 @@ import pytest
 import tempfile
 import shutil
 import uuid
-from datetime import datetime
-from unittest.mock import patch, MagicMock
 
 # Set up mock API keys before importing app modules
 os.environ["OPENAI_API_KEY"] = "sk-test-key-for-testing"
@@ -313,6 +311,44 @@ class TestPersistentStorage:
 
         assert storage.read_file(session_id, "/test.txt") is None
         assert storage.get_session_metadata(session_id) is None
+
+    def test_path_traversal_prevention_read(self):
+        """Test that path traversal attempts are blocked in read_file."""
+        from app.deepagents.storage.persistent_backend import PersistentStorage
+
+        storage = PersistentStorage(base_path=self.temp_dir)
+        session_id = "test-session"
+
+        # Test actual path traversal patterns that use .. to escape directory
+        traversal_patterns = [
+            "../../../etc/passwd",
+            "../../etc/passwd",
+            "/../../../etc/passwd",
+            "normal/../../../etc/passwd",
+        ]
+
+        for pattern in traversal_patterns:
+            with pytest.raises(ValueError, match="Invalid file path outside of session directory"):
+                storage.read_file(session_id, pattern)
+
+    def test_path_traversal_prevention_delete(self):
+        """Test that path traversal attempts are blocked in delete_file."""
+        from app.deepagents.storage.persistent_backend import PersistentStorage
+
+        storage = PersistentStorage(base_path=self.temp_dir)
+        session_id = "test-session"
+
+        # Test actual path traversal patterns that use .. to escape directory
+        traversal_patterns = [
+            "../../../etc/passwd",
+            "../../etc/passwd",
+            "/../../../etc/passwd",
+            "normal/../../../etc/passwd",
+        ]
+
+        for pattern in traversal_patterns:
+            with pytest.raises(ValueError, match="Invalid file path outside of session directory"):
+                storage.delete_file(session_id, pattern)
 
 
 class TestMemoryStorage:
@@ -622,7 +658,6 @@ class TestSecurityConsiderations:
     def test_session_id_sanitization(self):
         """Test that session IDs are sanitized in storage."""
         from app.deepagents.storage.persistent_backend import PersistentStorage
-        import tempfile
 
         temp_dir = tempfile.mkdtemp()
         try:
@@ -642,7 +677,6 @@ class TestSecurityConsiderations:
     def test_file_path_sanitization(self):
         """Test that file paths are sanitized against directory traversal."""
         from app.deepagents.storage.persistent_backend import PersistentStorage
-        import tempfile
 
         temp_dir = tempfile.mkdtemp()
         try:
@@ -659,7 +693,7 @@ class TestSecurityConsiderations:
 
             # Test with directory traversal attempt (/../ pattern)
             # The storage should either strip the traversal or prevent it
-            entry2 = storage.save_file(
+            storage.save_file(
                 session_id,
                 "/data/../../../etc/passwd",
                 "malicious content"

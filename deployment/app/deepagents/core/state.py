@@ -5,7 +5,7 @@ conversations, todos, files, and subagent executions.
 """
 
 from datetime import datetime
-from typing import Annotated, Any
+from typing import Annotated
 
 from langchain_core.messages import BaseMessage
 from langgraph.graph.message import add_messages
