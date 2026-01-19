@@ -140,7 +140,7 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
         import sys
         # Normalize path (remove trailing slash for comparison)
         path = request.url.path.rstrip("/") or "/"
-        
+
         # Debug: Log every request through middleware
         sys.stdout.write(f"[Middleware] Processing: {path}, API_KEY_ENABLED={API_KEY_ENABLED}\n")
         sys.stdout.flush()
