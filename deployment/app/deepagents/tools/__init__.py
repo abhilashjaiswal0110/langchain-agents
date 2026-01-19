@@ -84,6 +84,18 @@ from app.deepagents.tools.analytics_tools import (
     get_sales_performance_summary,
 )
 
+# =============================================================================
+# Document Tools (Shared by both agents)
+# =============================================================================
+from app.deepagents.tools.document_tools import (
+    search_attachments,
+    list_attachments,
+    get_attachment_summary,
+    clear_attachments,
+    process_and_store_document,
+    get_document_context,
+)
+
 __all__ = [
     # ==========================================================================
     # IT Operations Tools
@@ -151,4 +163,13 @@ __all__ = [
     "assess_deal_risk",
     "get_similar_deals",
     "get_sales_performance_summary",
+    # ==========================================================================
+    # Document Tools (Shared)
+    # ==========================================================================
+    "search_attachments",
+    "list_attachments",
+    "get_attachment_summary",
+    "clear_attachments",
+    "process_and_store_document",
+    "get_document_context",
 ]

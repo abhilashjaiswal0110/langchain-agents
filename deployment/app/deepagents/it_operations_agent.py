@@ -55,6 +55,12 @@ from app.deepagents.tools import (
     get_kb_article,
     create_kb_article,
     suggest_kb_articles,
+    # Document tools for attachment handling
+    search_attachments,
+    list_attachments,
+    get_attachment_summary,
+    clear_attachments,
+    get_document_context,
 )
 from app.deepagents.storage.persistent_backend import PersistentStorage
 
@@ -90,6 +96,16 @@ Use file system tools to:
 - `write_file`: Save investigation notes, findings, reports
 - `read_file`: Retrieve saved context
 - `ls`: List available context files
+
+## Document Attachments
+Users can upload documents (PDF, Word, TXT, PPT, images) for context.
+When documents are uploaded, use these tools:
+- `search_attachments`: Search document content using semantic similarity
+- `list_attachments`: See all uploaded documents
+- `get_attachment_summary`: Get overview of a document
+
+**IMPORTANT**: When users ask about uploaded documents, ALWAYS use `search_attachments`
+to find relevant content. Never answer from memory - search the documents first.
 
 ## Integration
 You are connected to ServiceNow for real ITSM data (when in live mode).
@@ -264,7 +280,15 @@ class ITOperationsDeepAgent:
             suggest_kb_articles,
         ]
 
-        return planning_tools + fs_tools + task_tools + it_tools
+        # Document attachment tools
+        doc_tools = [
+            search_attachments,
+            list_attachments,
+            get_attachment_summary,
+            clear_attachments,
+        ]
+
+        return planning_tools + fs_tools + task_tools + it_tools + doc_tools
 
     def _create_write_todos_tool(self):
         """Create the write_todos planning tool."""
@@ -524,9 +548,21 @@ class ITOperationsDeepAgent:
         """Process messages and decide on actions."""
         messages = list(state.messages)
 
+        # Build dynamic system prompt with document context
+        system_prompt = IT_OPERATIONS_SYSTEM_PROMPT
+
+        # Inject document context if documents are uploaded
+        session_id = state.session_id or "default"
+        doc_context = get_document_context(session_id)
+        if doc_context:
+            system_prompt += "\n" + doc_context
+
         # Ensure system message is first
         if not messages or not isinstance(messages[0], SystemMessage):
-            messages = [SystemMessage(content=IT_OPERATIONS_SYSTEM_PROMPT)] + messages
+            messages = [SystemMessage(content=system_prompt)] + messages
+        else:
+            # Update existing system message with document context
+            messages[0] = SystemMessage(content=system_prompt)
 
         response = self.llm_with_tools.invoke(messages)
 
@@ -646,12 +682,19 @@ class ITOperationsDeepAgent:
         """Stream chat responses with thinking and progress updates.
 
         Yields events for:
-        - thinking: Agent's reasoning process
+        - thinking: Agent's reasoning process (collapsible in UI)
         - tool_start: When a tool is being called
         - tool_result: Tool execution result
         - todo_update: Todo list changes
         - token: Streaming tokens
         - complete: Final response
+
+        The thinking event includes:
+        - iteration: Step number in the agent loop
+        - phase: Current processing phase (planning/analyzing/executing/summarizing)
+        - content: Full reasoning content (for expanded view)
+        - summary: Brief summary (for collapsed view)
+        - is_reasoning_token: True if from extended thinking models (Claude/o1)
 
         Args:
             message: User message.
@@ -681,6 +724,23 @@ class ITOperationsDeepAgent:
         iteration = 0
         final_response = ""
         accumulated_tokens = ""
+        current_phase = "planning"
+        thinking_buffer = ""  # Buffer for accumulating thinking content
+
+        # Phase detection based on iteration and tool usage
+        def get_phase(iter_num: int, has_tool_calls: bool, tool_name: str | None = None) -> str:
+            if iter_num == 1:
+                return "planning"
+            if tool_name:
+                if tool_name in ("write_todos", "update_todo"):
+                    return "planning"
+                elif tool_name in ("search_incidents", "search_changes", "search_cmdb", "search_knowledge_base", "search_attachments"):
+                    return "analyzing"
+                else:
+                    return "executing"
+            if has_tool_calls:
+                return "executing"
+            return "summarizing"
 
         try:
             async for event in self.graph.astream_events(
@@ -696,31 +756,127 @@ class ITOperationsDeepAgent:
                 event_name = event.get("name", "")
                 event_data = event.get("data", {})
 
-                # Agent thinking/reasoning
+                # Agent thinking/reasoning - iteration start
                 if event_type == "on_chat_model_start":
                     iteration += 1
+                    current_phase = get_phase(iteration, False)
+                    thinking_buffer = ""  # Reset thinking buffer for new iteration
+
+                    phase_messages = {
+                        "planning": "Planning approach...",
+                        "analyzing": "Analyzing data...",
+                        "executing": "Executing actions...",
+                        "summarizing": "Preparing response...",
+                    }
+
                     yield {
                         "type": "thinking",
                         "data": {
                             "iteration": iteration,
-                            "message": f"Analyzing request (step {iteration})...",
+                            "phase": current_phase,
+                            "content": "",  # Content will be streamed
+                            "summary": phase_messages.get(current_phase, f"Step {iteration}..."),
+                            "is_reasoning_token": False,
                         },
                     }
 
                 # Streaming tokens from LLM
                 elif event_type == "on_chat_model_stream":
                     chunk = event_data.get("chunk")
-                    if chunk and hasattr(chunk, "content") and chunk.content:
-                        accumulated_tokens += chunk.content
-                        yield {
-                            "type": "token",
-                            "data": {"content": chunk.content},
-                        }
+                    if chunk:
+                        # Check for extended thinking content (Claude with thinking enabled)
+                        # The content may be a list of blocks for Claude models
+                        if hasattr(chunk, "content"):
+                            content = chunk.content
+
+                            # Handle Claude extended thinking blocks
+                            if isinstance(content, list):
+                                for block in content:
+                                    if isinstance(block, dict):
+                                        block_type = block.get("type", "")
+                                        if block_type == "thinking":
+                                            # Extended thinking content from Claude
+                                            thinking_text = block.get("thinking", "")
+                                            if thinking_text:
+                                                thinking_buffer += thinking_text
+                                                yield {
+                                                    "type": "thinking",
+                                                    "data": {
+                                                        "iteration": iteration,
+                                                        "phase": current_phase,
+                                                        "content": thinking_text,
+                                                        "summary": self._summarize_thinking(thinking_text),
+                                                        "is_reasoning_token": True,
+                                                    },
+                                                }
+                                        elif block_type == "text":
+                                            # Regular text content
+                                            text = block.get("text", "")
+                                            if text:
+                                                accumulated_tokens += text
+                                                yield {
+                                                    "type": "token",
+                                                    "data": {"content": text},
+                                                }
+                                    elif hasattr(block, "type"):
+                                        # Handle Pydantic-style content blocks
+                                        if block.type == "thinking":
+                                            thinking_text = getattr(block, "thinking", "")
+                                            if thinking_text:
+                                                thinking_buffer += thinking_text
+                                                yield {
+                                                    "type": "thinking",
+                                                    "data": {
+                                                        "iteration": iteration,
+                                                        "phase": current_phase,
+                                                        "content": thinking_text,
+                                                        "summary": self._summarize_thinking(thinking_text),
+                                                        "is_reasoning_token": True,
+                                                    },
+                                                }
+                                        elif block.type == "text":
+                                            text = getattr(block, "text", "")
+                                            if text:
+                                                accumulated_tokens += text
+                                                yield {
+                                                    "type": "token",
+                                                    "data": {"content": text},
+                                                }
+                            elif isinstance(content, str) and content:
+                                # Regular string content
+                                accumulated_tokens += content
+                                yield {
+                                    "type": "token",
+                                    "data": {"content": content},
+                                }
+
+                        # Check for OpenAI reasoning tokens (o1/o3/o4 models)
+                        # These may appear in additional_kwargs or as special fields
+                        if hasattr(chunk, "additional_kwargs"):
+                            additional = chunk.additional_kwargs
+                            if additional:
+                                # OpenAI o1/o3/o4 reasoning tokens
+                                reasoning = additional.get("reasoning_content") or additional.get("reasoning")
+                                if reasoning:
+                                    thinking_buffer += reasoning
+                                    yield {
+                                        "type": "thinking",
+                                        "data": {
+                                            "iteration": iteration,
+                                            "phase": current_phase,
+                                            "content": reasoning,
+                                            "summary": self._summarize_thinking(reasoning),
+                                            "is_reasoning_token": True,
+                                        },
+                                    }
 
                 # Tool call initiated
                 elif event_type == "on_tool_start":
                     tool_name = event_name
                     tool_input = event_data.get("input", {})
+
+                    # Update phase based on tool type
+                    current_phase = get_phase(iteration, True, tool_name)
 
                     # Format tool description for user
                     tool_desc = self._get_tool_description(tool_name, tool_input)
@@ -747,6 +903,7 @@ class ITOperationsDeepAgent:
                             "tool": tool_name,
                             "input": safe_input,
                             "description": tool_desc,
+                            "phase": current_phase,
                         },
                     }
 
@@ -841,8 +998,44 @@ class ITOperationsDeepAgent:
             "search_cmdb": "Querying CMDB...",
             "get_sla_status": "Checking SLA status...",
             "search_knowledge_base": "Searching knowledge base...",
+            # Document tools
+            "search_attachments": f"Searching documents for '{tool_input.get('query', '')[:30]}...'",
+            "list_attachments": "Listing uploaded documents...",
+            "get_attachment_summary": "Getting document summary...",
+            "clear_attachments": "Clearing documents...",
         }
         return descriptions.get(tool_name, f"Executing {tool_name}...")
+
+    def _summarize_thinking(self, thinking_content: str, max_length: int = 60) -> str:
+        """Summarize thinking content for collapsed display.
+
+        Args:
+            thinking_content: Full thinking/reasoning content.
+            max_length: Maximum length for summary.
+
+        Returns:
+            Brief summary suitable for collapsed view.
+        """
+        if not thinking_content:
+            return "Thinking..."
+
+        # Clean and truncate
+        content = thinking_content.strip()
+
+        # Try to get first meaningful sentence or phrase
+        # Look for sentence boundaries
+        for sep in [". ", ".\n", "! ", "? ", "\n\n"]:
+            if sep in content:
+                first_part = content.split(sep)[0]
+                if len(first_part) >= 10:  # Meaningful length
+                    content = first_part
+                    break
+
+        # Truncate if still too long
+        if len(content) > max_length:
+            content = content[:max_length - 3] + "..."
+
+        return content
 
     def get_session_context(self, session_id: str) -> dict[str, Any]:
         """Get context for a session.

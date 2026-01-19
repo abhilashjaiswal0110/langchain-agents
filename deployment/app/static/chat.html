@@ -3,7 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>IT Support Agent - Demo</title>
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>IT Support Agent - Demo v2.0</title>
     <style>
         :root {
             --primary: #2563eb;
@@ -263,9 +266,10 @@
             border-top: 1px solid var(--border);
             display: flex;
             gap: 10px;
+            align-items: center;
         }
 
-        .input-area input {
+        .input-area input[type="text"] {
             flex: 1;
             padding: 12px 16px;
             border: 1px solid var(--border);
@@ -275,7 +279,7 @@
             transition: border-color 0.2s;
         }
 
-        .input-area input:focus {
+        .input-area input[type="text"]:focus {
             border-color: var(--primary);
         }
 
@@ -289,6 +293,7 @@
             font-weight: 500;
             cursor: pointer;
             transition: background 0.2s;
+            flex-shrink: 0;
         }
 
         .input-area button:hover {
@@ -303,15 +308,28 @@
         .input-area #uploadButton {
             padding: 12px 16px;
             font-size: 18px;
-            min-width: auto;
-        }
-
-        .input-area #uploadButton:not(:disabled) {
+            min-width: 48px;
             background: var(--success);
         }
 
         .input-area #uploadButton:hover:not(:disabled) {
             background: #45a049;
+        }
+
+        .input-area #uploadButton:disabled {
+            background: #ccc;
+            opacity: 0.6;
+        }
+
+        .input-area #stopButton {
+            padding: 12px 16px;
+            font-size: 14px;
+            min-width: 70px;
+            background: var(--danger);
+        }
+
+        .input-area #stopButton:hover:not(:disabled) {
+            background: #dc2626;
         }
 
         .upload-status {
@@ -517,6 +535,49 @@
             background: #eff6ff;
         }
 
+        .attachments-list {
+            max-height: 180px;
+            overflow-y: auto;
+        }
+
+        .attachment-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 10px;
+            background: var(--bg-primary);
+            border-radius: 6px;
+            font-size: 0.8rem;
+            margin-bottom: 6px;
+            border-left: 3px solid var(--primary);
+        }
+
+        .attachment-item.current {
+            background: #eff6ff;
+            border-left-color: #22c55e;
+        }
+
+        .attachment-icon {
+            font-size: 16px;
+        }
+
+        .attachment-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .attachment-name {
+            font-weight: 500;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .attachment-meta {
+            font-size: 0.7rem;
+            color: var(--text-secondary);
+        }
+
         .subagent-badge {
             display: inline-block;
             padding: 2px 8px;
@@ -564,6 +625,120 @@
         .thinking-status {
             font-size: 0.9rem;
             color: var(--text-primary);
+        }
+
+        /* Collapsible Thinking Blocks (Claude Code style) */
+        .thinking-blocks {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+
+        .thinking-block {
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            overflow: hidden;
+            transition: all 0.2s ease;
+        }
+
+        .thinking-block.collapsed .thinking-content {
+            display: none;
+        }
+
+        .thinking-block.expanded .thinking-content {
+            display: block;
+        }
+
+        .thinking-header {
+            display: flex;
+            align-items: center;
+            padding: 10px 12px;
+            background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+            cursor: pointer;
+            user-select: none;
+            gap: 8px;
+        }
+
+        .thinking-header:hover {
+            background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%);
+        }
+
+        .expand-icon {
+            font-size: 10px;
+            transition: transform 0.2s;
+            color: var(--primary);
+            width: 12px;
+        }
+
+        .thinking-block.expanded .expand-icon {
+            transform: rotate(90deg);
+        }
+
+        .thinking-summary {
+            flex: 1;
+            font-size: 0.85rem;
+            color: var(--text-primary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .thinking-badge {
+            font-size: 0.7rem;
+            padding: 2px 8px;
+            border-radius: 12px;
+            background: var(--primary);
+            color: white;
+            font-weight: 500;
+        }
+
+        .thinking-badge.reasoning {
+            background: #8b5cf6;
+        }
+
+        .thinking-phase {
+            font-size: 0.7rem;
+            padding: 2px 8px;
+            border-radius: 12px;
+            background: #f1f5f9;
+            color: var(--text-secondary);
+            text-transform: capitalize;
+        }
+
+        .thinking-content {
+            background: #f9fafb;
+            padding: 12px;
+            border-top: 1px solid #e5e7eb;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .thinking-content pre {
+            white-space: pre-wrap;
+            word-break: break-word;
+            margin: 0;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 0.8rem;
+            line-height: 1.5;
+        }
+
+        /* Animation for new thinking blocks */
+        @keyframes thinking-slide-in {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .thinking-block.new {
+            animation: thinking-slide-in 0.3s ease-out;
         }
 
         /* Tool Activity Styles */
@@ -628,6 +803,12 @@
             font-size: 0.8rem;
         }
 
+        /* Message wrapper for streaming responses */
+        .message-wrapper {
+            flex: 1;
+            min-width: 0;
+        }
+
         /* Streamed Response */
         .streamed-response {
             padding: 12px;
@@ -668,7 +849,7 @@
 <body>
     <div class="container">
         <header class="header">
-            <h1>Enterprise AI Agents</h1>
+            <h1>Enterprise AI Agents <span style="font-size: 0.6rem; background: var(--primary); color: white; padding: 2px 6px; border-radius: 4px; vertical-align: middle;">v2.0</span></h1>
             <div class="agent-selector">
                 <label>Agent:</label>
                 <select id="agentSelect">
@@ -774,9 +955,10 @@
 
                 <div class="input-area">
                     <input type="file" id="fileInput" style="display:none" onchange="handleFileUpload(event)">
-                    <button id="uploadButton" onclick="document.getElementById('fileInput').click()" disabled style="display:none" title="Upload Document">📎</button>
+                    <button id="uploadButton" onclick="document.getElementById('fileInput').click()" disabled style="display:none" title="Upload Document (📎)">📎</button>
                     <input type="text" id="messageInput" placeholder="Type your message..." disabled onkeypress="handleKeyPress(event)">
                     <button id="sendButton" onclick="sendMessage()" disabled>Send</button>
+                    <button id="stopButton" onclick="stopExecution()" style="display:none" title="Stop query execution">Stop</button>
                 </div>
             </div>
 
@@ -793,6 +975,13 @@
                     <h3>Context Files</h3>
                     <div class="files-list" id="filesList">
                         <div class="context-info">No files in context</div>
+                    </div>
+                </div>
+
+                <div class="panel-card deep-agent-panel" id="attachmentsPanel">
+                    <h3>Uploaded Documents</h3>
+                    <div class="attachments-list" id="attachmentsList">
+                        <div class="context-info">No documents uploaded. Click 📎 to upload.</div>
                     </div>
                 </div>
 
@@ -866,12 +1055,17 @@
     </div>
 
     <script>
+        // Version 2.0 - With attachment upload, collapsible thinking, and stop button
+        console.log('[CHAT UI] Version 2.0 loaded - Features: Attachment Upload, Collapsible Thinking, Stop Button');
+
         // State
         let sessionId = null;
         let currentAgent = null;
         let isEnterpriseAgent = false;
         let isDeepAgent = false;
         let todoRefreshInterval = null;
+        let currentAbortController = null;
+        let isExecuting = false;
 
         // Enterprise agent endpoints
         const enterpriseEndpoints = {
@@ -948,16 +1142,29 @@
         const welcomeScreen = document.getElementById('welcomeScreen');
         const messageInput = document.getElementById('messageInput');
         const sendButton = document.getElementById('sendButton');
+        const stopButton = document.getElementById('stopButton');
         const uploadButton = document.getElementById('uploadButton');
         const fileInput = document.getElementById('fileInput');
         const agentSelect = document.getElementById('agentSelect');
 
+        // Debug: Verify critical elements are found
+        console.log('[CHAT UI] Elements check:', {
+            uploadButton: !!uploadButton,
+            stopButton: !!stopButton,
+            sendButton: !!sendButton,
+            messageInput: !!messageInput
+        });
+        if (!uploadButton) console.error('[CHAT UI] CRITICAL: uploadButton not found!');
+        if (!stopButton) console.error('[CHAT UI] CRITICAL: stopButton not found!');
+
         // Agents that support file upload
-        const uploadAgents = ['multilingual_rag', 'data_analyst', 'document_intelligence'];
+        const uploadAgents = ['multilingual_rag', 'data_analyst', 'document_intelligence', 'it_operations_deep', 'sales_intelligence_deep'];
         const uploadEndpoints = {
             'multilingual_rag': '/api/enterprise/rag/upload',
             'data_analyst': '/api/enterprise/data-analyst/upload',
-            'document_intelligence': '/api/enterprise/document-intelligence/upload'
+            'document_intelligence': '/api/enterprise/document-intelligence/upload',
+            'it_operations_deep': '/api/deepagent/upload',
+            'sales_intelligence_deep': '/api/sales-agent/upload'
         };
         const statusBadge = document.getElementById('statusBadge');
         const sessionInfo = document.getElementById('sessionInfo');
@@ -1048,16 +1255,17 @@
 
             // Show/hide upload button based on agent type
             if (uploadAgents.includes(agentType)) {
-                uploadButton.style.display = 'block';
+                uploadButton.style.display = 'inline-flex';
                 uploadButton.disabled = false;
                 // Set accepted file types based on agent
                 if (agentType === 'multilingual_rag') {
                     fileInput.accept = '.pdf,.txt,.docx,.doc,.md';
                 } else if (agentType === 'data_analyst') {
                     fileInput.accept = '.xlsx,.xls,.csv';
-                } else if (agentType === 'document_intelligence') {
+                } else if (agentType === 'document_intelligence' || agentType === 'it_operations_deep' || agentType === 'sales_intelligence_deep') {
                     fileInput.accept = '.pdf,.txt,.docx,.doc,.pptx,.ppt,.png,.jpg,.jpeg';
                 }
+                console.log('[DEBUG] Upload button enabled for:', agentType);
             } else {
                 uploadButton.style.display = 'none';
                 uploadButton.disabled = true;
@@ -1086,7 +1294,7 @@
                 context: '/api/deepagent/context',
                 subagents: '/api/deepagent/subagents',
                 name: 'IT Operations Deep Agent',
-                welcome: 'Hello! I\'m your IT Operations Deep Agent. I can help with complex IT tasks including incident analysis, change management, problem investigation, CMDB queries, and SLA monitoring. I break down complex tasks and coordinate specialized subagents. What can I help you with today?'
+                welcome: 'Hello! I\'m your IT Operations Deep Agent. I can help with complex IT tasks including incident analysis, change management, problem investigation, CMDB queries, and SLA monitoring. I break down complex tasks and coordinate specialized subagents.\n\n📎 **Tip**: Click the paperclip button to upload documents (PDF, Word, PPT, images) for context.\n\nWhat can I help you with today?'
             },
             'sales_intelligence_deep': {
                 start: '/api/sales-agent/start',
@@ -1095,7 +1303,7 @@
                 context: '/api/sales-agent/context',
                 subagents: '/api/sales-agent/subagents',
                 name: 'Sales Intelligence Deep Agent',
-                welcome: 'Hello! I\'m your Sales Intelligence Deep Agent. I can help with deal qualification (BANT/MEDDIC), RFP/RFI responses, solution mapping, competitive analysis, pricing optimization, and win probability assessment. What sales challenge can I help you with today?'
+                welcome: 'Hello! I\'m your Sales Intelligence Deep Agent. I can help with deal qualification (BANT/MEDDIC), RFP/RFI responses, solution mapping, competitive analysis, pricing optimization, and win probability assessment.\n\n📎 **Tip**: Click the paperclip button to upload RFP documents, customer requirements, or competitive intel for analysis.\n\nWhat sales challenge can I help you with today?'
             }
         };
 
@@ -1137,6 +1345,13 @@
                     messageInput.disabled = false;
                     sendButton.disabled = false;
                     agentSelect.value = agentType;
+
+                    // Enable file upload for deep agents - make button visible and enabled
+                    console.log('[DEBUG] Enabling upload button for deep agent:', agentType);
+                    uploadButton.style.display = 'inline-flex';
+                    uploadButton.disabled = false;
+                    fileInput.accept = '.pdf,.txt,.docx,.doc,.pptx,.ppt,.png,.jpg,.jpeg';
+                    console.log('[DEBUG] Upload button display:', uploadButton.style.display, 'disabled:', uploadButton.disabled);
 
                     statusBadge.className = 'status-badge connected';
                     statusBadge.innerHTML = '<span class="status-dot green"></span> Connected';
@@ -1190,25 +1405,38 @@
         }
 
         // Stream Deep Agent chat with thinking and progress updates
-        async function streamDeepAgentChat(message, sessionId) {
+        async function streamDeepAgentChat(message, sessionIdParam) {
             return new Promise((resolve, reject) => {
-                // Create a progress message element
+                // Create abort controller for stop functionality
+                currentAbortController = new AbortController();
+                isExecuting = true;
+
+                // Show stop button, hide send button
+                sendButton.style.display = 'none';
+                stopButton.style.display = 'inline-flex';
+
+                // Create a progress message element with collapsible thinking blocks
                 const progressDiv = document.createElement('div');
                 progressDiv.className = 'message assistant';
                 progressDiv.innerHTML = `
-                    <div class="thinking-indicator">
-                        <div class="thinking-dots">
-                            <span></span><span></span><span></span>
+                    <div class="message-avatar">AI</div>
+                    <div class="message-wrapper">
+                        <div class="thinking-indicator">
+                            <div class="thinking-dots">
+                                <span></span><span></span><span></span>
+                            </div>
+                            <div class="thinking-status">Processing your request...</div>
                         </div>
-                        <div class="thinking-status">Processing your request...</div>
+                        <div class="thinking-blocks"></div>
+                        <div class="tool-activity" style="display:none;"></div>
+                        <div class="streamed-response" style="display:none;"></div>
                     </div>
-                    <div class="tool-activity" style="display:none;"></div>
-                    <div class="streamed-response" style="display:none;"></div>
                 `;
                 messagesEl.appendChild(progressDiv);
                 messagesEl.scrollTop = messagesEl.scrollHeight;
 
                 const thinkingStatus = progressDiv.querySelector('.thinking-status');
+                const thinkingBlocks = progressDiv.querySelector('.thinking-blocks');
                 const toolActivity = progressDiv.querySelector('.tool-activity');
                 const streamedResponse = progressDiv.querySelector('.streamed-response');
                 const thinkingIndicator = progressDiv.querySelector('.thinking-indicator');
@@ -1220,8 +1448,9 @@
                 const endpoints = deepAgentEndpoints[currentAgent] || deepAgentEndpoints['it_operations_deep'];
                 const streamEndpoint = endpoints.stream;
 
-                // Use fetch with streaming
+                // Use fetch with streaming and abort support
                 fetch(streamEndpoint, {
+                    signal: currentAbortController.signal,
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -1245,11 +1474,14 @@
                                 // Stream ended - if we didn't receive a complete event, show accumulated response
                                 if (!receivedComplete && lastResponse) {
                                     thinkingIndicator.style.display = 'none';
-                                    progressDiv.innerHTML = `<div class="message-content">${formatMessage(lastResponse)}</div>`;
+                                    thinkingBlocks.style.display = 'none';
+                                    progressDiv.querySelector('.message-wrapper').innerHTML = `<div class="message-content">${formatMessage(lastResponse)}</div>`;
                                 } else if (!receivedComplete && streamedResponse.textContent) {
                                     thinkingIndicator.style.display = 'none';
-                                    progressDiv.innerHTML = `<div class="message-content">${formatMessage(streamedResponse.textContent)}</div>`;
+                                    thinkingBlocks.style.display = 'none';
+                                    progressDiv.querySelector('.message-wrapper').innerHTML = `<div class="message-content">${formatMessage(streamedResponse.textContent)}</div>`;
                                 }
+                                resetExecutionState();
                                 resolve();
                                 return;
                             }
@@ -1268,7 +1500,7 @@
                                         } else if (event.type === 'token' && event.data && event.data.content) {
                                             lastResponse += event.data.content;
                                         }
-                                        handleStreamEvent(event, progressDiv, thinkingStatus, toolActivity, streamedResponse, thinkingIndicator);
+                                        handleStreamEvent(event, progressDiv, thinkingStatus, thinkingBlocks, toolActivity, streamedResponse, thinkingIndicator);
                                     } catch (e) {
                                         console.error('Error parsing SSE event:', e, 'Line:', line);
                                     }
@@ -1278,13 +1510,25 @@
                             processEvents();
                         }).catch(err => {
                             console.error('Stream read error:', err);
+                            resetExecutionState();
+                            // Check if this was an abort
+                            if (err.name === 'AbortError') {
+                                thinkingIndicator.style.display = 'none';
+                                if (lastResponse) {
+                                    progressDiv.querySelector('.message-wrapper').innerHTML = `<div class="message-content">${formatMessage(lastResponse)}<br><em style="color: var(--warning);">[Stopped by user]</em></div>`;
+                                } else {
+                                    progressDiv.querySelector('.message-wrapper').innerHTML = '<div class="message-content"><em style="color: var(--warning);">Query stopped by user.</em></div>';
+                                }
+                                resolve();
+                                return;
+                            }
                             // Show whatever response we accumulated
                             if (lastResponse) {
                                 thinkingIndicator.style.display = 'none';
-                                progressDiv.innerHTML = `<div class="message-content">${formatMessage(lastResponse)}</div>`;
+                                progressDiv.querySelector('.message-wrapper').innerHTML = `<div class="message-content">${formatMessage(lastResponse)}</div>`;
                                 resolve();
                             } else {
-                                progressDiv.innerHTML = '<div class="message-content error">Connection interrupted. Please try again.</div>';
+                                progressDiv.querySelector('.message-wrapper').innerHTML = '<div class="message-content error">Connection interrupted. Please try again.</div>';
                                 reject(err);
                             }
                         });
@@ -1293,14 +1537,46 @@
                     processEvents();
                 }).catch(err => {
                     console.error('Fetch error:', err);
-                    progressDiv.innerHTML = `<div class="message-content error">Error: ${err.message || 'Failed to connect to agent'}</div>`;
+                    resetExecutionState();
+                    // Check if this was an abort
+                    if (err.name === 'AbortError') {
+                        progressDiv.querySelector('.message-wrapper').innerHTML = '<div class="message-content"><em style="color: var(--warning);">Query stopped by user.</em></div>';
+                        resolve();
+                        return;
+                    }
+                    progressDiv.querySelector('.message-wrapper').innerHTML = `<div class="message-content error">Error: ${err.message || 'Failed to connect to agent'}</div>`;
                     reject(err);
                 });
             });
         }
 
+        // Reset execution state (hide stop button, show send button)
+        function resetExecutionState() {
+            isExecuting = false;
+            currentAbortController = null;
+            sendButton.style.display = 'inline-flex';
+            stopButton.style.display = 'none';
+        }
+
+        // Stop query execution
+        function stopExecution() {
+            if (currentAbortController) {
+                console.log('[DEBUG] Stopping query execution');
+                currentAbortController.abort();
+            }
+        }
+
+        // Toggle thinking block expand/collapse
+        function toggleThinkingBlock(element) {
+            const block = element.closest('.thinking-block');
+            if (block) {
+                block.classList.toggle('collapsed');
+                block.classList.toggle('expanded');
+            }
+        }
+
         // Handle individual stream events
-        function handleStreamEvent(event, progressDiv, thinkingStatus, toolActivity, streamedResponse, thinkingIndicator) {
+        function handleStreamEvent(event, progressDiv, thinkingStatus, thinkingBlocks, toolActivity, streamedResponse, thinkingIndicator) {
             const type = event.type;
             const data = event.data;
 
@@ -1310,7 +1586,70 @@
                     break;
 
                 case 'thinking':
-                    thinkingStatus.innerHTML = `<strong>Step ${data.iteration}:</strong> ${data.message}`;
+                    // Handle enhanced thinking events with phase, content, summary
+                    const iteration = data.iteration || 1;
+                    const phase = data.phase || 'planning';
+                    const content = data.content || '';
+                    const summary = data.summary || data.message || `Step ${iteration}...`;
+                    const isReasoning = data.is_reasoning_token || false;
+
+                    // Update simple thinking status for basic display
+                    thinkingStatus.innerHTML = `<strong>Step ${iteration}:</strong> ${summary}`;
+
+                    // Always show thinking blocks for deep agents - they show the agent's progress
+                    thinkingBlocks.style.display = 'block';
+
+                    // Check if we already have a block for this iteration
+                    let existingBlock = thinkingBlocks.querySelector(`[data-iteration="${iteration}"]`);
+
+                    if (existingBlock) {
+                        // Append content to existing block if there's content
+                        if (content) {
+                            const contentEl = existingBlock.querySelector('.thinking-content pre');
+                            if (contentEl) {
+                                contentEl.textContent += content;
+                            }
+                        }
+                        // Update summary
+                        const summaryEl = existingBlock.querySelector('.thinking-summary');
+                        if (summaryEl && summary) {
+                            summaryEl.textContent = summary;
+                        }
+                        // Update phase badge
+                        const phaseEl = existingBlock.querySelector('.thinking-phase');
+                        if (phaseEl && phase) {
+                            phaseEl.textContent = phase;
+                        }
+                        // Mark as reasoning if applicable
+                        if (isReasoning) {
+                            const badgeEl = existingBlock.querySelector('.thinking-badge');
+                            if (badgeEl) {
+                                badgeEl.classList.add('reasoning');
+                            }
+                        }
+                    } else {
+                        // Create new collapsible thinking block
+                        const block = document.createElement('div');
+                        block.className = 'thinking-block collapsed new';
+                        block.dataset.iteration = iteration;
+                        block.innerHTML = `
+                            <div class="thinking-header" onclick="toggleThinkingBlock(this)">
+                                <span class="expand-icon">▶</span>
+                                <span class="thinking-summary">${escapeHtml(summary)}</span>
+                                <span class="thinking-phase">${phase}</span>
+                                <span class="thinking-badge ${isReasoning ? 'reasoning' : ''}">Step ${iteration}</span>
+                            </div>
+                            <div class="thinking-content">
+                                <pre>${escapeHtml(content || 'Processing...')}</pre>
+                            </div>
+                        `;
+                        thinkingBlocks.appendChild(block);
+
+                        // Remove animation class after animation completes
+                        setTimeout(() => block.classList.remove('new'), 300);
+                    }
+
+                    messagesEl.scrollTop = messagesEl.scrollHeight;
                     break;
 
                 case 'tool_start':
@@ -1351,11 +1690,25 @@
                     break;
 
                 case 'complete':
-                    // Hide thinking indicator, show final response
+                    // Hide thinking indicator but keep thinking blocks
                     thinkingIndicator.style.display = 'none';
 
-                    // Replace progress div with final message
-                    progressDiv.innerHTML = `<div class="message-content">${formatMessage(data.response || 'Task completed.')}</div>`;
+                    // Show final response in message-wrapper, preserving thinking blocks
+                    const messageWrapper = progressDiv.querySelector('.message-wrapper');
+                    if (messageWrapper) {
+                        // Keep thinking blocks, hide tool activity, show response
+                        toolActivity.style.display = 'none';
+                        streamedResponse.style.display = 'none';
+
+                        // Add final response content
+                        const responseDiv = document.createElement('div');
+                        responseDiv.className = 'message-content';
+                        responseDiv.innerHTML = formatMessage(data.response || 'Task completed.');
+                        messageWrapper.appendChild(responseDiv);
+                    } else {
+                        // Fallback: replace entire div
+                        progressDiv.innerHTML = `<div class="message-avatar">AI</div><div class="message-content">${formatMessage(data.response || 'Task completed.')}</div>`;
+                    }
 
                     // Update todos and files
                     if (data.todos) {
@@ -1397,6 +1750,7 @@
                 if (isDeepAgent && sessionId) {
                     await refreshTodos();
                     await refreshFiles();
+                    await refreshAttachments();
                 }
             }, 3000);
         }
@@ -1483,6 +1837,56 @@
         function viewFile(path) {
             console.log('View file:', path);
             // Could show a modal with file content
+        }
+
+        // Refresh attachments from server
+        async function refreshAttachments() {
+            if (!sessionId || !isDeepAgent) return;
+            try {
+                const baseEndpoint = currentAgent === 'sales_intelligence_deep'
+                    ? '/api/sales-agent/attachments'
+                    : '/api/deepagent/attachments';
+                const response = await fetch(`${baseEndpoint}/${sessionId}`, {
+                    headers: { 'ngrok-skip-browser-warning': 'true' }
+                });
+                const data = await response.json();
+                if (data.documents) {
+                    updateAttachmentsDisplay(data.documents);
+                }
+            } catch (error) {
+                console.error('Error refreshing attachments:', error);
+            }
+        }
+
+        // Update attachments display
+        function updateAttachmentsDisplay(documents) {
+            const attachmentsList = document.getElementById('attachmentsList');
+            if (!documents || documents.length === 0) {
+                attachmentsList.innerHTML = '<div class="context-info">No documents uploaded. Click 📎 to upload.</div>';
+                return;
+            }
+
+            const typeIcons = {
+                'pdf': '📕',
+                'text': '📄',
+                'docx': '📘',
+                'pptx': '📙',
+                'image': '🖼️'
+            };
+
+            attachmentsList.innerHTML = documents.map(doc => {
+                const icon = typeIcons[doc.file_type] || '📄';
+                const isCurrent = doc.is_current ? 'current' : '';
+                return `
+                    <div class="attachment-item ${isCurrent}" title="${doc.filename}">
+                        <span class="attachment-icon">${icon}</span>
+                        <div class="attachment-info">
+                            <div class="attachment-name">${doc.filename}</div>
+                            <div class="attachment-meta">${doc.chunk_count} chunks • ${doc.language.toUpperCase()}</div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
         }
 
         // Send Message
@@ -1621,6 +2025,14 @@
             messagesEl.scrollTop = messagesEl.scrollHeight;
         }
 
+        // Escape HTML to prevent XSS
+        function escapeHtml(text) {
+            if (!text) return '';
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
         // Format Message (simple markdown)
         function formatMessage(text) {
             return text
@@ -1647,6 +2059,11 @@
 
         // Clear Chat
         function clearChat() {
+            // Stop any running execution
+            if (currentAbortController) {
+                currentAbortController.abort();
+            }
+
             if (sessionId && !isDeepAgent) {
                 messageInput.value = '/clear';
                 sendMessage();
@@ -1669,12 +2086,17 @@
             sessionId = null;
             currentAgent = null;
             isEnterpriseAgent = false;
+            isExecuting = false;
+            currentAbortController = null;
 
             // Reset UI
             welcomeScreen.style.display = 'flex';
             messageInput.disabled = true;
             sendButton.disabled = true;
+            sendButton.style.display = 'inline-flex';
+            stopButton.style.display = 'none';
             uploadButton.style.display = 'none';
+            uploadButton.disabled = true;
             agentSelect.value = '';
             statusBadge.className = 'status-badge disconnected';
             statusBadge.innerHTML = '<span class="status-dot red"></span> Disconnected';
@@ -1725,8 +2147,12 @@
 
                 if (response.ok) {
                     addMessage(`✅ File uploaded successfully: ${file.name}\n\n${data.message || 'Document processed and ready for queries.'}`, 'assistant');
+                    // Refresh attachments panel for deep agents
+                    if (isDeepAgent) {
+                        await refreshAttachments();
+                    }
                 } else {
-                    addMessage(`❌ Upload failed: ${data.detail || 'Unknown error'}`, 'assistant');
+                    addMessage(`❌ Upload failed: ${data.detail || data.error || 'Unknown error'}`, 'assistant');
                 }
             } catch (error) {
                 typingIndicator.classList.remove('visible');

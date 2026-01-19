@@ -145,13 +145,12 @@ class TeamsJWTVerifier:
             # Get JWKS for verification
             jwks = self._get_jwks()
             if not jwks:
-                logger.warning("Could not fetch JWKS, skipping signature verification")
-                # Decode without verification for development/testing
-                claims = jwt.decode(token, options={"verify_signature": False})
+                # SECURITY: Fail closed - reject token if we can't verify signature
+                logger.error("SECURITY: Cannot fetch JWKS - rejecting JWT token")
                 return JWTVerificationResult(
-                    valid=True,
-                    claims=claims,
-                    error="Signature not verified (JWKS unavailable)",
+                    valid=False,
+                    claims=None,
+                    error="JWKS unavailable - cannot verify token signature",
                 )
 
             # Create JWKS client
