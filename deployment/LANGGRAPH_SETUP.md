@@ -127,7 +127,7 @@ uv sync
 ## Next Steps
 
 1. **For Development**: Use your existing FastAPI server (already working)
-2. **For Visual Debugging**: 
+2. **For Visual Debugging**:
    - Upgrade langgraph-cli to get `dev` command
    - Or start Docker and use `langgraph up`
 3. **For Production**: Use Docker deployment with `langgraph up`
