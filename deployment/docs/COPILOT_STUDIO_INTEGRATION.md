@@ -814,7 +814,7 @@ Response Handling:
 
 - **Platform Documentation:** [KNOWLEDGE.md](../KNOWLEDGE.md)
 - **Deployment Guide:** [DEPLOYMENT.md](DEPLOYMENT.md)
-- **Ngrok Setup:** [NGROK_SETUP.md](NGROK_SETUP.md)
+- **Ngrok Setup:** [NGROK_SETUP.md](../NGROK_SETUP.md)
 - **API Reference:** [docs/api/README.md](api/README.md)
 - **LangSmith:** https://smith.langchain.com
 - **Copilot Studio:** https://copilotstudio.microsoft.com
