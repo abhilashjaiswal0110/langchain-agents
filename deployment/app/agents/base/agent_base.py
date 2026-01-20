@@ -144,11 +144,25 @@ class BaseAgent(ABC):
 
         if provider == "openai":
             model_name = self.config.model_name or "gpt-4o-mini"
-            self._llm = ChatOpenAI(
-                model=model_name,
-                temperature=self.config.temperature,
-                max_tokens=self.config.max_tokens,
+
+            # OpenAI reasoning models (o1, o3, o4 series) don't support temperature
+            reasoning_models = ("o1", "o3", "o4", "o1-mini", "o3-mini", "o4-mini")
+            is_reasoning_model = any(
+                model_name.startswith(prefix) for prefix in reasoning_models
             )
+
+            if is_reasoning_model:
+                print(f"[DEBUG] Using reasoning model {model_name} (temperature not supported)")
+                self._llm = ChatOpenAI(
+                    model=model_name,
+                    max_tokens=self.config.max_tokens,
+                )
+            else:
+                self._llm = ChatOpenAI(
+                    model=model_name,
+                    temperature=self.config.temperature,
+                    max_tokens=self.config.max_tokens,
+                )
         elif provider == "anthropic":
             model_name = self.config.model_name or "claude-3-5-sonnet-latest"
             self._llm = ChatAnthropic(

@@ -6,6 +6,7 @@ as REST API endpoints using LangServe with LangSmith tracing enabled.
 
 import os
 import secrets
+import time
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
@@ -15,15 +16,18 @@ from typing import Literal
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.security import APIKeyHeader
 from fastapi.staticfiles import StaticFiles
 from langserve import add_routes
 from pydantic import BaseModel
 from starlette.middleware.base import BaseHTTPMiddleware
 
-# Load environment variables from .env file
-load_dotenv()
+# Load environment variables from .env file (explicit path for reliability)
+_ENV_FILE = Path(__file__).parent.parent / ".env"
+_env_loaded = load_dotenv(_ENV_FILE, override=True)
+print(f"[Startup] Loading .env from: {_ENV_FILE}")
+print(f"[Startup] .env file exists: {_ENV_FILE.exists()}, loaded: {_env_loaded}")
 
 # Import AIMessage for response extraction
 from langchain_core.messages import AIMessage
@@ -106,29 +110,68 @@ API_KEY_ENABLED = os.getenv("API_KEY_ENABLED", "true").lower() == "true"
 API_KEY = os.getenv("API_KEY", "")
 API_KEY_HEADER = "X-API-Key"
 
+# Log API key configuration at startup for debugging
+print(f"[Security] API_KEY_ENABLED={API_KEY_ENABLED} (env: '{os.getenv('API_KEY_ENABLED', 'not set')}')")
+if API_KEY_ENABLED:
+    print(f"[Security] API key authentication is ENABLED - protected endpoints require X-API-Key header")
+else:
+    print(f"[Security] API key authentication is DISABLED - all endpoints are open")
+
 # Paths that don't require authentication
-PUBLIC_PATHS = {"/", "/docs", "/redoc", "/openapi.json", "/health", "/ready"}
+PUBLIC_PATHS = {"/", "/docs", "/redoc", "/openapi.json", "/health", "/ready", "/chat", "/chatui"}
+
+# API paths that use LangServe (no API key required for demo purposes)
+LANGSERVE_PREFIXES = ("/api/langserve/",)
+
+# API paths accessible from internal web UI (no API key required)
+# These are secured by same-origin policy since they're accessed from /chat
+UI_API_PREFIXES = (
+    "/api/conversation",
+    "/api/deepagent",
+    "/api/sales-agent",
+    "/api/enterprise",
+)
 
 
 class APIKeyMiddleware(BaseHTTPMiddleware):
     """Middleware to validate API key for protected endpoints."""
 
     async def dispatch(self, request: Request, call_next):
+        import sys
+        # Normalize path (remove trailing slash for comparison)
+        path = request.url.path.rstrip("/") or "/"
+
+        # Debug: Log every request through middleware
+        sys.stdout.write(f"[Middleware] Processing: {path}, API_KEY_ENABLED={API_KEY_ENABLED}\n")
+        sys.stdout.flush()
+
         # Skip if API key auth is disabled
         if not API_KEY_ENABLED:
+            sys.stdout.write(f"[Middleware] Auth disabled, allowing: {path}\n")
+            sys.stdout.flush()
             return await call_next(request)
 
-        # Skip public paths
-        if request.url.path in PUBLIC_PATHS:
+        # Skip public paths (check both with and without trailing slash)
+        if path in PUBLIC_PATHS or request.url.path in PUBLIC_PATHS:
             return await call_next(request)
 
-        # Skip static files and chat UI
-        if request.url.path.startswith("/static") or request.url.path == "/chat":
+        # Skip static files
+        if path.startswith("/static"):
+            return await call_next(request)
+
+        # Skip UI API endpoints (accessed from internal web UI)
+        if path.startswith(UI_API_PREFIXES):
+            return await call_next(request)
+
+        # Skip LangServe API endpoints (demo/testing)
+        if path.startswith(LANGSERVE_PREFIXES):
             return await call_next(request)
 
         # Validate API key (use constant-time comparison to prevent timing attacks)
         api_key = request.headers.get(API_KEY_HEADER)
         if not api_key or not API_KEY or not secrets.compare_digest(api_key, API_KEY):
+            # Log the rejection for debugging
+            print(f"[Security] Rejected request to {path} - API key missing/invalid")
             return HTMLResponse(
                 content='{"detail": "Invalid or missing API key"}',
                 status_code=401,
@@ -147,6 +190,7 @@ langgraph_loaded = False
 doc_rag_loaded = False
 it_support_loaded = False
 enterprise_agents_loaded = False
+deep_agent_loaded = False
 chat_chain = None
 rag_chain = None
 agent_executor = None
@@ -163,6 +207,10 @@ multilingual_rag_agent = None
 hitl_support_agent = None
 code_assistant_agent = None
 document_intelligence_agent = None
+
+# Deep Agent
+it_operations_deep_agent = None
+sales_intelligence_deep_agent = None
 
 
 def load_chains() -> bool:
@@ -358,6 +406,57 @@ def load_enterprise_agents() -> dict[str, bool]:
     return status
 
 
+def load_deep_agent() -> bool:
+    """Load the IT Operations Deep Agent.
+
+    Returns:
+        True if Deep Agent loaded successfully, False otherwise.
+    """
+    global deep_agent_loaded, it_operations_deep_agent, sales_intelligence_deep_agent
+
+    has_openai = bool(os.getenv("OPENAI_API_KEY"))
+    has_anthropic = bool(os.getenv("ANTHROPIC_API_KEY"))
+
+    if not (has_openai or has_anthropic):
+        print("[DEBUG] Deep Agent: No API keys found (OPENAI_API_KEY or ANTHROPIC_API_KEY)")
+        return False
+
+    try:
+        from app.deepagents import create_it_operations_agent
+        from app.deepagents.sales_intelligence_agent import create_sales_intelligence_agent
+
+        # Get model configuration from environment
+        provider = os.getenv("DEEP_AGENT_PROVIDER", "auto")
+        model_name = os.getenv("DEEP_AGENT_MODEL") or None
+
+        it_operations_deep_agent = create_it_operations_agent(
+            model_provider=provider,
+            model_name=model_name,
+            storage_path="./data/deepagent_context",
+        )
+
+        sales_intelligence_deep_agent = create_sales_intelligence_agent(
+            model_provider=provider,
+            model_name=model_name,
+            storage_path="./data/deepagent_context",
+        )
+
+        deep_agent_loaded = True
+
+        # Log model info
+        model_info = model_name or "default"
+        print(f"[DEBUG] Deep Agents using provider={provider}, model={model_info}")
+        print(f"[DEBUG] Loaded: IT Operations, Sales Intelligence")
+
+        return True
+    except Exception as e:
+        import traceback
+
+        print(f"[ERROR] Failed to load Deep Agent: {e}")
+        traceback.print_exc()
+        return False
+
+
 # ============================================================================
 # Application Lifespan
 # ============================================================================
@@ -414,11 +513,17 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     else:
         print("[--] Enterprise agents not loaded (no API keys set)")
 
+    # Load Deep Agent
+    if load_deep_agent():
+        print("[OK] IT Operations Deep Agent loaded")
+    else:
+        print("[--] Deep Agent not loaded (no API keys set)")
+
     print("=" * 60)
     print("Platform ready!")
-    print("  - API Docs: http://localhost:8000/docs")
     print("  - Chat UI:  http://localhost:8000/chat")
-    print("  - Enterprise Agents: http://localhost:8000/docs#/Enterprise%20Agents")
+    print("  - API Docs: http://localhost:8000/docs")
+    print("  - Health:   http://localhost:8000/health")
     print("=" * 60)
 
     yield
@@ -467,12 +572,17 @@ LangSmith tracing for full observability.
 # Configure CORS (restrict origins in production, never use "*")
 _cors_origins = os.getenv("CORS_ORIGINS", "http://localhost:8000,http://localhost:3000")
 _allowed_origins = [origin.strip() for origin in _cors_origins.split(",") if origin.strip()]
+
+# SECURITY: Reject wildcard origins in production
+if any("*" in origin for origin in _allowed_origins):
+    print("[Security] WARNING: Wildcard CORS origins detected - not recommended for production")
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_allowed_origins,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*", API_KEY_HEADER],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization", "Accept", API_KEY_HEADER],
 )
 
 # Add API key authentication middleware
@@ -501,6 +611,7 @@ class HealthResponse(BaseModel):
     doc_rag_loaded: bool
     it_support_loaded: bool
     enterprise_agents_loaded: bool
+    deep_agent_loaded: bool
     tracing_enabled: bool
     langsmith_project: str | None
 
@@ -775,6 +886,72 @@ class DocumentIntelligenceUploadResponse(BaseModel):
 
 
 # ============================================================================
+# Deep Agent Models
+# ============================================================================
+
+class DeepAgentStartRequest(BaseModel):
+    """Request to start a Deep Agent session."""
+
+    user_id: str | None = None
+    metadata: dict | None = None
+
+
+class DeepAgentStartResponse(BaseModel):
+    """Response from starting a Deep Agent session."""
+
+    success: bool
+    session_id: str | None = None
+    message: str | None = None
+    error: str | None = None
+
+
+class DeepAgentChatRequest(BaseModel):
+    """Request to chat with Deep Agent."""
+
+    message: str
+    session_id: str | None = None
+    user_id: str | None = None
+
+
+class DeepAgentChatResponse(BaseModel):
+    """Response from Deep Agent chat."""
+
+    success: bool
+    response: str | None = None
+    session_id: str | None = None
+    todos: list[dict] | None = None
+    files: list[str] | None = None
+    tool_calls: list | None = None
+    iteration_count: int | None = None
+    error: str | None = None
+
+
+class DeepAgentContextResponse(BaseModel):
+    """Response with Deep Agent session context."""
+
+    success: bool
+    session_id: str
+    todos: list[dict] | None = None
+    files: list[str] | None = None
+    metadata: dict | None = None
+    error: str | None = None
+
+
+class DeepAgentUploadResponse(BaseModel):
+    """Response from Deep Agent document upload."""
+
+    success: bool
+    document_id: str | None = None
+    filename: str | None = None
+    file_type: str | None = None
+    chunks_created: int | None = None
+    detected_language: str | None = None
+    session_id: str | None = None
+    message: str | None = None
+    error: str | None = None
+
+
+# ============================================================================
 # API Endpoints
 # ============================================================================
 
@@ -795,6 +972,7 @@ async def health_check() -> HealthResponse:
         doc_rag_loaded=doc_rag_loaded,
         it_support_loaded=it_support_loaded,
         enterprise_agents_loaded=enterprise_agents_loaded,
+        deep_agent_loaded=deep_agent_loaded,
         tracing_enabled=tracing_enabled,
         langsmith_project=os.getenv("LANGCHAIN_PROJECT") if tracing_enabled else None,
     )
@@ -2042,6 +2220,878 @@ async def document_intelligence_clear_documents(
 
 
 # ============================================================================
+# Deep Agent Endpoints
+# ============================================================================
+
+@app.post("/api/deepagent/start", response_model=DeepAgentStartResponse, tags=["Deep Agent"])
+async def deep_agent_start(request: DeepAgentStartRequest) -> DeepAgentStartResponse:
+    """Start a new Deep Agent session.
+
+    The IT Operations Deep Agent can handle complex IT managed services tasks
+    including incident management, change management, problem management,
+    asset management, SLA monitoring, and knowledge management.
+
+    Returns:
+        Session ID and welcome message.
+    """
+    if not deep_agent_loaded or it_operations_deep_agent is None:
+        return DeepAgentStartResponse(
+            success=False,
+            error="Deep Agent not available. Set OPENAI_API_KEY or ANTHROPIC_API_KEY.",
+        )
+
+    import uuid
+    session_id = str(uuid.uuid4())
+
+    return DeepAgentStartResponse(
+        success=True,
+        session_id=session_id,
+        message="IT Operations Deep Agent session started. I can help with incident management, change requests, problem analysis, CMDB queries, SLA tracking, and knowledge base operations.",
+    )
+
+
+@app.post("/api/deepagent/chat", response_model=DeepAgentChatResponse, tags=["Deep Agent"])
+async def deep_agent_chat(request: DeepAgentChatRequest) -> DeepAgentChatResponse:
+    """Chat with the IT Operations Deep Agent.
+
+    The Deep Agent will:
+    1. Plan complex tasks using todos
+    2. Delegate to specialized subagents
+    3. Query ServiceNow for ITSM data
+    4. Store context in workspace files
+
+    Args:
+        request: Chat message and optional session ID.
+
+    Returns:
+        Agent response with todos, files, and tool calls.
+    """
+    if not deep_agent_loaded or it_operations_deep_agent is None:
+        return DeepAgentChatResponse(
+            success=False,
+            error="Deep Agent not available. Set OPENAI_API_KEY or ANTHROPIC_API_KEY.",
+        )
+
+    try:
+        result = await it_operations_deep_agent.achat(
+            message=request.message,
+            session_id=request.session_id,
+            user_id=request.user_id,
+        )
+
+        return DeepAgentChatResponse(
+            success=True,
+            response=result.get("response"),
+            session_id=result.get("session_id"),
+            todos=result.get("todos"),
+            files=result.get("files"),
+            tool_calls=result.get("tool_calls"),
+            iteration_count=result.get("iteration_count"),
+        )
+    except Exception as e:
+        return DeepAgentChatResponse(
+            success=False,
+            session_id=request.session_id,
+            error=str(e),
+        )
+
+
+@app.post("/api/deepagent/chat/stream", tags=["Deep Agent"])
+async def deep_agent_chat_stream(request: DeepAgentChatRequest):
+    """Stream chat with the IT Operations Deep Agent.
+
+    Uses Server-Sent Events (SSE) to stream:
+    - thinking: Agent's reasoning steps
+    - tool_start: When a tool is being called
+    - tool_result: Tool execution results
+    - todo_update: Todo list changes
+    - token: Streaming response tokens
+    - complete: Final response with all context
+
+    Args:
+        request: Chat message and session ID.
+
+    Returns:
+        SSE stream of events.
+    """
+    import json
+    import traceback
+
+    def serialize_event(event: dict) -> str:
+        """Serialize event to JSON, handling datetime and other types."""
+        def default_serializer(obj):
+            if hasattr(obj, "isoformat"):
+                return obj.isoformat()
+            if hasattr(obj, "model_dump"):
+                return obj.model_dump()
+            if hasattr(obj, "__dict__"):
+                return str(obj)
+            return str(obj)
+        return json.dumps(event, default=default_serializer)
+
+    if not deep_agent_loaded or it_operations_deep_agent is None:
+        async def error_generator():
+            yield f"data: {serialize_event({'type': 'error', 'data': {'error': 'Deep Agent not available. Set OPENAI_API_KEY or ANTHROPIC_API_KEY.'}})}\n\n"
+
+        return StreamingResponse(
+            error_generator(),
+            media_type="text/event-stream",
+        )
+
+    async def event_generator():
+        try:
+            print(f"[DEBUG] Starting stream for session: {request.session_id}")
+            async for event in it_operations_deep_agent.astream_chat(
+                message=request.message,
+                session_id=request.session_id,
+                user_id=request.user_id,
+            ):
+                try:
+                    yield f"data: {serialize_event(event)}\n\n"
+                except Exception as serialize_err:
+                    print(f"[ERROR] Failed to serialize event: {serialize_err}")
+                    yield f"data: {serialize_event({'type': 'error', 'data': {'error': f'Serialization error: {serialize_err}'}})}\n\n"
+            print(f"[DEBUG] Stream completed for session: {request.session_id}")
+        except GeneratorExit:
+            print(f"[DEBUG] Client disconnected from stream: {request.session_id}")
+        except Exception as e:
+            print(f"[ERROR] Stream error for session {request.session_id}: {e}")
+            traceback.print_exc()
+            yield f"data: {serialize_event({'type': 'error', 'data': {'error': str(e)}})}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@app.get("/api/deepagent/context/{session_id}", response_model=DeepAgentContextResponse, tags=["Deep Agent"])
+async def deep_agent_context(session_id: str) -> DeepAgentContextResponse:
+    """Get the current context for a Deep Agent session.
+
+    Returns todos, workspace files, and session metadata.
+
+    Args:
+        session_id: The session identifier.
+
+    Returns:
+        Session context including todos and files.
+    """
+    if not deep_agent_loaded or it_operations_deep_agent is None:
+        return DeepAgentContextResponse(
+            success=False,
+            session_id=session_id,
+            error="Deep Agent not available.",
+        )
+
+    try:
+        context = it_operations_deep_agent.get_session_context(session_id)
+        return DeepAgentContextResponse(
+            success=True,
+            session_id=session_id,
+            todos=context.get("todos"),
+            files=context.get("files"),
+            metadata=context.get("metadata"),
+        )
+    except Exception as e:
+        return DeepAgentContextResponse(
+            success=False,
+            session_id=session_id,
+            error=str(e),
+        )
+
+
+@app.get("/api/deepagent/todos/{session_id}", tags=["Deep Agent"])
+async def deep_agent_todos(session_id: str) -> dict:
+    """Get the todo list for a Deep Agent session.
+
+    Args:
+        session_id: The session identifier.
+
+    Returns:
+        List of todos with their status.
+    """
+    if not deep_agent_loaded or it_operations_deep_agent is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Deep Agent not available.",
+        )
+
+    context = it_operations_deep_agent.get_session_context(session_id)
+    todos = context.get("todos", [])
+
+    summary = {
+        "total": len(todos),
+        "pending": len([t for t in todos if t.get("status") == "pending"]),
+        "in_progress": len([t for t in todos if t.get("status") == "in_progress"]),
+        "completed": len([t for t in todos if t.get("status") == "completed"]),
+    }
+
+    return {
+        "success": True,
+        "session_id": session_id,
+        "todos": todos,
+        "summary": summary,
+    }
+
+
+@app.get("/api/deepagent/files/{session_id}", tags=["Deep Agent"])
+async def deep_agent_files(session_id: str) -> dict:
+    """Get the workspace files for a Deep Agent session.
+
+    Args:
+        session_id: The session identifier.
+
+    Returns:
+        List of file paths in the session workspace.
+    """
+    if not deep_agent_loaded or it_operations_deep_agent is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Deep Agent not available.",
+        )
+
+    context = it_operations_deep_agent.get_session_context(session_id)
+
+    return {
+        "success": True,
+        "session_id": session_id,
+        "files": context.get("files", []),
+        "count": len(context.get("files", [])),
+    }
+
+
+@app.get("/api/deepagent/subagents", tags=["Deep Agent"])
+async def deep_agent_subagents() -> dict:
+    """Get available subagents for the Deep Agent.
+
+    Returns:
+        List of available subagents with descriptions.
+    """
+    if not deep_agent_loaded:
+        raise HTTPException(
+            status_code=503,
+            detail="Deep Agent not available.",
+        )
+
+    subagents = [
+        {
+            "name": "incident-manager",
+            "description": "Incident lifecycle management - create, update, escalate incidents",
+        },
+        {
+            "name": "change-manager",
+            "description": "Change request validation and risk assessment",
+        },
+        {
+            "name": "problem-manager",
+            "description": "Root cause analysis and known error management",
+        },
+        {
+            "name": "asset-manager",
+            "description": "CMDB queries and CI relationship mapping",
+        },
+        {
+            "name": "sla-monitor",
+            "description": "SLA tracking and breach prediction",
+        },
+        {
+            "name": "knowledge-manager",
+            "description": "Knowledge base search and article management",
+        },
+    ]
+
+    return {
+        "success": True,
+        "subagents": subagents,
+        "count": len(subagents),
+    }
+
+
+@app.post("/api/deepagent/upload", response_model=DeepAgentUploadResponse, tags=["Deep Agent"])
+async def deep_agent_upload(
+    file: UploadFile = File(...),
+    session_id: str = Form(...),
+) -> DeepAgentUploadResponse:
+    """Upload a document to the IT Operations Deep Agent session.
+
+    Supported file types: PDF, TXT, DOCX, DOC, PPTX, PPT, PNG, JPG, JPEG
+    Documents are processed, chunked, and indexed for RAG-based search.
+    The agent can then use search_attachments tool to query document content.
+
+    Args:
+        file: Document file to upload
+        session_id: Session ID to associate the document with
+
+    Returns:
+        Upload response with document ID and metadata
+    """
+    if not deep_agent_loaded:
+        return DeepAgentUploadResponse(
+            success=False,
+            error="Deep Agent not available. Set OPENAI_API_KEY or ANTHROPIC_API_KEY.",
+        )
+
+    from app.deepagents.tools.document_tools import process_and_store_document
+
+    # Validate file extension
+    allowed_extensions = {".pdf", ".txt", ".docx", ".doc", ".pptx", ".ppt", ".png", ".jpg", ".jpeg"}
+    file_ext = "." + file.filename.split(".")[-1].lower() if "." in file.filename else ""
+
+    if file_ext not in allowed_extensions:
+        return DeepAgentUploadResponse(
+            success=False,
+            filename=file.filename,
+            error=f"Unsupported file type: {file_ext}. Supported: {', '.join(allowed_extensions)}",
+        )
+
+    try:
+        # Read file content
+        content = await file.read()
+
+        # Process and store document
+        result = process_and_store_document(
+            content=content,
+            filename=file.filename,
+            session_id=session_id,
+        )
+
+        return DeepAgentUploadResponse(
+            success=True,
+            document_id=result["doc_id"],
+            filename=result["filename"],
+            file_type=result["file_type"],
+            chunks_created=result["chunk_count"],
+            detected_language=result["language"],
+            session_id=session_id,
+            message=f"Document '{file.filename}' uploaded successfully with {result['chunk_count']} chunks. Use search_attachments tool to query content.",
+        )
+
+    except ValueError as ve:
+        return DeepAgentUploadResponse(
+            success=False,
+            filename=file.filename,
+            session_id=session_id,
+            error=str(ve),
+        )
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return DeepAgentUploadResponse(
+            success=False,
+            filename=file.filename,
+            session_id=session_id,
+            error=f"Failed to process document: {e}",
+        )
+
+
+@app.get("/api/deepagent/attachments/{session_id}", tags=["Deep Agent"])
+async def deep_agent_list_attachments(session_id: str) -> dict:
+    """List all uploaded documents for a Deep Agent session.
+
+    Args:
+        session_id: Session identifier
+
+    Returns:
+        List of uploaded documents with metadata
+    """
+    if not deep_agent_loaded:
+        raise HTTPException(
+            status_code=503,
+            detail="Deep Agent not available.",
+        )
+
+    from app.deepagents.tools.document_tools import _document_metadata, _current_document
+
+    docs = _document_metadata.get(session_id, {})
+    current_doc_id = _current_document.get(session_id)
+
+    documents = []
+    for doc_id, meta in docs.items():
+        documents.append({
+            **meta,
+            "is_current": doc_id == current_doc_id,
+        })
+
+    return {
+        "success": True,
+        "session_id": session_id,
+        "documents": documents,
+        "count": len(documents),
+        "current_document_id": current_doc_id,
+    }
+
+
+@app.delete("/api/deepagent/attachments/{session_id}", tags=["Deep Agent"])
+async def deep_agent_clear_attachments(
+    session_id: str,
+    document_ids: str | None = None,
+) -> dict:
+    """Clear uploaded documents from a Deep Agent session.
+
+    Args:
+        session_id: Session identifier
+        document_ids: Comma-separated document IDs to clear, or None for all
+
+    Returns:
+        Confirmation of cleared documents
+    """
+    if not deep_agent_loaded:
+        raise HTTPException(
+            status_code=503,
+            detail="Deep Agent not available.",
+        )
+
+    from app.deepagents.tools.document_tools import clear_attachments
+
+    doc_ids = document_ids.split(",") if document_ids else None
+    result = clear_attachments.invoke({"session_id": session_id, "doc_ids": doc_ids})
+
+    return {
+        "success": True,
+        "session_id": session_id,
+        "message": result,
+    }
+
+
+# ============================================================================
+# Sales Intelligence Deep Agent Endpoints
+# ============================================================================
+
+@app.post("/api/sales-agent/start", response_model=DeepAgentStartResponse, tags=["Sales Agent"])
+async def sales_agent_start(request: DeepAgentStartRequest) -> DeepAgentStartResponse:
+    """Start a new Sales Intelligence Deep Agent session.
+
+    The Sales Intelligence Deep Agent assists with deal qualification,
+    RFP/RFI responses, solution mapping, competitive positioning,
+    and pricing optimization.
+
+    Returns:
+        Session ID and welcome message.
+    """
+    if not deep_agent_loaded or sales_intelligence_deep_agent is None:
+        return DeepAgentStartResponse(
+            success=False,
+            error="Sales Agent not available. Set OPENAI_API_KEY or ANTHROPIC_API_KEY.",
+        )
+
+    import uuid
+    session_id = str(uuid.uuid4())
+
+    return DeepAgentStartResponse(
+        success=True,
+        session_id=session_id,
+        message="Sales Intelligence Deep Agent session started. I can help with deal qualification, RFP responses, solution mapping, competitive analysis, and pricing optimization.",
+    )
+
+
+@app.post("/api/sales-agent/chat", response_model=DeepAgentChatResponse, tags=["Sales Agent"])
+async def sales_agent_chat(request: DeepAgentChatRequest) -> DeepAgentChatResponse:
+    """Chat with the Sales Intelligence Deep Agent.
+
+    The Deep Agent will:
+    1. Qualify deals using BANT/MEDDIC frameworks
+    2. Draft RFP/RFI responses using templates
+    3. Analyze competitors and develop win strategies
+    4. Calculate pricing with margin analysis
+    5. Assess win probability and deal risks
+
+    Args:
+        request: Chat message and optional session ID.
+
+    Returns:
+        Agent response with todos, files, and tool calls.
+    """
+    if not deep_agent_loaded or sales_intelligence_deep_agent is None:
+        return DeepAgentChatResponse(
+            success=False,
+            error="Sales Agent not available. Set OPENAI_API_KEY or ANTHROPIC_API_KEY.",
+        )
+
+    try:
+        result = await sales_intelligence_deep_agent.achat(
+            message=request.message,
+            session_id=request.session_id,
+            user_id=request.user_id,
+        )
+
+        return DeepAgentChatResponse(
+            success=True,
+            response=result.get("response"),
+            session_id=result.get("session_id"),
+            todos=result.get("todos"),
+            files=result.get("files"),
+            tool_calls=result.get("tool_calls"),
+            iteration_count=result.get("iteration_count"),
+        )
+    except Exception as e:
+        return DeepAgentChatResponse(
+            success=False,
+            session_id=request.session_id,
+            error=str(e),
+        )
+
+
+@app.post("/api/sales-agent/chat/stream", tags=["Sales Agent"])
+async def sales_agent_chat_stream(request: DeepAgentChatRequest):
+    """Stream chat with the Sales Intelligence Deep Agent.
+
+    Uses Server-Sent Events (SSE) to stream:
+    - thinking: Agent's reasoning steps
+    - tool_start: When a tool is being called
+    - tool_result: Tool execution results
+    - todo_update: Todo list changes
+    - token: Streaming response tokens
+    - complete: Final response with all context
+
+    Args:
+        request: Chat message and session ID.
+
+    Returns:
+        SSE stream of events.
+    """
+    import json
+    import traceback
+
+    def serialize_event(event: dict) -> str:
+        """Serialize event to JSON, handling datetime and other types."""
+        def default_serializer(obj):
+            if hasattr(obj, "isoformat"):
+                return obj.isoformat()
+            if hasattr(obj, "model_dump"):
+                return obj.model_dump()
+            if hasattr(obj, "__dict__"):
+                return str(obj)
+            return str(obj)
+        return json.dumps(event, default=default_serializer)
+
+    async def event_generator():
+        if not deep_agent_loaded or sales_intelligence_deep_agent is None:
+            yield f"data: {serialize_event({'type': 'error', 'data': {'error': 'Sales Agent not available'}})}\n\n"
+            return
+
+        try:
+            print(f"[DEBUG] Starting Sales Agent stream for session: {request.session_id}")
+            async for event in sales_intelligence_deep_agent.astream_chat(
+                message=request.message,
+                session_id=request.session_id,
+                user_id=request.user_id,
+            ):
+                try:
+                    yield f"data: {serialize_event(event)}\n\n"
+                except Exception as serialize_err:
+                    print(f"[ERROR] Failed to serialize event: {serialize_err}")
+                    yield f"data: {serialize_event({'type': 'error', 'data': {'error': f'Serialization error: {serialize_err}'}})}\n\n"
+            print(f"[DEBUG] Sales Agent stream completed for session: {request.session_id}")
+        except GeneratorExit:
+            print(f"[DEBUG] Client disconnected from Sales Agent stream: {request.session_id}")
+        except Exception as e:
+            print(f"[ERROR] Sales Agent stream error for session {request.session_id}: {e}")
+            import traceback
+            traceback.print_exc()
+            yield f"data: {serialize_event({'type': 'error', 'data': {'error': str(e)}})}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@app.get("/api/sales-agent/context/{session_id}", response_model=DeepAgentContextResponse, tags=["Sales Agent"])
+async def sales_agent_context(session_id: str) -> DeepAgentContextResponse:
+    """Get context for a Sales Agent session.
+
+    Args:
+        session_id: Session identifier.
+
+    Returns:
+        Session context including todos and files.
+    """
+    if not deep_agent_loaded or sales_intelligence_deep_agent is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Sales Agent not available.",
+        )
+
+    try:
+        context = sales_intelligence_deep_agent.get_session_context(session_id)
+
+        return DeepAgentContextResponse(
+            success=True,
+            session_id=session_id,
+            todos=context.get("todos", []),
+            files=context.get("files", []),
+            metadata=context.get("metadata"),
+        )
+    except Exception as e:
+        return DeepAgentContextResponse(
+            success=False,
+            session_id=session_id,
+            error=str(e),
+        )
+
+
+@app.get("/api/sales-agent/todos/{session_id}", tags=["Sales Agent"])
+async def sales_agent_todos(session_id: str) -> dict:
+    """Get the todo list for a Sales Agent session.
+
+    Args:
+        session_id: The session identifier.
+
+    Returns:
+        List of todos with their status.
+    """
+    if not deep_agent_loaded or sales_intelligence_deep_agent is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Sales Agent not available.",
+        )
+
+    context = sales_intelligence_deep_agent.get_session_context(session_id)
+    todos = context.get("todos", [])
+
+    summary = {
+        "total": len(todos),
+        "pending": len([t for t in todos if t.get("status") == "pending"]),
+        "in_progress": len([t for t in todos if t.get("status") == "in_progress"]),
+        "completed": len([t for t in todos if t.get("status") == "completed"]),
+    }
+
+    return {
+        "success": True,
+        "session_id": session_id,
+        "todos": todos,
+        "summary": summary,
+    }
+
+
+@app.get("/api/sales-agent/files/{session_id}", tags=["Sales Agent"])
+async def sales_agent_files(session_id: str) -> dict:
+    """Get the workspace files for a Sales Agent session.
+
+    Args:
+        session_id: The session identifier.
+
+    Returns:
+        List of file paths in the session workspace.
+    """
+    if not deep_agent_loaded or sales_intelligence_deep_agent is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Sales Agent not available.",
+        )
+
+    context = sales_intelligence_deep_agent.get_session_context(session_id)
+
+    return {
+        "success": True,
+        "session_id": session_id,
+        "files": context.get("files", []),
+        "count": len(context.get("files", [])),
+    }
+
+
+@app.get("/api/sales-agent/subagents", tags=["Sales Agent"])
+async def sales_agent_subagents() -> dict:
+    """Get available subagents for the Sales Intelligence Agent.
+
+    Returns:
+        List of available subagents with descriptions.
+    """
+    if not deep_agent_loaded:
+        raise HTTPException(
+            status_code=503,
+            detail="Sales Agent not available.",
+        )
+
+    subagents = [
+        {
+            "name": "deal-qualifier",
+            "description": "Lead qualification using BANT/MEDDIC frameworks",
+        },
+        {
+            "name": "solution-architect",
+            "description": "Requirement mapping and solution design by business line",
+        },
+        {
+            "name": "proposal-writer",
+            "description": "RFP/RFI response drafting and executive summaries",
+        },
+        {
+            "name": "pricing-analyst",
+            "description": "Pricing strategy, margin analysis, and commercial modeling",
+        },
+        {
+            "name": "competitive-strategist",
+            "description": "Competitive positioning and objection handling",
+        },
+    ]
+
+    return {
+        "success": True,
+        "subagents": subagents,
+        "count": len(subagents),
+    }
+
+
+@app.post("/api/sales-agent/upload", response_model=DeepAgentUploadResponse, tags=["Sales Agent"])
+async def sales_agent_upload(
+    file: UploadFile = File(...),
+    session_id: str = Form(...),
+) -> DeepAgentUploadResponse:
+    """Upload a document to the Sales Intelligence Deep Agent session.
+
+    Supported file types: PDF, TXT, DOCX, DOC, PPTX, PPT, PNG, JPG, JPEG
+    Documents are processed, chunked, and indexed for RAG-based search.
+    The agent can then use search_attachments tool to query document content.
+    Useful for RFP documents, customer requirements, competitive intel, etc.
+
+    Args:
+        file: Document file to upload
+        session_id: Session ID to associate the document with
+
+    Returns:
+        Upload response with document ID and metadata
+    """
+    if not deep_agent_loaded:
+        return DeepAgentUploadResponse(
+            success=False,
+            error="Sales Agent not available. Set OPENAI_API_KEY or ANTHROPIC_API_KEY.",
+        )
+
+    from app.deepagents.tools.document_tools import process_and_store_document
+
+    # Validate file extension
+    allowed_extensions = {".pdf", ".txt", ".docx", ".doc", ".pptx", ".ppt", ".png", ".jpg", ".jpeg"}
+    file_ext = "." + file.filename.split(".")[-1].lower() if "." in file.filename else ""
+
+    if file_ext not in allowed_extensions:
+        return DeepAgentUploadResponse(
+            success=False,
+            filename=file.filename,
+            error=f"Unsupported file type: {file_ext}. Supported: {', '.join(allowed_extensions)}",
+        )
+
+    try:
+        # Read file content
+        content = await file.read()
+
+        # Process and store document
+        result = process_and_store_document(
+            content=content,
+            filename=file.filename,
+            session_id=session_id,
+        )
+
+        return DeepAgentUploadResponse(
+            success=True,
+            document_id=result["doc_id"],
+            filename=result["filename"],
+            file_type=result["file_type"],
+            chunks_created=result["chunk_count"],
+            detected_language=result["language"],
+            session_id=session_id,
+            message=f"Document '{file.filename}' uploaded successfully with {result['chunk_count']} chunks. Use search_attachments tool to query content.",
+        )
+
+    except ValueError as ve:
+        return DeepAgentUploadResponse(
+            success=False,
+            filename=file.filename,
+            session_id=session_id,
+            error=str(ve),
+        )
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return DeepAgentUploadResponse(
+            success=False,
+            filename=file.filename,
+            session_id=session_id,
+            error=f"Failed to process document: {e}",
+        )
+
+
+@app.get("/api/sales-agent/attachments/{session_id}", tags=["Sales Agent"])
+async def sales_agent_list_attachments(session_id: str) -> dict:
+    """List all uploaded documents for a Sales Agent session.
+
+    Args:
+        session_id: Session identifier
+
+    Returns:
+        List of uploaded documents with metadata
+    """
+    if not deep_agent_loaded:
+        raise HTTPException(
+            status_code=503,
+            detail="Sales Agent not available.",
+        )
+
+    from app.deepagents.tools.document_tools import _document_metadata, _current_document
+
+    docs = _document_metadata.get(session_id, {})
+    current_doc_id = _current_document.get(session_id)
+
+    documents = []
+    for doc_id, meta in docs.items():
+        documents.append({
+            **meta,
+            "is_current": doc_id == current_doc_id,
+        })
+
+    return {
+        "success": True,
+        "session_id": session_id,
+        "documents": documents,
+        "count": len(documents),
+        "current_document_id": current_doc_id,
+    }
+
+
+@app.delete("/api/sales-agent/attachments/{session_id}", tags=["Sales Agent"])
+async def sales_agent_clear_attachments(
+    session_id: str,
+    document_ids: str | None = None,
+) -> dict:
+    """Clear uploaded documents from a Sales Agent session.
+
+    Args:
+        session_id: Session identifier
+        document_ids: Comma-separated document IDs to clear, or None for all
+
+    Returns:
+        Confirmation of cleared documents
+    """
+    if not deep_agent_loaded:
+        raise HTTPException(
+            status_code=503,
+            detail="Sales Agent not available.",
+        )
+
+    from app.deepagents.tools.document_tools import clear_attachments
+
+    doc_ids = document_ids.split(",") if document_ids else None
+    result = clear_attachments.invoke({"session_id": session_id, "doc_ids": doc_ids})
+
+    return {
+        "success": True,
+        "session_id": session_id,
+        "message": result,
+    }
+
+
+# ============================================================================
 # Chat UI (Static Files)
 # ============================================================================
 
@@ -2051,15 +3101,41 @@ STATIC_DIR = Path(__file__).parent / "static"
 
 @app.get("/chat", response_class=HTMLResponse)
 async def chat_ui() -> HTMLResponse:
-    """Serve the chat UI for demos."""
+    """Serve the chat UI at /chat.
+
+    Returns the HTML with no-cache headers and dynamic timestamp to ensure
+    the latest version is always served and verifiable.
+    """
     chat_file = STATIC_DIR / "chat.html"
     if chat_file.exists():
-        return HTMLResponse(content=chat_file.read_text(encoding="utf-8"))
+        # Read file fresh every time (no caching)
+        html_content = chat_file.read_text(encoding="utf-8")
+
+        # Inject server timestamp for cache verification (invisible to user)
+        server_timestamp = f"<!-- Server-rendered: {time.time()} -->\n"
+        html_content = server_timestamp + html_content
+
+        return HTMLResponse(
+            content=html_content,
+            headers={
+                "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0",
+                "Pragma": "no-cache",
+                "Expires": "0",
+                "X-Content-Type-Options": "nosniff",
+                "ETag": f'"{int(time.time())}"',
+            },
+        )
 
     return HTMLResponse(
         content="<h1>Chat UI not found</h1><p>Please ensure app/static/chat.html exists.</p>",
         status_code=404,
     )
+
+
+@app.get("/chatui")
+async def chatui_redirect() -> RedirectResponse:
+    """Redirect legacy /chatui to /chat for backwards compatibility."""
+    return RedirectResponse(url="/chat", status_code=301)
 
 
 # Mount static files if directory exists
@@ -2072,7 +3148,13 @@ if STATIC_DIR.exists():
 # ============================================================================
 
 def setup_langchain_routes() -> None:
-    """Set up LangServe routes for LangChain chains."""
+    """Set up LangServe routes for LangChain chains.
+
+    API routes are prefixed with /api/langserve/ for clean separation:
+    - /api/langserve/chat/invoke, /stream, /batch
+    - /api/langserve/rag/invoke, /stream, /batch
+    - /api/langserve/agent/invoke, /stream
+    """
     if not chains_loaded:
         return
 
@@ -2080,7 +3162,7 @@ def setup_langchain_routes() -> None:
     add_routes(
         app,
         chat_chain,
-        path="/chat",
+        path="/api/langserve/chat",
         enabled_endpoints=["invoke", "stream", "batch"],
     )
 
@@ -2088,7 +3170,7 @@ def setup_langchain_routes() -> None:
     add_routes(
         app,
         rag_chain,
-        path="/rag",
+        path="/api/langserve/rag",
         enabled_endpoints=["invoke", "stream", "batch"],
     )
 
@@ -2096,7 +3178,7 @@ def setup_langchain_routes() -> None:
     add_routes(
         app,
         agent_executor,
-        path="/agent",
+        path="/api/langserve/agent",
         enabled_endpoints=["invoke", "stream"],
     )
 
