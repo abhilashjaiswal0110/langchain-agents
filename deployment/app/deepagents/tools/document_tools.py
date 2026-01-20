@@ -13,6 +13,7 @@ Following Enterprise Development Standards:
 import logging
 import os
 import uuid
+from contextvars import ContextVar
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -20,6 +21,36 @@ from typing import Any
 from langchain_core.tools import tool
 
 logger = logging.getLogger(__name__)
+
+# =============================================================================
+# Session Context Management
+# =============================================================================
+
+# Context variable to track the current session_id during agent execution
+# This allows tools to access the session_id without requiring it as a parameter
+_current_session_id: ContextVar[str] = ContextVar("current_session_id", default="default")
+
+
+def set_current_session(session_id: str) -> None:
+    """Set the current session ID for document tools.
+
+    Call this at the start of each agent invocation to ensure
+    document tools can access the correct session context.
+
+    Args:
+        session_id: The session identifier to use.
+    """
+    _current_session_id.set(session_id)
+    logger.debug(f"Set current session context: {session_id}")
+
+
+def get_current_session() -> str:
+    """Get the current session ID.
+
+    Returns:
+        The current session ID, or 'default' if not set.
+    """
+    return _current_session_id.get()
 
 # =============================================================================
 # Module-Level Storage (Session-Isolated)
@@ -169,10 +200,10 @@ def get_document_context(session_id: str) -> str:
     """Get document context string for system prompt.
 
     Args:
-        session_id: Session identifier
+        session_id: Session identifier.
 
     Returns:
-        Formatted context string about uploaded documents
+        Formatted context string about uploaded documents.
     """
     if session_id not in _document_metadata or not _document_metadata[session_id]:
         return ""
@@ -180,12 +211,12 @@ def get_document_context(session_id: str) -> str:
     docs = _document_metadata[session_id]
     current_doc_id = _current_document.get(session_id)
 
-    context = "\n## UPLOADED DOCUMENTS AVAILABLE:\n"
+    context = "\n## UPLOADED DOCUMENTS AVAILABLE IN THIS SESSION:\n"
     context += f"**Total Documents**: {len(docs)}\n\n"
 
     if current_doc_id and current_doc_id in docs:
         current = docs[current_doc_id]
-        context += f"**Current Document (most recent)**:\n"
+        context += "**Current Document (most recent)**:\n"
         context += f"- Filename: {current['filename']}\n"
         context += f"- Document ID: {current['doc_id']}\n"
         context += f"- Type: {current['file_type']}\n"
@@ -198,7 +229,11 @@ def get_document_context(session_id: str) -> str:
             if doc_id != current_doc_id:
                 context += f"- {meta['filename']} (ID: {doc_id}, {meta['chunk_count']} chunks)\n"
 
-    context += "\n**IMPORTANT**: Use `search_attachments` tool to query document content.\n"
+    context += "\n**ACTION REQUIRED**: When the user asks about document content, you MUST use:\n"
+    context += "- `search_attachments(query=\"your search query\")` to find information\n"
+    context += "- `list_attachments()` to see all documents\n"
+    context += "- `get_attachment_summary()` for document overview\n"
+    context += "\nDo NOT answer from your training data - always search the uploaded documents!\n"
 
     return context
 
@@ -210,7 +245,7 @@ def get_document_context(session_id: str) -> str:
 @tool
 def search_attachments(
     query: str,
-    session_id: str,
+    session_id: str | None = None,
     scope: str = "current",
     k: int = 5,
 ) -> str:
@@ -220,15 +255,20 @@ def search_attachments(
     The search uses vector similarity to find the most relevant chunks.
 
     Args:
-        query: Search query describing what information to find
-        session_id: Session identifier for document isolation
+        query: Search query describing what information to find.
+        session_id: Session identifier (optional - uses current session if not provided).
         scope: Search scope - "current" (most recent doc), "recent" (last 3),
-               or "all" (all documents)
-        k: Number of results to return (default 5)
+               or "all" (all documents).
+        k: Number of results to return (default 5).
 
     Returns:
-        Formatted search results with source attribution
+        Formatted search results with source attribution.
     """
+    # Use context variable as fallback for session_id
+    if session_id is None:
+        session_id = get_current_session()
+        logger.debug(f"search_attachments using context session: {session_id}")
+
     vector_store = _get_or_create_vector_store(session_id)
 
     if vector_store is None:
@@ -281,17 +321,22 @@ def search_attachments(
 
 
 @tool
-def list_attachments(session_id: str) -> str:
+def list_attachments(session_id: str | None = None) -> str:
     """List all uploaded documents in the session.
 
     Use this tool to see what documents are available to search.
 
     Args:
-        session_id: Session identifier
+        session_id: Session identifier (optional - uses current session if not provided).
 
     Returns:
-        Formatted list of uploaded documents with metadata
+        Formatted list of uploaded documents with metadata.
     """
+    # Use context variable as fallback for session_id
+    if session_id is None:
+        session_id = get_current_session()
+        logger.debug(f"list_attachments using context session: {session_id}")
+
     if session_id not in _document_metadata or not _document_metadata[session_id]:
         return "No documents have been uploaded yet."
 
@@ -315,20 +360,25 @@ def list_attachments(session_id: str) -> str:
 
 @tool
 def get_attachment_summary(
-    session_id: str,
     doc_id: str | None = None,
+    session_id: str | None = None,
 ) -> str:
     """Get a summary of a specific document or the current document.
 
     Use this tool to get an overview of document content.
 
     Args:
-        session_id: Session identifier
-        doc_id: Specific document ID, or None for current document
+        doc_id: Specific document ID, or None for current document.
+        session_id: Session identifier (optional - uses current session if not provided).
 
     Returns:
-        Document summary with key information
+        Document summary with key information.
     """
+    # Use context variable as fallback for session_id
+    if session_id is None:
+        session_id = get_current_session()
+        logger.debug(f"get_attachment_summary using context session: {session_id}")
+
     if session_id not in _document_metadata or not _document_metadata[session_id]:
         return "No documents have been uploaded yet."
 
@@ -372,8 +422,8 @@ def get_attachment_summary(
 
 @tool
 def clear_attachments(
-    session_id: str,
     doc_ids: list[str] | None = None,
+    session_id: str | None = None,
 ) -> str:
     """Clear uploaded documents from the session.
 
@@ -382,12 +432,17 @@ def clear_attachments(
     metadata is cleared and documents are excluded from searches.
 
     Args:
-        session_id: Session identifier
-        doc_ids: Specific document IDs to clear, or None for all
+        doc_ids: Specific document IDs to clear, or None for all.
+        session_id: Session identifier (optional - uses current session if not provided).
 
     Returns:
-        Confirmation message
+        Confirmation message.
     """
+    # Use context variable as fallback for session_id
+    if session_id is None:
+        session_id = get_current_session()
+        logger.debug(f"clear_attachments using context session: {session_id}")
+
     if session_id not in _document_metadata:
         return "No documents to clear."
 
@@ -431,4 +486,6 @@ __all__ = [
     "clear_attachments",
     "process_and_store_document",
     "get_document_context",
+    "set_current_session",
+    "get_current_session",
 ]

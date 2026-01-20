@@ -94,6 +94,8 @@ from app.deepagents.tools.document_tools import (
     clear_attachments,
     process_and_store_document,
     get_document_context,
+    set_current_session,
+    get_current_session,
 )
 
 __all__ = [
@@ -172,4 +174,6 @@ __all__ = [
     "clear_attachments",
     "process_and_store_document",
     "get_document_context",
+    "set_current_session",
+    "get_current_session",
 ]
