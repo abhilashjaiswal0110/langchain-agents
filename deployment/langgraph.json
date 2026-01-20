@@ -3,7 +3,9 @@
   "graphs": {
     "servicenow_agent": "./app/agents/servicenow_agent.py:get_graph",
     "document_agent": "./app/agents/documents/document_agent.py:get_graph",
-    "it_helpdesk": "./app/agents/it_helpdesk.py:get_graph"
+    "it_helpdesk": "./app/agents/it_helpdesk.py:get_graph",
+    "it_operations_agent": "./app/deepagents/it_operations_agent.py:get_graph",
+    "sales_intelligence_agent": "./app/deepagents/sales_intelligence_agent.py:get_graph"
   },
   "env": ".env",
   "python_version": "3.11"
