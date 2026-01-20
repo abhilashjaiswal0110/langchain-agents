@@ -176,7 +176,8 @@ deployment/server_startup.log
 deployment/docs/ENHANCEMENT_PLAN.md
 
 # Doc templates directory
-/doctemplates
+/deployment/docs/doctemplates
+deployment/docs/doctemplates/
 
 # Temporary/data files
 nul

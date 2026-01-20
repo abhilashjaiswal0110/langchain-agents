@@ -71,6 +71,7 @@ from app.deepagents.tools.document_tools import (
     get_attachment_summary,
     clear_attachments,
     get_document_context,
+    set_current_session,
 )
 from app.deepagents.storage.persistent_backend import PersistentStorage
 
@@ -137,13 +138,17 @@ Use file system tools to:
 Users can upload documents (PDF, Word, TXT, PPT, images) for context.
 This is especially useful for RFP documents, customer requirements, competitive intel.
 When documents are uploaded, use these tools:
-- `search_attachments`: Search document content using semantic similarity
-- `list_attachments`: See all uploaded documents
-- `get_attachment_summary`: Get overview of a document
+- `search_attachments(query)`: Search document content using semantic similarity
+- `list_attachments()`: See all uploaded documents
+- `get_attachment_summary()`: Get overview of a document
+- `clear_attachments()`: Clear documents from session
+
+**NOTE**: You do NOT need to provide session_id parameter - it is handled automatically.
 
 **IMPORTANT**: When users ask about uploaded documents (RFPs, requirements, etc.),
 ALWAYS use `search_attachments` to find relevant content first.
 Never answer from memory - search the documents for accurate information.
+The document context is automatically available to you through these tools.
 
 ## Response Format
 - Provide clear, actionable responses
@@ -684,6 +689,9 @@ class SalesIntelligenceDeepAgent:
         if session_id is None:
             session_id = str(uuid.uuid4())
 
+        # Set session context for document tools
+        set_current_session(session_id)
+
         config = {
             "configurable": {"thread_id": session_id},
             "recursion_limit": 50,
@@ -723,6 +731,9 @@ class SalesIntelligenceDeepAgent:
         """Async version of chat."""
         if session_id is None:
             session_id = str(uuid.uuid4())
+
+        # Set session context for document tools
+        set_current_session(session_id)
 
         config = {
             "configurable": {"thread_id": session_id},
@@ -787,6 +798,9 @@ class SalesIntelligenceDeepAgent:
         if session_id is None:
             session_id = str(uuid.uuid4())
 
+        # Set session context for document tools
+        set_current_session(session_id)
+
         config = {
             "configurable": {"thread_id": session_id},
             "recursion_limit": 50,
@@ -806,23 +820,38 @@ class SalesIntelligenceDeepAgent:
         accumulated_tokens = ""
         current_phase = "planning"
         thinking_buffer = ""  # Buffer for accumulating thinking content
+        pending_tool_calls: list[dict] = []  # Track pending tool calls
+        last_tool_name: str | None = None  # Track the last tool being executed
 
         # Phase detection based on iteration and tool usage
         def get_phase(iter_num: int, has_tool_calls: bool, tool_name: str | None = None) -> str:
-            if iter_num == 1:
-                return "planning"
             if tool_name:
                 if tool_name in ("write_todos", "update_todo"):
                     return "planning"
                 elif tool_name in ("search_opportunities", "get_deal_details", "get_customer_history",
                                    "search_rfp_templates", "extract_requirements", "search_attachments",
+                                   "list_attachments", "get_attachment_summary",
                                    "get_competitive_analysis", "get_similar_deals"):
                     return "analyzing"
                 else:
                     return "executing"
             if has_tool_calls:
                 return "executing"
+            if iter_num == 1:
+                return "planning"
             return "summarizing"
+
+        # Get a descriptive message for what's happening
+        def get_phase_message(phase: str, tool_name: str | None = None, tool_input: dict | None = None) -> str:
+            if tool_name:
+                return self._get_tool_description(tool_name, tool_input or {})
+            phase_messages = {
+                "planning": "Planning approach...",
+                "analyzing": "Analyzing data...",
+                "executing": "Executing actions...",
+                "summarizing": "Preparing response...",
+            }
+            return phase_messages.get(phase, f"Processing...")
 
         try:
             async for event in self.graph.astream_events(
@@ -841,26 +870,51 @@ class SalesIntelligenceDeepAgent:
                 # Agent thinking/reasoning - iteration start
                 if event_type == "on_chat_model_start":
                     iteration += 1
-                    current_phase = get_phase(iteration, False)
+                    pending_tool_calls = []  # Reset for new iteration
                     thinking_buffer = ""  # Reset thinking buffer for new iteration
 
-                    phase_messages = {
-                        "planning": "Planning approach...",
-                        "analyzing": "Analyzing data...",
-                        "executing": "Executing actions...",
-                        "summarizing": "Preparing response...",
-                    }
+                    # Determine phase based on context
+                    if last_tool_name:
+                        # Coming back after tool execution - analyzing results
+                        current_phase = "analyzing"
+                        phase_msg = f"Analyzing {last_tool_name} results..."
+                    elif iteration == 1:
+                        current_phase = "planning"
+                        phase_msg = "Planning approach..."
+                    else:
+                        current_phase = "summarizing"
+                        phase_msg = "Preparing response..."
 
                     yield {
                         "type": "thinking",
                         "data": {
                             "iteration": iteration,
                             "phase": current_phase,
-                            "content": "",  # Content will be streamed
-                            "summary": phase_messages.get(current_phase, f"Step {iteration}..."),
+                            "content": "",
+                            "summary": phase_msg,
                             "is_reasoning_token": False,
                         },
                     }
+
+                # LLM finished - check for tool calls
+                elif event_type == "on_chat_model_end":
+                    output = event_data.get("output")
+                    if output and hasattr(output, "tool_calls") and output.tool_calls:
+                        pending_tool_calls = output.tool_calls
+                        # Emit thinking update about pending tool calls
+                        tool_names = [tc.get("name", tc.get("function", {}).get("name", "unknown")) for tc in pending_tool_calls]
+                        current_phase = "executing"
+
+                        yield {
+                            "type": "thinking",
+                            "data": {
+                                "iteration": iteration,
+                                "phase": current_phase,
+                                "content": f"Calling tools: {', '.join(tool_names)}",
+                                "summary": f"Executing {len(tool_names)} tool(s)...",
+                                "is_reasoning_token": False,
+                            },
+                        }
 
                 # Streaming tokens from LLM
                 elif event_type == "on_chat_model_stream":
@@ -954,6 +1008,7 @@ class SalesIntelligenceDeepAgent:
                 elif event_type == "on_tool_start":
                     tool_name = event_name
                     tool_input = event_data.get("input", {})
+                    last_tool_name = tool_name  # Track for next iteration context
 
                     # Update phase based on tool type
                     current_phase = get_phase(iteration, True, tool_name)
@@ -983,6 +1038,18 @@ class SalesIntelligenceDeepAgent:
                     else:
                         safe_input = str(tool_input)
 
+                    # Emit thinking update with tool-specific message
+                    yield {
+                        "type": "thinking",
+                        "data": {
+                            "iteration": iteration,
+                            "phase": current_phase,
+                            "content": f"Executing: {tool_name}",
+                            "summary": tool_desc,
+                            "is_reasoning_token": False,
+                        },
+                    }
+
                     yield {
                         "type": "tool_start",
                         "data": {
@@ -997,6 +1064,18 @@ class SalesIntelligenceDeepAgent:
                 elif event_type == "on_tool_end":
                     tool_name = event_name
                     output = event_data.get("output", "")
+
+                    # Emit thinking update about tool completion
+                    yield {
+                        "type": "thinking",
+                        "data": {
+                            "iteration": iteration,
+                            "phase": current_phase,
+                            "content": f"Completed: {tool_name}",
+                            "summary": f"{tool_name} completed",
+                            "is_reasoning_token": False,
+                        },
+                    }
 
                     yield {
                         "type": "tool_result",
