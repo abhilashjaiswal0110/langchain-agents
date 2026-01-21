@@ -11,9 +11,9 @@ from typing import Annotated, Any, Literal
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.tools import tool
-from langchain_openai import ChatOpenAI
-from langchain_anthropic import ChatAnthropic
 from langgraph.checkpoint.memory import MemorySaver
+
+from app.agents.base.llm_factory import get_llm
 from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode
@@ -475,30 +475,21 @@ Remember: Your goal is to resolve issues efficiently while providing excellent u
         provider: str,
         model_name: str | None,
         temperature: float,
-    ) -> ChatOpenAI | ChatAnthropic:
-        """Get LLM instance based on provider."""
-        has_openai = bool(os.getenv("OPENAI_API_KEY"))
-        has_anthropic = bool(os.getenv("ANTHROPIC_API_KEY"))
+    ):
+        """Get LLM instance based on provider.
 
-        if provider == "auto":
-            # Prefer OpenAI for consistency across all agents
-            if has_openai:
-                provider = "openai"
-            elif has_anthropic:
-                provider = "anthropic"
-            else:
-                raise ValueError("No LLM API key found. Set OPENAI_API_KEY or ANTHROPIC_API_KEY.")
-
-        if provider == "anthropic":
-            return ChatAnthropic(
-                model=model_name or "claude-sonnet-4-20250514",
-                temperature=temperature,
-            )
-        else:
-            return ChatOpenAI(
-                model=model_name or "gpt-4o-mini",
-                temperature=temperature,
-            )
+        Uses the centralized LLM factory which supports:
+        - Azure OpenAI (primary for production)
+        - OpenAI (disabled by default)
+        - Anthropic (fallback)
+        """
+        # Use the centralized LLM factory which supports Azure OpenAI, OpenAI, and Anthropic
+        provider_arg = provider if provider != "auto" else None
+        return get_llm(
+            provider=provider_arg,
+            model=model_name,
+            temperature=temperature,
+        )
 
     def _build_graph(self) -> StateGraph:
         """Build the LangGraph workflow."""

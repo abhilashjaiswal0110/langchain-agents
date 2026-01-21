@@ -2,7 +2,8 @@
 
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
-from langchain_openai import ChatOpenAI
+
+from app.agents.base.llm_factory import get_llm
 
 # Simple chat prompt template (no history for simplicity)
 prompt = ChatPromptTemplate.from_messages([
@@ -13,11 +14,8 @@ prompt = ChatPromptTemplate.from_messages([
     ("human", "{input}"),
 ])
 
-# Initialize the LLM (uses OPENAI_API_KEY from environment)
-llm = ChatOpenAI(
-    model="gpt-4o-mini",
-    temperature=0.7,
-)
+# Initialize the LLM (uses factory with Azure OpenAI as primary)
+llm = get_llm(temperature=0.7)
 
 # Build the chat chain
 chat_chain = prompt | llm | StrOutputParser()

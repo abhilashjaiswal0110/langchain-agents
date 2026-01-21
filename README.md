@@ -133,7 +133,7 @@ cd deployment
 
 **Available Agents:**
 - ServiceNow ITSM Agent
-- Document Processing Agent  
+- Document Processing Agent
 - IT Helpdesk Agent
 - IT Operations Deep Agent (with 6 subagents)
 - Sales Intelligence Deep Agent

@@ -1,7 +1,7 @@
 """LLM-based translation service for the Document Intelligence Agent.
 
 This module provides translation capabilities using the same LLM
-(GPT-4/Claude) as the main agent, avoiding additional API dependencies.
+(Azure OpenAI/GPT-4/Claude) as the main agent, avoiding additional API dependencies.
 
 Following Enterprise Development Standards:
 - Software Architect: Modular translation service
@@ -15,6 +15,8 @@ from typing import Any
 from langchain_core.language_models import BaseChatModel
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
+
+from app.agents.base.llm_factory import get_llm
 
 logger = logging.getLogger(__name__)
 
@@ -94,23 +96,16 @@ If uncertain, respond with your best guess."""),
     def _get_llm(self) -> BaseChatModel:
         """Get or create the LLM instance.
 
+        Uses the factory pattern with Azure OpenAI as primary provider.
+
         Returns:
             BaseChatModel instance
         """
         if self._llm is not None:
             return self._llm
 
-        # Create LLM from environment
-        if os.getenv("OPENAI_API_KEY"):
-            from langchain_openai import ChatOpenAI
-            self._llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.3)
-        elif os.getenv("ANTHROPIC_API_KEY"):
-            from langchain_anthropic import ChatAnthropic
-            self._llm = ChatAnthropic(model="claude-3-5-sonnet-latest", temperature=0.3)
-        else:
-            msg = "No LLM API key found. Set OPENAI_API_KEY or ANTHROPIC_API_KEY."
-            raise RuntimeError(msg)
-
+        # Use the factory which handles Azure OpenAI, OpenAI, and Anthropic
+        self._llm = get_llm(temperature=0.3)
         return self._llm
 
     def translate(

@@ -16,6 +16,8 @@ from uuid import uuid4
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
 
+from app.agents.base.llm_factory import get_embedding_model
+
 
 @dataclass
 class MemoryEntry:
@@ -107,27 +109,14 @@ class SemanticMemory:
         return self._embeddings
 
     def _create_embeddings(self) -> Embeddings:
-        """Create default embeddings model."""
-        # Try OpenAI first, fall back to HuggingFace
-        try:
-            from langchain_openai import OpenAIEmbeddings
+        """Create default embeddings model.
 
-            if os.getenv("OPENAI_API_KEY"):
-                return OpenAIEmbeddings(model="text-embedding-3-small")
-        except ImportError:
-            pass
-
-        try:
-            from langchain_community.embeddings import HuggingFaceEmbeddings
-
-            return HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
-        except ImportError:
-            pass
-
-        raise ImportError(
-            "No embeddings available. Install langchain-openai or "
-            "langchain-community with sentence-transformers."
-        )
+        Uses the centralized embedding factory which supports:
+        - Azure OpenAI (primary for production)
+        - OpenAI (disabled by default)
+        - HuggingFace (local fallback)
+        """
+        return get_embedding_model()
 
     @property
     def vector_store(self):

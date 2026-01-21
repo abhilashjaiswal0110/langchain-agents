@@ -10,15 +10,17 @@ from datetime import datetime
 from typing import Any, Literal
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
-from langchain_openai import ChatOpenAI
-from langchain_anthropic import ChatAnthropic
+from langchain_core.language_models import BaseChatModel
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import StateGraph, START, END
 from langgraph.prebuilt import ToolNode
 from langsmith import traceable
 
+from app.agents.base.llm_factory import get_llm
+
 from app.deepagents.core.types import (
     DeepAgentConfig,
+    FileEntry,
     SubAgentDefinition,
     Todo,
     TodoStatus,
@@ -92,30 +94,21 @@ class DeepAgent:
         self._files: dict[str, FileEntry] = {}
         self._todos: list[Todo] = []
 
-    def _create_llm(self) -> ChatOpenAI | ChatAnthropic:
-        """Create LLM instance based on configuration."""
-        provider = self.config.model_provider
-        has_openai = bool(os.getenv("OPENAI_API_KEY"))
-        has_anthropic = bool(os.getenv("ANTHROPIC_API_KEY"))
+    def _create_llm(self) -> BaseChatModel:
+        """Create LLM instance based on configuration.
 
-        if provider == "auto":
-            if has_openai:
-                provider = "openai"
-            elif has_anthropic:
-                provider = "anthropic"
-            else:
-                raise ValueError("No LLM API key found.")
+        Uses the centralized LLM factory which supports:
+        - Azure OpenAI (primary for production)
+        - OpenAI (disabled by default)
+        - Anthropic (fallback)
+        """
+        provider = self.config.model_provider if self.config.model_provider != "auto" else None
 
-        if provider == "anthropic":
-            return ChatAnthropic(
-                model=self.config.model if "claude" in self.config.model else "claude-sonnet-4-20250514",
-                temperature=self.config.temperature,
-            )
-        else:
-            return ChatOpenAI(
-                model=self.config.model,
-                temperature=self.config.temperature,
-            )
+        return get_llm(
+            provider=provider,
+            model=self.config.model,
+            temperature=self.config.temperature,
+        )
 
     def _collect_tools(self) -> list:
         """Collect all tools from middleware and custom tools."""

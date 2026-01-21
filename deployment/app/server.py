@@ -213,15 +213,40 @@ it_operations_deep_agent = None
 sales_intelligence_deep_agent = None
 
 
+def _is_azure_openai_configured() -> bool:
+    """Check if Azure OpenAI is fully configured.
+
+    Returns:
+        True if all required Azure OpenAI env vars are set.
+    """
+    return all([
+        os.getenv("AZURE_OPENAI_API_KEY"),
+        os.getenv("AZURE_OPENAI_ENDPOINT"),
+        os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME"),
+    ])
+
+
+def _is_any_llm_configured() -> bool:
+    """Check if any LLM provider is configured.
+
+    Returns:
+        True if Azure OpenAI, OpenAI (enabled), or Anthropic is configured.
+    """
+    has_azure = _is_azure_openai_configured()
+    has_openai = bool(os.getenv("OPENAI_API_KEY")) and os.getenv("OPENAI_ENABLED", "false").lower() == "true"
+    has_anthropic = bool(os.getenv("ANTHROPIC_API_KEY"))
+    return has_azure or has_openai or has_anthropic
+
+
 def load_chains() -> bool:
-    """Load LangChain chains if API key is available.
+    """Load LangChain chains if any LLM provider is available.
 
     Returns:
         True if chains loaded successfully, False otherwise.
     """
     global chains_loaded, chat_chain, rag_chain, agent_executor
 
-    if not os.getenv("OPENAI_API_KEY"):
+    if not _is_any_llm_configured():
         return False
 
     try:
@@ -247,10 +272,7 @@ def load_langgraph_agent() -> bool:
     """
     global langgraph_loaded, langgraph_agent
 
-    has_openai = bool(os.getenv("OPENAI_API_KEY"))
-    has_anthropic = bool(os.getenv("ANTHROPIC_API_KEY"))
-
-    if not (has_openai or has_anthropic):
+    if not _is_any_llm_configured():
         return False
 
     try:
@@ -266,14 +288,14 @@ def load_langgraph_agent() -> bool:
 
 
 def load_doc_rag() -> bool:
-    """Load Document RAG chain if OpenAI API key is available.
+    """Load Document RAG chain if any LLM provider is available.
 
     Returns:
         True if Document RAG chain loaded successfully, False otherwise.
     """
     global doc_rag_loaded, doc_rag_chain
 
-    if not os.getenv("OPENAI_API_KEY"):
+    if not _is_any_llm_configured():
         return False
 
     try:
@@ -294,10 +316,7 @@ def load_it_support_agents() -> bool:
     """
     global it_support_loaded, conversation_manager
 
-    has_openai = bool(os.getenv("OPENAI_API_KEY"))
-    has_anthropic = bool(os.getenv("ANTHROPIC_API_KEY"))
-
-    if not (has_openai or has_anthropic):
+    if not _is_any_llm_configured():
         return False
 
     try:
@@ -321,10 +340,7 @@ def load_enterprise_agents() -> dict[str, bool]:
     global document_agent, multilingual_rag_agent, hitl_support_agent
     global code_assistant_agent, document_intelligence_agent
 
-    has_openai = bool(os.getenv("OPENAI_API_KEY"))
-    has_anthropic = bool(os.getenv("ANTHROPIC_API_KEY"))
-
-    if not (has_openai or has_anthropic):
+    if not _is_any_llm_configured():
         return {"loaded": False, "reason": "No API keys configured"}
 
     status = {}
@@ -414,11 +430,8 @@ def load_deep_agent() -> bool:
     """
     global deep_agent_loaded, it_operations_deep_agent, sales_intelligence_deep_agent
 
-    has_openai = bool(os.getenv("OPENAI_API_KEY"))
-    has_anthropic = bool(os.getenv("ANTHROPIC_API_KEY"))
-
-    if not (has_openai or has_anthropic):
-        print("[DEBUG] Deep Agent: No API keys found (OPENAI_API_KEY or ANTHROPIC_API_KEY)")
+    if not _is_any_llm_configured():
+        print("[DEBUG] Deep Agent: No LLM provider configured (Azure OpenAI, OpenAI with OPENAI_ENABLED=true, or Anthropic)")
         return False
 
     try:

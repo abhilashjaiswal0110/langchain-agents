@@ -3,11 +3,12 @@
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.runnables import RunnablePassthrough, RunnableParallel
-from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain_core.vectorstores import InMemoryVectorStore
 
-# Initialize embeddings and vector store
-embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
+from app.agents.base.llm_factory import get_llm, get_embedding_model
+
+# Initialize embeddings and vector store (uses factory with Azure OpenAI as primary)
+embeddings = get_embedding_model()
 vectorstore = InMemoryVectorStore(embeddings)
 
 # Add some sample documents for demonstration
@@ -38,8 +39,8 @@ If you cannot answer the question based on the context, say so.""",
     ("human", "{question}"),
 ])
 
-# Initialize LLM
-llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+# Initialize LLM (uses factory with Azure OpenAI as primary)
+llm = get_llm(temperature=0)
 
 
 def format_docs(docs: list) -> str:
