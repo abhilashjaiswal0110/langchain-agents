@@ -115,7 +115,6 @@ cd deployment
 **Visual development interface** for building and debugging agents without Docker:
 
 ```bash
-cd deployment
 .venv\Scripts\python.exe -m langgraph_cli dev --port 2024 --allow-blocking
 ```
 
