@@ -13,7 +13,7 @@ Your LangGraph environment is configured and ready to use with all your agents:
 
 ## Environment Setup
 
-- **Python Environment**: `.venv` in deployment folder (Python 3.13.9)
+- **Python Environment**: `.venv` in deployment folder (Python 3.11)
 - **Package Manager**: `uv` (fast Python package manager)
 - **LangGraph CLI**: v0.1.54 installed in `.venv/Scripts/langgraph.exe`
 - **Configuration**: `deployment/langgraph.json`
