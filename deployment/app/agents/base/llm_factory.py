@@ -11,11 +11,11 @@ Following Enterprise Development Standards:
 - Software Engineer: Type-safe, environment-aware
 """
 
+import json
 import os
 from typing import Any
 
 from langchain_core.language_models import BaseChatModel
-
 
 # Cache for LLM instances
 _llm_cache: dict[str, BaseChatModel] = {}
@@ -62,7 +62,10 @@ def get_llm(
     if not provider:
         if _is_azure_openai_configured():
             provider = "azure_openai"
-        elif os.getenv("OPENAI_API_KEY") and os.getenv("OPENAI_ENABLED", "false").lower() == "true":
+        elif (
+            os.getenv("OPENAI_API_KEY")
+            and os.getenv("OPENAI_ENABLED", "false").lower() == "true"
+        ):
             # OpenAI only if explicitly enabled (disabled by default)
             provider = "openai"
         elif os.getenv("ANTHROPIC_API_KEY"):
@@ -79,14 +82,19 @@ def get_llm(
     # Determine model/deployment name
     if model is None:
         if provider == "azure_openai":
-            model = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME", os.getenv("ENTERPRISE_AGENT_MODEL", "gpt-4o-mini"))
+            model = os.getenv(
+                "AZURE_OPENAI_DEPLOYMENT_NAME",
+                os.getenv("ENTERPRISE_AGENT_MODEL", "gpt-4o-mini"),
+            )
         elif provider == "openai":
             model = os.getenv("ENTERPRISE_AGENT_MODEL", "gpt-4o-mini")
         else:
             model = os.getenv("ENTERPRISE_AGENT_MODEL", "claude-3-haiku-20240307")
 
-    # Cache key
-    cache_key = f"{provider}:{model}:{temperature}"
+    # Cache key - include kwargs to ensure different configurations get different instances
+    # Sort kwargs to ensure consistent cache keys
+    kwargs_str = json.dumps(kwargs, sort_keys=True) if kwargs else "{}"
+    cache_key = f"{provider}:{model}:{temperature}:{kwargs_str}"
 
     # Return cached instance if available
     if cache_key in _llm_cache:
@@ -99,7 +107,9 @@ def get_llm(
         azure_endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
         api_key = os.getenv("AZURE_OPENAI_API_KEY")
         # LangChain uses OPENAI_API_VERSION for Azure, but we support both for convenience
-        api_version = os.getenv("OPENAI_API_VERSION") or os.getenv("AZURE_OPENAI_API_VERSION", "2024-08-01-preview")
+        api_version = os.getenv("OPENAI_API_VERSION") or os.getenv(
+            "AZURE_OPENAI_API_VERSION", "2024-08-01-preview"
+        )
 
         if not azure_endpoint or not api_key:
             msg = "Azure OpenAI requires AZURE_OPENAI_ENDPOINT and AZURE_OPENAI_API_KEY"
@@ -115,10 +125,14 @@ def get_llm(
         # Azure OpenAI reasoning models (o1, o3, o4 series) don't support temperature
         # Check deployment name for reasoning model indicators
         reasoning_models = ("o1", "o3", "o4", "o1-mini", "o3-mini", "o4-mini")
-        is_reasoning_model = any(model.lower().startswith(prefix) for prefix in reasoning_models)
+        is_reasoning_model = any(
+            model.lower().startswith(prefix) for prefix in reasoning_models
+        )
 
         if is_reasoning_model:
-            print(f"[LLM Factory] Using Azure OpenAI reasoning model: deployment={model}, endpoint={azure_endpoint[:50]}..., api_version={api_version} (temperature not supported)")
+            print(
+                f"[LLM Factory] Using Azure OpenAI reasoning model: deployment={model}, endpoint={azure_endpoint[:50]}..., api_version={api_version} (temperature not supported)"
+            )
 
             try:
                 llm = AzureChatOpenAI(
@@ -139,7 +153,9 @@ def get_llm(
                 )
                 raise ValueError(msg) from e
         else:
-            print(f"[LLM Factory] Using Azure OpenAI: deployment={model}, endpoint={azure_endpoint[:50]}..., api_version={api_version}")
+            print(
+                f"[LLM Factory] Using Azure OpenAI: deployment={model}, endpoint={azure_endpoint[:50]}..., api_version={api_version}"
+            )
 
             try:
                 llm = AzureChatOpenAI(
@@ -166,10 +182,14 @@ def get_llm(
         # OpenAI reasoning models (o1, o3, o4 series) don't support temperature
         # They only accept the default value of 1
         reasoning_models = ("o1", "o3", "o4", "o1-mini", "o3-mini", "o4-mini")
-        is_reasoning_model = any(model.startswith(prefix) for prefix in reasoning_models)
+        is_reasoning_model = any(
+            model.startswith(prefix) for prefix in reasoning_models
+        )
 
         if is_reasoning_model:
-            print(f"[LLM Factory] Using OpenAI reasoning model {model} (temperature not supported)")
+            print(
+                f"[LLM Factory] Using OpenAI reasoning model {model} (temperature not supported)"
+            )
             llm = ChatOpenAI(model=model, **kwargs)
         else:
             print(f"[LLM Factory] Using OpenAI: model={model}")
@@ -202,11 +222,13 @@ def _is_azure_openai_configured() -> bool:
     Returns:
         True if all required Azure OpenAI env vars are set.
     """
-    return all([
-        os.getenv("AZURE_OPENAI_API_KEY"),
-        os.getenv("AZURE_OPENAI_ENDPOINT"),
-        os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME"),
-    ])
+    return all(
+        [
+            os.getenv("AZURE_OPENAI_API_KEY"),
+            os.getenv("AZURE_OPENAI_ENDPOINT"),
+            os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME"),
+        ]
+    )
 
 
 def get_embedding_model(
@@ -234,7 +256,10 @@ def get_embedding_model(
     if not provider:
         if _is_azure_openai_embedding_configured():
             provider = "azure_openai"
-        elif os.getenv("OPENAI_API_KEY") and os.getenv("OPENAI_ENABLED", "false").lower() == "true":
+        elif (
+            os.getenv("OPENAI_API_KEY")
+            and os.getenv("OPENAI_ENABLED", "false").lower() == "true"
+        ):
             provider = "openai"
         else:
             # Default to huggingface if no cloud provider configured
@@ -246,14 +271,20 @@ def get_embedding_model(
         azure_endpoint = os.getenv("AZURE_OPENAI_ENDPOINT")
         api_key = os.getenv("AZURE_OPENAI_API_KEY")
         # LangChain uses OPENAI_API_VERSION for Azure, but we support both for convenience
-        api_version = os.getenv("OPENAI_API_VERSION") or os.getenv("AZURE_OPENAI_API_VERSION", "2024-08-01-preview")
-        deployment = model or os.getenv("AZURE_OPENAI_EMBEDDING_DEPLOYMENT", "text-embedding-3-small")
+        api_version = os.getenv("OPENAI_API_VERSION") or os.getenv(
+            "AZURE_OPENAI_API_VERSION", "2024-08-01-preview"
+        )
+        deployment = model or os.getenv(
+            "AZURE_OPENAI_EMBEDDING_DEPLOYMENT", "text-embedding-3-small"
+        )
 
         if not azure_endpoint or not api_key:
             msg = "Azure OpenAI Embeddings requires AZURE_OPENAI_ENDPOINT and AZURE_OPENAI_API_KEY"
             raise ValueError(msg)
 
-        print(f"[Embedding Factory] Using Azure OpenAI Embeddings: deployment={deployment}, api_version={api_version}")
+        print(
+            f"[Embedding Factory] Using Azure OpenAI Embeddings: deployment={deployment}, api_version={api_version}"
+        )
 
         try:
             return AzureOpenAIEmbeddings(
@@ -275,7 +306,9 @@ def get_embedding_model(
     elif provider == "openai":
         from langchain_openai import OpenAIEmbeddings
 
-        embedding_model = model or os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")
+        embedding_model = model or os.getenv(
+            "OPENAI_EMBEDDING_MODEL", "text-embedding-3-small"
+        )
         print(f"[Embedding Factory] Using OpenAI Embeddings: model={embedding_model}")
         return OpenAIEmbeddings(model=embedding_model)
     elif provider == "huggingface":
@@ -298,11 +331,13 @@ def _is_azure_openai_embedding_configured() -> bool:
     Returns:
         True if Azure OpenAI endpoint and key are set, and embedding deployment exists.
     """
-    return all([
-        os.getenv("AZURE_OPENAI_API_KEY"),
-        os.getenv("AZURE_OPENAI_ENDPOINT"),
-        os.getenv("AZURE_OPENAI_EMBEDDING_DEPLOYMENT"),
-    ])
+    return all(
+        [
+            os.getenv("AZURE_OPENAI_API_KEY"),
+            os.getenv("AZURE_OPENAI_ENDPOINT"),
+            os.getenv("AZURE_OPENAI_EMBEDDING_DEPLOYMENT"),
+        ]
+    )
 
 
 def clear_llm_cache() -> None:
