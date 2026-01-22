@@ -17,8 +17,6 @@ from typing import Annotated, Any, Literal, TypeVar
 
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
-from langchain_openai import ChatOpenAI
-from langchain_anthropic import ChatAnthropic
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.checkpoint.base import BaseCheckpointSaver
 from langgraph.graph import StateGraph, START, END
@@ -34,6 +32,7 @@ from app.agents.memory.checkpointers import (
 )
 from app.agents.memory.semantic_memory import get_semantic_memory
 from app.agents.memory.summarizer import get_summarizer
+from app.agents.base.llm_factory import get_llm
 
 
 # Type variable for state
@@ -45,8 +44,8 @@ class AgentConfig:
     """Configuration for agent initialization.
 
     Attributes:
-        model_provider: LLM provider to use ("openai", "anthropic", "auto")
-        model_name: Specific model name (e.g., "gpt-4o-mini", "claude-3-sonnet")
+        model_provider: LLM provider to use ("azure_openai", "openai", "anthropic", "auto")
+        model_name: Specific model name or Azure deployment name
         temperature: Model temperature for response generation
         max_tokens: Maximum tokens in response
         checkpointer: Optional checkpointer for state persistence
@@ -57,7 +56,7 @@ class AgentConfig:
         project_name: LangSmith project name for tracing
     """
 
-    model_provider: Literal["openai", "anthropic", "auto"] = "auto"
+    model_provider: Literal["azure_openai", "openai", "anthropic", "auto"] = "auto"
     model_name: str | None = None
     temperature: float = 0.7
     max_tokens: int = 4096
@@ -128,50 +127,23 @@ class BaseAgent(ABC):
             self._setup_tracing()
 
     def _init_llm(self) -> None:
-        """Initialize the language model based on configuration."""
-        provider = self.config.model_provider
+        """Initialize the language model based on configuration.
 
-        # Auto-detect available provider (prefer OpenAI for broader compatibility)
-        if provider == "auto":
-            if os.getenv("OPENAI_API_KEY"):
-                provider = "openai"
-            elif os.getenv("ANTHROPIC_API_KEY"):
-                provider = "anthropic"
-            else:
-                raise ValueError(
-                    "No API key found. Set OPENAI_API_KEY or ANTHROPIC_API_KEY"
-                )
+        Uses the centralized LLM factory which supports:
+        - Azure OpenAI (primary for production)
+        - OpenAI (disabled by default)
+        - Anthropic (fallback)
+        """
+        provider = self.config.model_provider if self.config.model_provider != "auto" else None
+        model = self.config.model_name
 
-        if provider == "openai":
-            model_name = self.config.model_name or "gpt-4o-mini"
-
-            # OpenAI reasoning models (o1, o3, o4 series) don't support temperature
-            reasoning_models = ("o1", "o3", "o4", "o1-mini", "o3-mini", "o4-mini")
-            is_reasoning_model = any(
-                model_name.startswith(prefix) for prefix in reasoning_models
-            )
-
-            if is_reasoning_model:
-                print(f"[DEBUG] Using reasoning model {model_name} (temperature not supported)")
-                self._llm = ChatOpenAI(
-                    model=model_name,
-                    max_tokens=self.config.max_tokens,
-                )
-            else:
-                self._llm = ChatOpenAI(
-                    model=model_name,
-                    temperature=self.config.temperature,
-                    max_tokens=self.config.max_tokens,
-                )
-        elif provider == "anthropic":
-            model_name = self.config.model_name or "claude-3-5-sonnet-latest"
-            self._llm = ChatAnthropic(
-                model=model_name,
-                temperature=self.config.temperature,
-                max_tokens=self.config.max_tokens,
-            )
-        else:
-            raise ValueError(f"Unsupported provider: {provider}")
+        # Use the factory to get the LLM instance
+        self._llm = get_llm(
+            provider=provider,
+            model=model,
+            temperature=self.config.temperature,
+            max_tokens=self.config.max_tokens,
+        )
 
     def _setup_tracing(self) -> None:
         """Configure LangSmith tracing."""

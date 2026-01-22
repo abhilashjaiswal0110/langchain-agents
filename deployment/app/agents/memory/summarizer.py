@@ -12,6 +12,8 @@ from typing import Any
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from langchain_core.prompts import ChatPromptTemplate
 
+from app.agents.base.llm_factory import get_llm
+
 
 # Default summarization prompt
 SUMMARIZATION_PROMPT = """You are a conversation summarizer. Your task is to create a concise summary of the conversation that captures:
@@ -59,37 +61,18 @@ class ConversationSummarizer:
         return self._llm
 
     def _create_llm(self):
-        """Create default LLM for summarization."""
-        # Try OpenAI first (faster for summarization)
+        """Create default LLM for summarization.
+
+        Uses the factory pattern with Azure OpenAI as primary provider.
+        """
         try:
-            from langchain_openai import ChatOpenAI
-
-            if os.getenv("OPENAI_API_KEY"):
-                return ChatOpenAI(
-                    model="gpt-4o-mini",
-                    temperature=0,
-                    max_tokens=500,
-                )
-        except ImportError:
-            pass
-
-        # Fall back to Anthropic
-        try:
-            from langchain_anthropic import ChatAnthropic
-
-            if os.getenv("ANTHROPIC_API_KEY"):
-                return ChatAnthropic(
-                    model="claude-3-haiku-20240307",
-                    temperature=0,
-                    max_tokens=500,
-                )
-        except ImportError:
-            pass
-
-        raise ImportError(
-            "No LLM available for summarization. "
-            "Install langchain-openai or langchain-anthropic."
-        )
+            # Use the factory which handles Azure OpenAI, OpenAI, and Anthropic
+            return get_llm(temperature=0, max_tokens=500)
+        except ValueError as e:
+            raise ImportError(
+                f"No LLM available for summarization: {e}. "
+                "Configure Azure OpenAI, OpenAI, or Anthropic."
+            ) from e
 
     def should_summarize(self, messages: list[BaseMessage]) -> bool:
         """Check if conversation should be summarized.

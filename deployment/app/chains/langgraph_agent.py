@@ -1,8 +1,8 @@
 """LangGraph Agent Integration.
 
 This module provides LangGraph-based agents that can be used alongside
-LangChain chains. Supports both Anthropic and OpenAI models with
-LangSmith tracing enabled.
+LangChain chains. Supports Azure OpenAI, OpenAI, and Anthropic models
+with LangSmith tracing enabled.
 """
 
 import os
@@ -14,21 +14,7 @@ from langchain_core.tools import tool
 from langgraph.graph import END, StateGraph, add_messages
 from langgraph.prebuilt import ToolNode
 
-# Conditional imports for model providers
-_anthropic_available = False
-_openai_available = False
-
-try:
-    from langchain_anthropic import ChatAnthropic
-    _anthropic_available = bool(os.getenv("ANTHROPIC_API_KEY"))
-except ImportError:
-    pass
-
-try:
-    from langchain_openai import ChatOpenAI
-    _openai_available = bool(os.getenv("OPENAI_API_KEY"))
-except ImportError:
-    pass
+from app.agents.base.llm_factory import get_llm, _is_azure_openai_configured
 
 
 # ============================================================================
@@ -98,7 +84,7 @@ def get_system_info() -> str:
 class AgentContext(TypedDict):
     """Context for selecting model provider."""
 
-    model: Literal["anthropic", "openai"]
+    model: Literal["azure_openai", "anthropic", "openai"]
 
 
 class AgentState(TypedDict):
@@ -116,36 +102,27 @@ def create_langgraph_agent(
 ) -> StateGraph | None:
     """Create a LangGraph agent with tools.
 
+    Uses the centralized LLM factory which supports:
+    - Azure OpenAI (primary for production)
+    - OpenAI (disabled by default)
+    - Anthropic (fallback)
+
     Args:
-        model_provider: The model provider to use ('anthropic', 'openai', or 'auto').
+        model_provider: The model provider to use ('azure_openai', 'openai', 'anthropic', or 'auto').
 
     Returns:
         Compiled LangGraph agent or None if no providers available.
     """
-    # Determine available model
-    if model_provider == "auto":
-        if _anthropic_available:
-            model_provider = "anthropic"
-        elif _openai_available:
-            model_provider = "openai"
-        else:
-            return None
-
     # Initialize tools
     tools = [web_search, calculator, get_system_info]
 
-    # Initialize model based on provider
-    if model_provider == "anthropic" and _anthropic_available:
-        model = ChatAnthropic(
-            model="claude-3-5-sonnet-20241022",
-            temperature=0,
-        ).bind_tools(tools)
-    elif model_provider == "openai" and _openai_available:
-        model = ChatOpenAI(
-            model="gpt-4o-mini",
-            temperature=0,
-        ).bind_tools(tools)
-    else:
+    # Use factory to get LLM (handles Azure OpenAI, OpenAI, and Anthropic)
+    try:
+        provider_arg = model_provider if model_provider != "auto" else None
+        llm = get_llm(provider=provider_arg, temperature=0)
+        model = llm.bind_tools(tools)
+    except ValueError:
+        # No LLM provider configured
         return None
 
     # Define routing function
@@ -219,7 +196,7 @@ class LangGraphAgentRunnable:
         if self.agent is None:
             return {
                 "output": "Error: No LLM provider configured. "
-                "Set OPENAI_API_KEY or ANTHROPIC_API_KEY.",
+                "Configure Azure OpenAI, OpenAI (with OPENAI_ENABLED=true), or Anthropic.",
             }
 
         user_input = input_data.get("input", "")
@@ -243,7 +220,7 @@ class LangGraphAgentRunnable:
         if self.agent is None:
             return {
                 "output": "Error: No LLM provider configured. "
-                "Set OPENAI_API_KEY or ANTHROPIC_API_KEY.",
+                "Configure Azure OpenAI, OpenAI (with OPENAI_ENABLED=true), or Anthropic.",
             }
 
         user_input = input_data.get("input", "")

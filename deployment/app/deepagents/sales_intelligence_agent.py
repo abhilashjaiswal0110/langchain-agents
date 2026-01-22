@@ -12,9 +12,9 @@ from typing import Any, AsyncGenerator, Literal
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_core.tools import tool
-from langchain_openai import ChatOpenAI
-from langchain_anthropic import ChatAnthropic
 from langgraph.checkpoint.memory import MemorySaver
+
+from app.agents.base.llm_factory import get_llm
 from langgraph.graph import StateGraph, START, END
 from langgraph.prebuilt import ToolNode
 from langsmith import traceable
@@ -230,45 +230,20 @@ class SalesIntelligenceDeepAgent:
         provider: str,
         model_name: str | None,
         temperature: float,
-    ) -> ChatOpenAI | ChatAnthropic:
+    ):
         """Create LLM instance.
 
-        Note: OpenAI reasoning models (o1, o3-mini, o4-mini) do not support
-        the temperature parameter - they only accept the default value of 1.
+        Uses the centralized LLM factory which supports:
+        - Azure OpenAI (primary for production)
+        - OpenAI (disabled by default)
+        - Anthropic (fallback)
         """
-        has_openai = bool(os.getenv("OPENAI_API_KEY"))
-        has_anthropic = bool(os.getenv("ANTHROPIC_API_KEY"))
-
-        if provider == "auto":
-            if has_openai:
-                provider = "openai"
-            elif has_anthropic:
-                provider = "anthropic"
-            else:
-                raise ValueError("No LLM API key found.")
-
-        if provider == "anthropic":
-            return ChatAnthropic(
-                model=model_name or "claude-sonnet-4-20250514",
-                temperature=temperature,
-            )
-        else:
-            # Determine actual model name
-            actual_model = model_name or "gpt-4o-mini"
-
-            # OpenAI reasoning models (o1, o3, o4 series) don't support temperature
-            reasoning_models = ("o1", "o3", "o4", "o1-mini", "o3-mini", "o4-mini")
-            is_reasoning_model = any(
-                actual_model.startswith(prefix) for prefix in reasoning_models
-            )
-
-            if is_reasoning_model:
-                return ChatOpenAI(model=actual_model)
-            else:
-                return ChatOpenAI(
-                    model=actual_model,
-                    temperature=temperature,
-                )
+        provider_arg = provider if provider != "auto" else None
+        return get_llm(
+            provider=provider_arg,
+            model=model_name,
+            temperature=temperature,
+        )
 
     def _collect_tools(self) -> list:
         """Collect all tools for the agent."""

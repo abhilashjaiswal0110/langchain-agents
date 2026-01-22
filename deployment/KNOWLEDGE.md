@@ -2178,6 +2178,90 @@ docker-compose up -d
 docker-compose logs -f
 ```
 
+### LangGraph Studio UI (Visual Development)
+
+**Best for**: Visual debugging, agent workflow visualization, and development without Docker overhead
+
+#### Prerequisites
+- LangGraph CLI v0.4.11+ installed (already configured in deployment/.venv)
+- langgraph-api v0.6.39+ installed
+- langgraph-runtime-inmem v0.22.1+ installed
+
+#### Quick Start
+
+**Option 1: Use convenience script**
+```bash
+cd deployment
+.\start_studio.ps1
+```
+
+**Option 2: Direct command**
+```bash
+cd deployment
+.venv\Scripts\python.exe -m langgraph_cli dev --port 2024 --allow-blocking
+```
+
+#### Access Points
+
+Once started, access via:
+- **🎨 Studio UI**: https://smith.langchain.com/studio/?baseUrl=http://127.0.0.1:2024
+- **🚀 API**: http://127.0.0.1:2024
+- **📚 API Docs**: http://127.0.0.1:2024/docs
+
+#### Available Agents in Studio
+
+All 5 agents are accessible in the visual interface:
+1. **servicenow_agent** - ServiceNow ITSM operations
+2. **document_agent** - Document processing and RAG
+3. **it_helpdesk** - IT support conversations
+4. **it_operations_agent** - Deep Agent with 6 subagents
+5. **sales_intelligence_agent** - Sales & Pre-Sales Deep Agent
+
+#### Features
+
+- **Visual Graph Editor**: See agent workflows and state transitions in real-time
+- **Interactive Testing**: Send messages and observe agent execution step-by-step
+- **Tool Inspection**: View tool calls, inputs, and outputs
+- **State Debugging**: Inspect agent state at any point in execution
+- **No Docker Required**: Runs entirely in-memory for fast iteration
+- **Hot Reload**: Automatically detects code changes and reloads agents
+
+#### Configuration
+
+The Studio UI uses `langgraph.json` for configuration:
+```json
+{
+  "dependencies": ["."],
+  "graphs": {
+    "servicenow_agent": "./app/agents/servicenow_agent.py:get_graph",
+    "document_agent": "./app/agents/documents/document_agent.py:get_graph",
+    "it_helpdesk": "./app/agents/it_helpdesk.py:get_graph",
+    "it_operations_agent": "./app/deepagents/it_operations_agent.py:get_graph",
+    "sales_intelligence_agent": "./app/deepagents/sales_intelligence_agent.py:get_graph"
+  },
+  "env": ".env",
+  "python_version": "3.11"
+}
+```
+
+#### Important Notes
+
+- **`--allow-blocking` flag**: Required for agents that use synchronous I/O (like file operations in Deep Agents)
+- **Port 2024**: Studio UI runs on a separate port from the main FastAPI server (8000)
+- **Can run alongside FastAPI**: Studio UI and the main server can run simultaneously
+- **In-memory runtime**: All state is ephemeral; restart clears session data
+
+#### Troubleshooting
+
+**Issue**: `Blocking call to os.mkdir` error
+- **Solution**: Always use `--allow-blocking` flag for development
+
+**Issue**: `langgraph.json` not found
+- **Solution**: Ensure you're in the `deployment/` directory
+
+**Issue**: Module import errors
+- **Solution**: Verify all dependencies installed: `uv pip install -U "langgraph-cli[inmem]"`
+
 ### Kubernetes
 
 Use health endpoints for probes:

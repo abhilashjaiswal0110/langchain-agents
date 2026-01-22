@@ -16,7 +16,8 @@ from typing import Any
 import uuid
 
 from langchain_core.documents import Document
-from langchain_openai import OpenAIEmbeddings
+
+from app.agents.base.llm_factory import get_embedding_model
 
 logger = logging.getLogger(__name__)
 
@@ -38,9 +39,10 @@ class DocumentVectorStore:
     def __init__(self) -> None:
         """Initialize the vector store manager."""
         try:
-            self._embeddings = OpenAIEmbeddings()
+            # Uses factory with Azure OpenAI as primary
+            self._embeddings = get_embedding_model()
         except Exception as e:
-            logger.warning(f"Failed to initialize OpenAI embeddings: {e}")
+            logger.warning(f"Failed to initialize embeddings: {e}")
             self._embeddings = None
 
     def _get_or_create_store(self, session_id: str) -> Any:
@@ -119,7 +121,7 @@ class DocumentVectorStore:
             raise ImportError(msg)
 
         if not self._embeddings:
-            msg = "Embeddings not initialized. Check OPENAI_API_KEY."
+            msg = "Embeddings not initialized. Check Azure OpenAI or other provider configuration."
             raise RuntimeError(msg)
 
         # Generate document ID

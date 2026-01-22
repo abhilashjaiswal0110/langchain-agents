@@ -20,8 +20,9 @@ from langchain_core.documents import Document
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnablePassthrough
-from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langsmith import traceable
+
+from app.agents.base.llm_factory import get_llm, get_embedding_model
 
 
 class DocumentRAGChain:
@@ -51,9 +52,9 @@ class DocumentRAGChain:
         self.model = model
         self.temperature = temperature
 
-        # Initialize components
-        self.embeddings = OpenAIEmbeddings()
-        self.llm = ChatOpenAI(model=model, temperature=temperature)
+        # Initialize components (uses factory with Azure OpenAI as primary)
+        self.embeddings = get_embedding_model()
+        self.llm = get_llm(temperature=temperature)
         self.text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=chunk_size,
             chunk_overlap=chunk_overlap,

@@ -103,7 +103,41 @@ python app/server.py
 
 # Or use Docker
 docker-compose up --build
+
+# Or use LangGraph Studio UI for visual development (recommended)
+cd deployment
+.\start_studio.ps1
+# Access at: https://smith.langchain.com/studio/?baseUrl=http://127.0.0.1:2024
 ```
+
+### 🎨 LangGraph Studio UI
+
+**Visual development interface** for building and debugging agents without Docker:
+
+```bash
+.venv\Scripts\python.exe -m langgraph_cli dev --port 2024 --allow-blocking
+```
+
+**Features:**
+- 🔍 Visual graph editor with real-time workflow visualization
+- 🐛 Interactive debugging with step-by-step execution
+- 🔧 Tool call inspection and state management
+- ⚡ Hot reload for rapid iteration
+- 🚀 No Docker required - runs entirely in-memory
+
+**Access:**
+- Studio UI: https://smith.langchain.com/studio/?baseUrl=http://127.0.0.1:2024
+- API: http://127.0.0.1:2024
+- Docs: http://127.0.0.1:2024/docs
+
+**Available Agents:**
+- ServiceNow ITSM Agent
+- Document Processing Agent
+- IT Helpdesk Agent
+- IT Operations Deep Agent (with 6 subagents)
+- Sales Intelligence Deep Agent
+
+See [LANGGRAPH_SETUP.md](deployment/LANGGRAPH_SETUP.md) for detailed setup instructions.
 
 ### 🔗 Integration Examples
 

@@ -20,6 +20,8 @@ from typing import Any
 
 from langchain_core.tools import tool
 
+from app.agents.base.llm_factory import get_embedding_model
+
 logger = logging.getLogger(__name__)
 
 # =============================================================================
@@ -92,11 +94,12 @@ def _ensure_storage_path(session_id: str) -> Path:
 def _get_embeddings():
     """Get or create embeddings instance.
 
+    Uses the factory pattern with Azure OpenAI as primary provider.
+
     Returns:
-        OpenAI embeddings instance
+        Embeddings instance (Azure OpenAI, OpenAI, or HuggingFace)
     """
-    from langchain_openai import OpenAIEmbeddings
-    return OpenAIEmbeddings()
+    return get_embedding_model()
 
 
 def _get_or_create_vector_store(session_id: str):

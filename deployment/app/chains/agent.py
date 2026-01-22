@@ -4,8 +4,9 @@ from datetime import datetime
 
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.tools import tool
-from langchain_openai import ChatOpenAI
 from langgraph.prebuilt import create_react_agent
+
+from app.agents.base.llm_factory import get_llm
 
 
 @tool
@@ -62,8 +63,8 @@ SYSTEM_PROMPT = """You are a helpful AI assistant with access to tools.
 Use the available tools to help answer questions.
 Always provide clear and helpful responses."""
 
-# Initialize LLM with tool calling capability
-llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+# Initialize LLM with tool calling capability (uses factory with Azure OpenAI as primary)
+llm = get_llm(temperature=0)
 
 # Create the agent using LangGraph's create_react_agent
 agent_executor = create_react_agent(
