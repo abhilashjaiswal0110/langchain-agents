@@ -133,8 +133,9 @@ def generate_scoring_report(
         )
 
         # Calculate combined score
-        resume_weight = 0.4
-        interview_weight = 0.6 if interview else 0.0
+        resume_weight = getattr(config, "resume_evaluation_weight", 0.4)
+        base_interview_weight = getattr(config, "interview_evaluation_weight", 0.6)
+        interview_weight = base_interview_weight if interview else 0.0
 
         if interview:
             combined_score = (
