@@ -129,6 +129,7 @@ UI_API_PREFIXES = (
     "/api/conversation",
     "/api/deepagent",
     "/api/sales-agent",
+    "/api/recruitment-agent",
     "/api/enterprise",
 )
 
@@ -211,6 +212,7 @@ document_intelligence_agent = None
 # Deep Agent
 it_operations_deep_agent = None
 sales_intelligence_deep_agent = None
+recruitment_deep_agent = None
 
 
 def _is_azure_openai_configured() -> bool:
@@ -428,7 +430,7 @@ def load_deep_agent() -> bool:
     Returns:
         True if Deep Agent loaded successfully, False otherwise.
     """
-    global deep_agent_loaded, it_operations_deep_agent, sales_intelligence_deep_agent
+    global deep_agent_loaded, it_operations_deep_agent, sales_intelligence_deep_agent, recruitment_deep_agent
 
     if not _is_any_llm_configured():
         print("[DEBUG] Deep Agent: No LLM provider configured (Azure OpenAI, OpenAI with OPENAI_ENABLED=true, or Anthropic)")
@@ -437,6 +439,7 @@ def load_deep_agent() -> bool:
     try:
         from app.deepagents import create_it_operations_agent
         from app.deepagents.sales_intelligence_agent import create_sales_intelligence_agent
+        from app.deepagents.recruitment_agent import create_recruitment_agent
 
         # Get model configuration from environment
         provider = os.getenv("DEEP_AGENT_PROVIDER", "auto")
@@ -454,12 +457,18 @@ def load_deep_agent() -> bool:
             storage_path="./data/deepagent_context",
         )
 
+        recruitment_deep_agent = create_recruitment_agent(
+            model_provider=provider,
+            model_name=model_name,
+            storage_path="./data/recruitment_context",
+        )
+
         deep_agent_loaded = True
 
         # Log model info
         model_info = model_name or "default"
         print(f"[DEBUG] Deep Agents using provider={provider}, model={model_info}")
-        print(f"[DEBUG] Loaded: IT Operations, Sales Intelligence")
+        print(f"[DEBUG] Loaded: IT Operations, Sales Intelligence, Recruitment")
 
         return True
     except Exception as e:
@@ -3101,6 +3110,475 @@ async def sales_agent_clear_attachments(
         "success": True,
         "session_id": session_id,
         "message": result,
+    }
+
+
+# ============================================================================
+# Recruitment Deep Agent Endpoints
+# ============================================================================
+
+@app.post("/api/recruitment-agent/start", response_model=DeepAgentStartResponse, tags=["Recruitment Agent"])
+async def recruitment_agent_start(request: DeepAgentStartRequest) -> DeepAgentStartResponse:
+    """Start a new Recruitment Deep Agent session.
+
+    The Recruitment Deep Agent assists with SharePoint document management,
+    resume screening (L1/L2/L3), interview question generation, candidate
+    evaluation, and scoring reports.
+
+    Returns:
+        Session ID and welcome message.
+    """
+    if not deep_agent_loaded or recruitment_deep_agent is None:
+        return DeepAgentStartResponse(
+            success=False,
+            error="Recruitment Agent not available. Set OPENAI_API_KEY or ANTHROPIC_API_KEY.",
+        )
+
+    import uuid
+    session_id = str(uuid.uuid4())
+
+    return DeepAgentStartResponse(
+        success=True,
+        session_id=session_id,
+        message="Recruitment Deep Agent session started. I can help with SharePoint document management, resume screening at L1/L2/L3 levels, interview question generation, candidate evaluation, and scoring reports.",
+    )
+
+
+@app.post("/api/recruitment-agent/chat", response_model=DeepAgentChatResponse, tags=["Recruitment Agent"])
+async def recruitment_agent_chat(request: DeepAgentChatRequest) -> DeepAgentChatResponse:
+    """Chat with the Recruitment Deep Agent.
+
+    The Deep Agent will:
+    1. Manage SharePoint documents (JDs, resumes, questions)
+    2. Screen resumes at L1, L2, L3 levels
+    3. Generate interview questions based on skillsets
+    4. Evaluate candidate answers
+    5. Generate scoring reports and shortlists
+
+    Args:
+        request: Chat message and optional session ID.
+
+    Returns:
+        Agent response with todos, files, and tool calls.
+    """
+    if not deep_agent_loaded or recruitment_deep_agent is None:
+        return DeepAgentChatResponse(
+            success=False,
+            error="Recruitment Agent not available. Set OPENAI_API_KEY or ANTHROPIC_API_KEY.",
+        )
+
+    try:
+        result = await recruitment_deep_agent.achat(
+            message=request.message,
+            session_id=request.session_id,
+            user_id=request.user_id,
+        )
+
+        return DeepAgentChatResponse(
+            success=True,
+            response=result.get("response"),
+            session_id=result.get("session_id"),
+            todos=result.get("todos"),
+            files=result.get("files"),
+            tool_calls=result.get("tool_calls"),
+            iteration_count=result.get("iteration_count"),
+        )
+    except Exception as e:
+        return DeepAgentChatResponse(
+            success=False,
+            session_id=request.session_id,
+            error=str(e),
+        )
+
+
+@app.post("/api/recruitment-agent/chat/stream", tags=["Recruitment Agent"])
+async def recruitment_agent_chat_stream(request: DeepAgentChatRequest):
+    """Stream chat with the Recruitment Deep Agent.
+
+    Uses Server-Sent Events (SSE) to stream:
+    - thinking: Agent's reasoning steps
+    - tool_start: When a tool is being called
+    - tool_result: Tool execution results
+    - todo_update: Todo list changes
+    - token: Streaming response tokens
+    - complete: Final response with all context
+
+    Args:
+        request: Chat message and session ID.
+
+    Returns:
+        SSE stream of events.
+    """
+    import json
+    import traceback
+
+    def serialize_event(event: dict) -> str:
+        """Serialize event to JSON, handling datetime and other types."""
+        def default_serializer(obj):
+            if hasattr(obj, "isoformat"):
+                return obj.isoformat()
+            if hasattr(obj, "model_dump"):
+                return obj.model_dump()
+            if hasattr(obj, "__dict__"):
+                return str(obj)
+            return str(obj)
+        return json.dumps(event, default=default_serializer)
+
+    async def event_generator():
+        if not deep_agent_loaded or recruitment_deep_agent is None:
+            yield f"data: {serialize_event({'type': 'error', 'data': {'error': 'Recruitment Agent not available'}})}\n\n"
+            return
+
+        try:
+            print(f"[DEBUG] Starting Recruitment Agent stream for session: {request.session_id}")
+            async for event in recruitment_deep_agent.astream_chat(
+                message=request.message,
+                session_id=request.session_id,
+                user_id=request.user_id,
+            ):
+                try:
+                    yield f"data: {serialize_event(event)}\n\n"
+                except Exception as serialize_err:
+                    print(f"[ERROR] Failed to serialize event: {serialize_err}")
+                    yield f"data: {serialize_event({'type': 'error', 'data': {'error': f'Serialization error: {serialize_err}'}})}\n\n"
+            print(f"[DEBUG] Recruitment Agent stream completed for session: {request.session_id}")
+        except GeneratorExit:
+            print(f"[DEBUG] Client disconnected from Recruitment Agent stream: {request.session_id}")
+        except Exception as e:
+            print(f"[ERROR] Recruitment Agent stream error for session {request.session_id}: {e}")
+            import traceback
+            traceback.print_exc()
+            yield f"data: {serialize_event({'type': 'error', 'data': {'error': str(e)}})}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@app.get("/api/recruitment-agent/context/{session_id}", response_model=DeepAgentContextResponse, tags=["Recruitment Agent"])
+async def recruitment_agent_context(session_id: str) -> DeepAgentContextResponse:
+    """Get context for a Recruitment Agent session.
+
+    Args:
+        session_id: Session identifier.
+
+    Returns:
+        Session context including todos and files.
+    """
+    if not deep_agent_loaded or recruitment_deep_agent is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Recruitment Agent not available.",
+        )
+
+    try:
+        context = recruitment_deep_agent.get_session_context(session_id)
+
+        return DeepAgentContextResponse(
+            success=True,
+            session_id=session_id,
+            todos=context.get("todos", []),
+            files=context.get("files", []),
+            metadata=context.get("metadata"),
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get context: {e}",
+        )
+
+
+@app.get("/api/recruitment-agent/todos/{session_id}", tags=["Recruitment Agent"])
+async def recruitment_agent_todos(session_id: str) -> dict:
+    """Get todos for a Recruitment Agent session.
+
+    Args:
+        session_id: Session identifier.
+
+    Returns:
+        List of todos with status.
+    """
+    if not deep_agent_loaded or recruitment_deep_agent is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Recruitment Agent not available.",
+        )
+
+    context = recruitment_deep_agent.get_session_context(session_id)
+
+    return {
+        "success": True,
+        "session_id": session_id,
+        "todos": context.get("todos", []),
+    }
+
+
+@app.get("/api/recruitment-agent/files/{session_id}", tags=["Recruitment Agent"])
+async def recruitment_agent_files(session_id: str) -> dict:
+    """Get files for a Recruitment Agent session.
+
+    Args:
+        session_id: Session identifier.
+
+    Returns:
+        List of files created during session.
+    """
+    if not deep_agent_loaded or recruitment_deep_agent is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Recruitment Agent not available.",
+        )
+
+    context = recruitment_deep_agent.get_session_context(session_id)
+
+    return {
+        "success": True,
+        "session_id": session_id,
+        "files": context.get("files", []),
+    }
+
+
+@app.get("/api/recruitment-agent/subagents", tags=["Recruitment Agent"])
+async def recruitment_agent_subagents() -> dict:
+    """Get available subagents for the Recruitment Deep Agent.
+
+    Returns:
+        List of subagent definitions with their descriptions and tools.
+    """
+    subagents = [
+        {
+            "name": "document-manager",
+            "description": "Specialized in SharePoint document management - listing, downloading, uploading, and organizing recruitment documents.",
+            "tools": ["list_sharepoint_folder", "download_sharepoint_document", "upload_to_sharepoint", "search_sharepoint_documents", "get_cached_document", "create_sharepoint_folder"],
+        },
+        {
+            "name": "resume-screener",
+            "description": "Specialized in resume parsing and candidate screening - extracting skills, experience, and matching candidates to job requirements.",
+            "tools": ["parse_resume", "parse_job_description", "screen_candidate", "batch_screen_resumes", "get_candidate_profile", "list_candidates", "list_job_descriptions", "get_shortlisted_candidates"],
+        },
+        {
+            "name": "question-generator",
+            "description": "Specialized in creating technical interview questions based on candidate skills and level.",
+            "tools": ["generate_interview_questions", "export_question_set", "list_question_sets", "get_candidate_profile", "list_candidates"],
+        },
+        {
+            "name": "answer-evaluator",
+            "description": "Specialized in evaluating candidate answers and generating scores.",
+            "tools": ["submit_candidate_answers", "evaluate_candidate_answers", "get_candidate_score", "list_question_sets", "get_candidate_profile"],
+        },
+        {
+            "name": "report-generator",
+            "description": "Specialized in generating recruitment reports, Excel exports, and shortlists.",
+            "tools": ["generate_scoring_report", "export_scoring_excel", "get_ranking_summary", "generate_shortlist_report", "get_passing_score_thresholds", "get_shortlisted_candidates"],
+        },
+    ]
+
+    return {
+        "success": True,
+        "subagents": subagents,
+        "count": len(subagents),
+    }
+
+
+@app.post("/api/recruitment-agent/upload", response_model=DeepAgentUploadResponse, tags=["Recruitment Agent"])
+async def recruitment_agent_upload(
+    file: UploadFile = File(...),
+    session_id: str = Form(...),
+) -> DeepAgentUploadResponse:
+    """Upload a document to the Recruitment Deep Agent session.
+
+    Supported file types: PDF, TXT, DOCX, DOC, PPTX, PPT, PNG, JPG, JPEG
+    Documents are processed, chunked, and indexed for RAG-based search.
+    The agent can then use search_attachments tool to query document content.
+    Useful for JDs, resumes, question sets, and answer files.
+
+    Args:
+        file: Document file to upload
+        session_id: Session ID to associate the document with
+
+    Returns:
+        Upload response with document ID and metadata
+    """
+    if not deep_agent_loaded:
+        return DeepAgentUploadResponse(
+            success=False,
+            error="Recruitment Agent not available. Set OPENAI_API_KEY or ANTHROPIC_API_KEY.",
+        )
+
+    from app.deepagents.tools.document_tools import process_and_store_document
+
+    # Validate file extension
+    allowed_extensions = {".pdf", ".txt", ".docx", ".doc", ".pptx", ".ppt", ".png", ".jpg", ".jpeg"}
+    file_ext = "." + file.filename.split(".")[-1].lower() if "." in file.filename else ""
+
+    if file_ext not in allowed_extensions:
+        return DeepAgentUploadResponse(
+            success=False,
+            filename=file.filename,
+            error=f"Unsupported file type: {file_ext}. Supported: {', '.join(allowed_extensions)}",
+        )
+
+    try:
+        # Read file content
+        content = await file.read()
+
+        # Process and store document
+        result = process_and_store_document(
+            content=content,
+            filename=file.filename,
+            session_id=session_id,
+        )
+
+        return DeepAgentUploadResponse(
+            success=True,
+            document_id=result["doc_id"],
+            filename=result["filename"],
+            file_type=result["file_type"],
+            chunks_created=result["chunk_count"],
+            detected_language=result["language"],
+            session_id=session_id,
+            message=f"Document '{file.filename}' uploaded successfully with {result['chunk_count']} chunks. Use search_attachments tool to query content.",
+        )
+
+    except ValueError as ve:
+        return DeepAgentUploadResponse(
+            success=False,
+            filename=file.filename,
+            session_id=session_id,
+            error=str(ve),
+        )
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return DeepAgentUploadResponse(
+            success=False,
+            filename=file.filename,
+            session_id=session_id,
+            error=f"Failed to process document: {e}",
+        )
+
+
+@app.get("/api/recruitment-agent/attachments/{session_id}", tags=["Recruitment Agent"])
+async def recruitment_agent_list_attachments(session_id: str) -> dict:
+    """List all uploaded documents for a Recruitment Agent session.
+
+    Args:
+        session_id: Session identifier
+
+    Returns:
+        List of uploaded documents with metadata
+    """
+    if not deep_agent_loaded:
+        raise HTTPException(
+            status_code=503,
+            detail="Recruitment Agent not available.",
+        )
+
+    from app.deepagents.tools.document_tools import _document_metadata, _current_document
+
+    docs = _document_metadata.get(session_id, {})
+    current_doc_id = _current_document.get(session_id)
+
+    documents = []
+    for doc_id, meta in docs.items():
+        documents.append({
+            **meta,
+            "is_current": doc_id == current_doc_id,
+        })
+
+    return {
+        "success": True,
+        "session_id": session_id,
+        "documents": documents,
+        "count": len(documents),
+        "current_document_id": current_doc_id,
+    }
+
+
+@app.delete("/api/recruitment-agent/attachments/{session_id}", tags=["Recruitment Agent"])
+async def recruitment_agent_clear_attachments(
+    session_id: str,
+    document_ids: str | None = None,
+) -> dict:
+    """Clear uploaded documents from a Recruitment Agent session.
+
+    Args:
+        session_id: Session identifier
+        document_ids: Comma-separated document IDs to clear, or None for all
+
+    Returns:
+        Confirmation of cleared documents
+    """
+    if not deep_agent_loaded:
+        raise HTTPException(
+            status_code=503,
+            detail="Recruitment Agent not available.",
+        )
+
+    from app.deepagents.tools.document_tools import clear_attachments
+
+    doc_ids = document_ids.split(",") if document_ids else None
+    result = clear_attachments.invoke({"session_id": session_id, "doc_ids": doc_ids})
+
+    return {
+        "success": True,
+        "session_id": session_id,
+        "message": result,
+    }
+
+
+@app.get("/api/recruitment-agent/config", tags=["Recruitment Agent"])
+async def recruitment_agent_config() -> dict:
+    """Get recruitment agent configuration including passing scores and thresholds.
+
+    Returns:
+        Configuration including passing scores for L1, L2, L3 levels and other parameters.
+    """
+    from app.deepagents.config.recruitment_config import get_recruitment_config
+
+    config = get_recruitment_config()
+
+    return {
+        "success": True,
+        "config": {
+            "scoring": {
+                "l1_passing_score": config.scoring.l1_passing_score,
+                "l2_passing_score": config.scoring.l2_passing_score,
+                "l3_passing_score": config.scoring.l3_passing_score,
+                "technical_weight": config.scoring.technical_weight,
+                "experience_weight": config.scoring.experience_weight,
+                "education_weight": config.scoring.education_weight,
+                "soft_skills_weight": config.scoring.soft_skills_weight,
+                "certification_weight": config.scoring.certification_weight,
+            },
+            "interview": {
+                "l1_question_count": config.interview.l1_question_count,
+                "l2_question_count": config.interview.l2_question_count,
+                "l3_question_count": config.interview.l3_question_count,
+                "mcq_percentage": config.interview.mcq_percentage,
+                "coding_percentage": config.interview.coding_percentage,
+            },
+            "resume_parsing": {
+                "l2_min_experience": config.resume_parsing.l2_min_experience,
+                "l3_min_experience": config.resume_parsing.l3_min_experience,
+                "supported_formats": config.resume_parsing.supported_formats,
+            },
+            "sharepoint": {
+                "folder_structure": {
+                    "jd": config.sharepoint.jd_folder,
+                    "resumes": config.sharepoint.resumes_folder,
+                    "questions": config.sharepoint.interview_questions_folder,
+                    "scoring": config.sharepoint.scoring_folder,
+                    "shortlist": config.sharepoint.shortlist_folder,
+                },
+            },
+        },
     }
 
 
