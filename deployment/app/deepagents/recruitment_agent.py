@@ -11,7 +11,7 @@ Following Enterprise Development Standards:
 - Software Engineer: Type-safe with comprehensive error handling
 """
 
-import os
+import logging
 import uuid
 from datetime import datetime
 from typing import Any, AsyncGenerator, Literal
@@ -27,6 +27,8 @@ from app.agents.base.llm_factory import get_llm
 from app.deepagents.core.types import Todo, TodoStatus
 from app.deepagents.core.state import DeepAgentState
 from app.deepagents.storage.persistent_backend import PersistentStorage
+
+logger = logging.getLogger(__name__)
 
 # Import all recruitment tools
 from app.deepagents.tools.sharepoint_tools import (
@@ -896,8 +898,9 @@ class RecruitmentDeepAgent:
                                     "action": "updated",
                                 },
                             }
-                        except Exception:
-                            pass
+                        except Exception as e:
+                            # Non-critical: todo update notification failed
+                            logger.debug("Failed to send todo update notification: %s", e)
 
                 elif event_type == "on_chain_end" and event_name == "LangGraph":
                     output = event_data.get("output", {})
@@ -910,13 +913,15 @@ class RecruitmentDeepAgent:
             # Get final context
             try:
                 files = self.storage.list_files(session_id)
-            except Exception:
+            except Exception as e:
+                logger.debug("Failed to list files for session %s: %s", session_id, e)
                 files = []
 
             try:
                 todos = self.storage.get_todos(session_id)
                 todo_list = [t.model_dump(mode="json") for t in todos]
-            except Exception:
+            except Exception as e:
+                logger.debug("Failed to get todos for session %s: %s", session_id, e)
                 todo_list = []
 
             yield {

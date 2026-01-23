@@ -12,7 +12,6 @@ Following Enterprise Development Standards:
 
 import csv
 import io
-import json
 import logging
 from datetime import datetime
 from typing import Any
@@ -67,7 +66,6 @@ class CandidateRanking(BaseModel):
 
 # Import storage from recruitment tools
 from app.deepagents.tools.recruitment_tools import (
-    _get_candidates,
     _get_jds,
     _get_screening_results,
 )
@@ -553,7 +551,6 @@ def generate_shortlist_report(
     jds = _get_jds(session_id)
     screening_results = _get_screening_results(session_id)
     interview_scores = _get_interview_scores(session_id)
-    config = get_recruitment_config()
 
     if jd_id not in jds:
         return f"Job description not found: {jd_id}"

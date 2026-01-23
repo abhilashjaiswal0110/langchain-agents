@@ -10,7 +10,6 @@ Following Enterprise Development Standards:
 - Software Engineer: Type-safe with comprehensive error handling
 """
 
-import json
 import logging
 import random
 import uuid
