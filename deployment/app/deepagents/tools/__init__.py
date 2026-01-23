@@ -119,6 +119,8 @@ from app.deepagents.tools.recruitment_tools import (
     list_candidates,
     list_job_descriptions,
     get_shortlisted_candidates,
+    get_session_dashboard,
+    clear_session_data,
 )
 from app.deepagents.tools.interview_tools import (
     generate_interview_questions,
@@ -233,6 +235,9 @@ __all__ = [
     "list_candidates",
     "list_job_descriptions",
     "get_shortlisted_candidates",
+    # Session management tools
+    "get_session_dashboard",
+    "clear_session_data",
     # Interview tools
     "generate_interview_questions",
     "export_question_set",

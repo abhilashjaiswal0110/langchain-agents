@@ -2147,7 +2147,7 @@ for candidate in shortlisted_candidates:
         skills=candidate.skills,
         level=candidate.level
     )
-    
+
     # 2. Export and upload to SharePoint
     question_doc = export_question_set(set_id=questions.set_id)
     upload_to_sharepoint(

@@ -601,6 +601,10 @@ In production, actual SharePoint file content would be returned.
 # SharePoint Client Factory
 # =============================================================================
 
+# Cache TTL in seconds (default: 30 minutes)
+CACHE_TTL_SECONDS = 1800
+
+
 def get_sharepoint_client(session_id: str = "default") -> SharePointClient:
     """Get or create SharePoint client for session.
 
@@ -613,6 +617,49 @@ def get_sharepoint_client(session_id: str = "default") -> SharePointClient:
     if session_id not in _sharepoint_clients:
         _sharepoint_clients[session_id] = SharePointClient()
     return _sharepoint_clients[session_id]
+
+
+def cleanup_expired_cache(session_id: str = "default") -> int:
+    """Remove expired entries from document cache.
+
+    Args:
+        session_id: Session identifier.
+
+    Returns:
+        Number of entries removed.
+    """
+    if session_id not in _document_cache:
+        return 0
+
+    now = datetime.now()
+    expired_keys = []
+
+    for key, entry in _document_cache[session_id].items():
+        downloaded_at = entry.get("downloaded_at", "")
+        if downloaded_at:
+            try:
+                entry_time = datetime.fromisoformat(downloaded_at)
+                if (now - entry_time).total_seconds() > CACHE_TTL_SECONDS:
+                    expired_keys.append(key)
+            except (ValueError, TypeError):
+                expired_keys.append(key)
+
+    for key in expired_keys:
+        del _document_cache[session_id][key]
+
+    return len(expired_keys)
+
+
+def clear_session_cache(session_id: str = "default") -> None:
+    """Clear all cached documents for a session.
+
+    Args:
+        session_id: Session identifier.
+    """
+    if session_id in _document_cache:
+        del _document_cache[session_id]
+    if session_id in _sharepoint_clients:
+        del _sharepoint_clients[session_id]
 
 
 # =============================================================================
@@ -911,6 +958,8 @@ def create_sharepoint_folder(
 __all__ = [
     "SharePointClient",
     "get_sharepoint_client",
+    "cleanup_expired_cache",
+    "clear_session_cache",
     "list_sharepoint_folder",
     "download_sharepoint_document",
     "upload_to_sharepoint",

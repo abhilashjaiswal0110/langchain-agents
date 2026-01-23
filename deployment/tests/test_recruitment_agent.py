@@ -974,3 +974,351 @@ class TestRecruitmentUIIntegration:
             assert "recruitment_deep" in content
             # UI should have recruitment agent in dropdown
             assert "Recruitment Deep Agent" in content or "recruitment_deep" in content
+
+
+# =============================================================================
+# Session Dashboard Tests
+# =============================================================================
+
+class TestSessionDashboard:
+    """Tests for the session dashboard tool."""
+
+    def test_dashboard_empty_session(self):
+        """Test dashboard shows setup phase for empty session."""
+        from app.deepagents.tools.recruitment_tools import get_session_dashboard
+
+        result = get_session_dashboard.invoke({"session_id": f"test-dashboard-{uuid.uuid4().hex[:8]}"})
+        assert "Dashboard" in result
+        assert "Setup" in result
+        assert "Pending" in result
+
+    def test_dashboard_after_jd_parsed(self):
+        """Test dashboard shows resume collection phase after JD is parsed."""
+        from app.deepagents.tools.recruitment_tools import (
+            get_session_dashboard,
+            parse_job_description,
+        )
+
+        session_id = f"test-dash-jd-{uuid.uuid4().hex[:8]}"
+        parse_job_description.invoke({
+            "content": "Looking for a Python developer with 5 years experience in Django and AWS.",
+            "title": "Senior Python Developer",
+            "session_id": session_id,
+        })
+
+        result = get_session_dashboard.invoke({"session_id": session_id})
+        assert "Dashboard" in result
+        assert "Resume Collection" in result
+        assert "Job Descriptions | 1" in result
+
+    def test_dashboard_after_candidates_parsed(self):
+        """Test dashboard shows screening phase after candidates are parsed."""
+        from app.deepagents.tools.recruitment_tools import (
+            get_session_dashboard,
+            parse_resume,
+            parse_job_description,
+        )
+
+        session_id = f"test-dash-cand-{uuid.uuid4().hex[:8]}"
+        parse_job_description.invoke({
+            "content": "Python developer needed with AWS experience.",
+            "title": "Python Dev",
+            "session_id": session_id,
+        })
+        parse_resume.invoke({
+            "content": "John Doe - 5 years Python, AWS, Django experience. john@email.com",
+            "filename": "john_doe_resume.pdf",
+            "session_id": session_id,
+        })
+
+        result = get_session_dashboard.invoke({"session_id": session_id})
+        assert "Screening" in result
+        assert "Candidates Parsed | 1" in result
+
+    def test_dashboard_progress_tracking(self):
+        """Test dashboard tracks progress through phases."""
+        from app.deepagents.tools.recruitment_tools import (
+            get_session_dashboard,
+            parse_resume,
+            parse_job_description,
+            batch_screen_resumes,
+            _get_jds,
+        )
+
+        session_id = f"test-dash-progress-{uuid.uuid4().hex[:8]}"
+
+        # Parse JD and resume
+        parse_job_description.invoke({
+            "content": "Need Python developer with 3 years experience.",
+            "title": "Python Developer",
+            "session_id": session_id,
+        })
+        parse_resume.invoke({
+            "content": "Jane Smith - 4 years Python, Flask, Docker. jane@test.com",
+            "filename": "jane_smith.pdf",
+            "session_id": session_id,
+        })
+
+        # Get JD ID
+        jds = _get_jds(session_id)
+        jd_id = list(jds.keys())[0]
+
+        # Screen candidates
+        batch_screen_resumes.invoke({
+            "jd_id": jd_id,
+            "session_id": session_id,
+        })
+
+        result = get_session_dashboard.invoke({"session_id": session_id})
+        assert "Screenings Completed | 1" in result
+
+    def test_dashboard_next_steps(self):
+        """Test dashboard provides actionable next steps."""
+        from app.deepagents.tools.recruitment_tools import get_session_dashboard
+
+        result = get_session_dashboard.invoke({"session_id": f"test-steps-{uuid.uuid4().hex[:8]}"})
+        assert "Next Steps" in result
+
+
+# =============================================================================
+# Data Lifecycle / PII Cleanup Tests
+# =============================================================================
+
+class TestDataLifecycle:
+    """Tests for data lifecycle management and PII cleanup."""
+
+    def test_clear_session_data_empty(self):
+        """Test clearing empty session returns appropriate message."""
+        from app.deepagents.tools.recruitment_tools import clear_session_data
+
+        result = clear_session_data.invoke({
+            "session_id": f"test-empty-{uuid.uuid4().hex[:8]}",
+        })
+        assert "No recruitment data found" in result or "Cache cleared" in result
+
+    def test_clear_session_data_with_candidates(self):
+        """Test clearing session removes candidate PII."""
+        from app.deepagents.tools.recruitment_tools import (
+            clear_session_data,
+            parse_resume,
+            _get_candidates,
+        )
+
+        session_id = f"test-clear-{uuid.uuid4().hex[:8]}"
+
+        # Add candidate data
+        parse_resume.invoke({
+            "content": "Alice Johnson - 6 years experience. alice@company.com +1-555-0123",
+            "filename": "alice_johnson.pdf",
+            "session_id": session_id,
+        })
+
+        # Verify data exists
+        assert len(_get_candidates(session_id)) > 0
+
+        # Clear session
+        result = clear_session_data.invoke({"session_id": session_id})
+        assert "Cleared" in result
+        assert "profiles removed" in result
+        assert "PII" in result
+
+    def test_clear_session_data_comprehensive(self):
+        """Test clearing session removes all data types."""
+        from app.deepagents.tools.recruitment_tools import (
+            clear_session_data,
+            parse_resume,
+            parse_job_description,
+            screen_candidate,
+            _get_candidates,
+            _get_jds,
+            _get_screening_results,
+        )
+
+        session_id = f"test-clear-all-{uuid.uuid4().hex[:8]}"
+
+        # Add JD
+        parse_job_description.invoke({
+            "content": "Senior engineer with Python and Kubernetes.",
+            "title": "Senior Engineer",
+            "session_id": session_id,
+        })
+
+        # Add candidate
+        parse_resume.invoke({
+            "content": "Bob Smith - 8 years Python, Kubernetes, Docker. bob@test.com",
+            "filename": "bob_smith.pdf",
+            "session_id": session_id,
+        })
+
+        # Screen
+        jds = _get_jds(session_id)
+        jd_id = list(jds.keys())[0]
+        candidates = _get_candidates(session_id)
+        candidate_id = list(candidates.keys())[0]
+
+        screen_candidate.invoke({
+            "candidate_id": candidate_id,
+            "jd_id": jd_id,
+            "session_id": session_id,
+        })
+
+        # Clear all
+        result = clear_session_data.invoke({"session_id": session_id})
+        assert "profiles removed" in result
+        assert "JDs removed" in result
+        assert "results removed" in result
+        assert "SharePoint cache" in result
+
+    def test_cache_ttl_functions_exist(self):
+        """Test that cache TTL functions are accessible."""
+        from app.deepagents.tools.sharepoint_tools import (
+            cleanup_expired_cache,
+            clear_session_cache,
+        )
+
+        # Cleanup expired cache should return 0 for non-existent session
+        result = cleanup_expired_cache(f"test-ttl-{uuid.uuid4().hex[:8]}")
+        assert result == 0
+
+    def test_clear_session_cache(self):
+        """Test clearing SharePoint session cache."""
+        from app.deepagents.tools.sharepoint_tools import (
+            clear_session_cache,
+            list_sharepoint_folder,
+        )
+
+        session_id = f"test-cache-{uuid.uuid4().hex[:8]}"
+
+        # Generate some cache data
+        list_sharepoint_folder.invoke({
+            "folder_type": "jd",
+            "session_id": session_id,
+        })
+
+        # Clear cache - should not raise
+        clear_session_cache(session_id)
+
+
+# =============================================================================
+# Enhanced Server Endpoints Tests
+# =============================================================================
+
+class TestEnhancedEndpoints:
+    """Tests for new dashboard and session cleanup endpoints."""
+
+    def test_dashboard_endpoint(self):
+        """Test the dashboard API endpoint."""
+        from fastapi.testclient import TestClient
+        from app.server import app
+
+        client = TestClient(app)
+        response = client.get("/api/recruitment-agent/dashboard/test-session")
+        # Should return 200 or 503 (agent not loaded)
+        assert response.status_code in [200, 503]
+        if response.status_code == 200:
+            data = response.json()
+            assert "dashboard" in data or "success" in data
+
+    def test_session_cleanup_endpoint(self):
+        """Test the session cleanup API endpoint."""
+        from fastapi.testclient import TestClient
+        from app.server import app
+
+        client = TestClient(app)
+        response = client.delete("/api/recruitment-agent/session/test-session")
+        # Should return 200 or 503 (agent not loaded)
+        assert response.status_code in [200, 503]
+
+    def test_dashboard_endpoint_routing(self):
+        """Test that dashboard endpoint is properly routed."""
+        from fastapi.testclient import TestClient
+        from app.server import app
+
+        client = TestClient(app)
+        response = client.get("/api/recruitment-agent/dashboard/test-session")
+        # Should not return 405 Method Not Allowed
+        assert response.status_code != 405
+
+    def test_session_cleanup_endpoint_routing(self):
+        """Test that session cleanup endpoint is properly routed."""
+        from fastapi.testclient import TestClient
+        from app.server import app
+
+        client = TestClient(app)
+        response = client.delete("/api/recruitment-agent/session/test-session")
+        # Should not return 405 Method Not Allowed
+        assert response.status_code != 405
+
+
+# =============================================================================
+# Enhanced System Prompt Tests
+# =============================================================================
+
+class TestEnhancedSystemPrompt:
+    """Tests for enhanced system prompt features."""
+
+    def test_system_prompt_has_quick_actions(self):
+        """Test system prompt includes quick action shortcuts."""
+        from app.deepagents.recruitment_agent import RECRUITMENT_SYSTEM_PROMPT
+
+        assert "Quick Actions" in RECRUITMENT_SYSTEM_PROMPT
+        assert "dashboard" in RECRUITMENT_SYSTEM_PROMPT
+        assert "screen all" in RECRUITMENT_SYSTEM_PROMPT
+        assert "full cycle" in RECRUITMENT_SYSTEM_PROMPT
+
+    def test_system_prompt_has_error_recovery(self):
+        """Test system prompt includes error recovery guidance."""
+        from app.deepagents.recruitment_agent import RECRUITMENT_SYSTEM_PROMPT
+
+        assert "Error Recovery" in RECRUITMENT_SYSTEM_PROMPT
+        assert "demo mode" in RECRUITMENT_SYSTEM_PROMPT
+
+    def test_system_prompt_has_data_privacy(self):
+        """Test system prompt includes data privacy guidelines."""
+        from app.deepagents.recruitment_agent import RECRUITMENT_SYSTEM_PROMPT
+
+        assert "Data Privacy" in RECRUITMENT_SYSTEM_PROMPT
+        assert "PII" in RECRUITMENT_SYSTEM_PROMPT
+        assert "clear_session_data" in RECRUITMENT_SYSTEM_PROMPT
+
+    def test_system_prompt_has_first_response_priority(self):
+        """Test system prompt includes first response priority."""
+        from app.deepagents.recruitment_agent import RECRUITMENT_SYSTEM_PROMPT
+
+        assert "First Response Priority" in RECRUITMENT_SYSTEM_PROMPT
+        assert "get_session_dashboard" in RECRUITMENT_SYSTEM_PROMPT
+
+    def test_agent_includes_new_tools(self):
+        """Test that agent tool collection includes new tools."""
+        from app.deepagents.recruitment_agent import RECRUITMENT_SYSTEM_PROMPT
+
+        # Verify new tools are referenced in the prompt
+        assert "get_session_dashboard" in RECRUITMENT_SYSTEM_PROMPT
+        assert "clear_session_data" in RECRUITMENT_SYSTEM_PROMPT
+
+
+# =============================================================================
+# New Tool Exports Tests
+# =============================================================================
+
+class TestNewToolExports:
+    """Tests for new tool exports."""
+
+    def test_session_dashboard_exported_from_tools(self):
+        """Test get_session_dashboard is exported from tools module."""
+        from app.deepagents.tools import get_session_dashboard
+        assert get_session_dashboard is not None
+
+    def test_clear_session_data_exported_from_tools(self):
+        """Test clear_session_data is exported from tools module."""
+        from app.deepagents.tools import clear_session_data
+        assert clear_session_data is not None
+
+    def test_sharepoint_cache_functions_exported(self):
+        """Test SharePoint cache functions are exported."""
+        from app.deepagents.tools.sharepoint_tools import (
+            cleanup_expired_cache,
+            clear_session_cache,
+        )
+        assert cleanup_expired_cache is not None
+        assert clear_session_cache is not None

@@ -3589,6 +3589,55 @@ async def recruitment_agent_config() -> dict:
     }
 
 
+@app.get("/api/recruitment-agent/dashboard/{session_id}", tags=["Recruitment Agent"])
+async def recruitment_agent_dashboard(session_id: str) -> dict:
+    """Get comprehensive session dashboard with progress and next steps.
+
+    Args:
+        session_id: Session identifier.
+
+    Returns:
+        Dashboard data including phase, progress, and recommendations.
+    """
+    if not deep_agent_loaded or recruitment_deep_agent is None:
+        raise HTTPException(status_code=503, detail="Recruitment agent not loaded")
+
+    from app.deepagents.tools.recruitment_tools import get_session_dashboard
+    result = get_session_dashboard.invoke({"session_id": session_id})
+
+    return {
+        "success": True,
+        "session_id": session_id,
+        "dashboard": result,
+    }
+
+
+@app.delete("/api/recruitment-agent/session/{session_id}", tags=["Recruitment Agent"])
+async def recruitment_agent_clear_session(session_id: str) -> dict:
+    """Clear all session data for PII compliance.
+
+    Removes all candidate profiles, JDs, screening results,
+    interview data, scores, and document caches.
+
+    Args:
+        session_id: Session identifier.
+
+    Returns:
+        Confirmation of cleared data.
+    """
+    if not deep_agent_loaded or recruitment_deep_agent is None:
+        raise HTTPException(status_code=503, detail="Recruitment agent not loaded")
+
+    from app.deepagents.tools.recruitment_tools import clear_session_data
+    result = clear_session_data.invoke({"session_id": session_id})
+
+    return {
+        "success": True,
+        "session_id": session_id,
+        "result": result,
+    }
+
+
 # ============================================================================
 # Chat UI (Static Files)
 # ============================================================================

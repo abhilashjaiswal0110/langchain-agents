@@ -47,6 +47,8 @@ from app.deepagents.tools.recruitment_tools import (
     list_candidates,
     list_job_descriptions,
     get_shortlisted_candidates,
+    get_session_dashboard,
+    clear_session_data,
 )
 
 from app.deepagents.tools.interview_tools import (
@@ -92,6 +94,11 @@ You coordinate the complete recruitment process by:
 4. Evaluating candidate responses
 5. Producing scoring reports and shortlists
 
+## First Response Priority
+When a user starts a new session or says "hello"/"start", ALWAYS begin by calling
+`get_session_dashboard` to show the current state. This gives immediate visibility
+into progress and next steps.
+
 ## Available Subagents
 Use the `task` tool to delegate to specialized subagents:
 
@@ -101,7 +108,7 @@ Use the `task` tool to delegate to specialized subagents:
 - **answer-evaluator**: Candidate answer evaluation and scoring
 - **report-generator**: Scoring reports and Excel exports
 
-## Workflow
+## Workflow Phases
 
 ### 1. Setup Phase
 - List available JDs from SharePoint (`list_sharepoint_folder` with folder_type="jd")
@@ -125,6 +132,20 @@ Use the `task` tool to delegate to specialized subagents:
 - Export results to Excel format
 - Create final shortlist report
 - Upload reports to SharePoint
+
+## Quick Actions (User Shortcuts)
+When users say these phrases, respond with the corresponding actions:
+
+- **"show status"** / **"dashboard"** -> Call `get_session_dashboard`
+- **"list positions"** -> Call `list_job_descriptions`
+- **"list candidates"** -> Call `list_candidates`
+- **"screen all"** -> Call `batch_screen_resumes` with the active JD
+- **"generate questions for [name]"** -> Look up candidate, call `generate_interview_questions`
+- **"show rankings"** -> Call `get_ranking_summary`
+- **"show config"** -> Call `get_passing_score_thresholds`
+- **"export report"** -> Call `export_scoring_excel`
+- **"full cycle"** -> Execute complete recruitment cycle (parse JD -> resumes -> screen -> questions -> report)
+- **"cleanup"** / **"clear data"** -> Call `clear_session_data` for PII compliance
 
 ## Planning Guidelines
 For complex requests, ALWAYS start with `write_todos` to create a task plan:
@@ -158,39 +179,56 @@ The recruitment process is governed by configurable parameters:
 Use `get_passing_score_thresholds` to view current configuration.
 
 ## Response Format
-- Provide clear, actionable responses
-- Reference candidate names and IDs
-- Summarize screening/evaluation findings
-- Recommend specific next steps
+- Provide clear, actionable responses with progress indicators
+- Reference candidate names and IDs in all outputs
+- Summarize screening/evaluation findings with tables when possible
+- Recommend specific next steps based on current workflow phase
 - Be transparent about all decisions with scoring justification
+- After batch operations, always show the session dashboard
+
+## Error Recovery
+When a tool fails or returns unexpected results:
+1. Explain clearly what went wrong
+2. Suggest alternative approaches
+3. Never repeat the same failing action without changing parameters
+4. If SharePoint is unavailable, offer demo mode alternatives
+5. If a candidate/JD is not found, list available ones
+
+## Data Privacy (CRITICAL)
+- Never expose raw PII (email, phone) in summary reports shared externally
+- Recommend `clear_session_data` after recruitment cycles complete
+- Do not retain candidate data beyond the session unless explicitly requested
+- Mask sensitive fields in exported reports
 
 ## Example Workflows
 
 ### Screen Candidates for a Position
-1. List JDs from SharePoint
-2. Parse target job description
-3. List resumes from SharePoint
-4. Parse each resume
-5. Screen all candidates against JD
-6. Generate shortlist report
+1. `get_session_dashboard` - Check current state
+2. `list_sharepoint_folder(folder_type="jd")` - List available JDs
+3. `download_sharepoint_document` + `parse_job_description` - Parse JD
+4. `list_sharepoint_folder(folder_type="resumes")` - List resumes
+5. Parse each resume with `parse_resume`
+6. `batch_screen_resumes(jd_id)` - Screen all at once
+7. `get_session_dashboard` - Show updated progress
 
 ### Conduct Technical Assessment
-1. Get shortlisted candidates
-2. Generate question sets based on skills
-3. Export questions to SharePoint
-4. Submit candidate answers when received
-5. Evaluate all answers
-6. Generate scoring report
-7. Produce final shortlist for L2 interview
+1. `get_shortlisted_candidates(jd_id)` - Get shortlisted candidates
+2. `generate_interview_questions` for each candidate
+3. `export_question_set` - Create candidate-facing documents
+4. `upload_to_sharepoint` - Save to SharePoint
+5. `submit_candidate_answers` - Record responses when received
+6. `evaluate_candidate_answers` - Score all submissions
+7. `generate_scoring_report` - Create comprehensive report
 
-### Complete Recruitment Cycle
+### Complete Recruitment Cycle (Full Automation)
 1. Parse JD requirements
 2. Screen all resumes (L1/L2/L3 classification)
 3. Generate interview questions for shortlisted
 4. Evaluate submitted answers
 5. Export scoring Excel to SharePoint
 6. Generate final shortlist report
-7. Identify candidates ready for L2 interview
+7. Show final dashboard with recommendations
+8. Offer `clear_session_data` for PII cleanup
 """
 
 
@@ -293,6 +331,8 @@ class RecruitmentDeepAgent:
             list_candidates,
             list_job_descriptions,
             get_shortlisted_candidates,
+            get_session_dashboard,
+            clear_session_data,
         ]
 
         # Interview tools
@@ -938,6 +978,9 @@ class RecruitmentDeepAgent:
             "get_ranking_summary": "Getting candidate rankings...",
             "generate_shortlist_report": "Generating shortlist report...",
             "get_passing_score_thresholds": "Getting score thresholds...",
+            # Session management tools
+            "get_session_dashboard": "Loading session dashboard...",
+            "clear_session_data": "Clearing session data (PII cleanup)...",
             # Document tools
             "search_attachments": f"Searching documents for '{tool_input.get('query', '')[:30]}'...",
             "list_attachments": "Listing uploaded documents...",

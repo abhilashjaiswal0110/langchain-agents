@@ -893,6 +893,234 @@ def get_shortlisted_candidates(
     return output
 
 
+@tool
+def get_session_dashboard(session_id: str = "default") -> str:
+    """Get a comprehensive dashboard of the current recruitment session.
+
+    Use this tool to provide an overview of all recruitment activities
+    including candidates parsed, JDs loaded, screening status, and next steps.
+
+    Args:
+        session_id: Session identifier.
+
+    Returns:
+        Formatted session dashboard with progress and recommendations.
+    """
+    candidates = _get_candidates(session_id)
+    jds = _get_jds(session_id)
+    results = _get_screening_results(session_id)
+
+    # Import interview data
+    from app.deepagents.tools.interview_tools import (
+        _get_question_sets,
+        _get_scores,
+    )
+    question_sets = _get_question_sets(session_id)
+    scores = _get_scores(session_id)
+
+    total_candidates = len(candidates)
+    total_jds = len(jds)
+    total_screenings = len(results)
+    shortlisted = [r for r in results if r.shortlisted]
+    passed = [r for r in results if r.passed]
+    failed = [r for r in results if not r.passed]
+    total_question_sets = len(question_sets)
+    total_scores = len(scores)
+
+    # Determine workflow phase
+    if total_jds == 0 and total_candidates == 0:
+        phase = "Setup"
+        phase_description = "No data loaded yet. Start by parsing a JD and resumes."
+        next_steps = [
+            "List JDs from SharePoint: `list_sharepoint_folder(folder_type='jd')`",
+            "Parse a job description: `parse_job_description(content, title)`",
+            "List resumes from SharePoint: `list_sharepoint_folder(folder_type='resumes')`",
+        ]
+    elif total_jds > 0 and total_candidates == 0:
+        phase = "Resume Collection"
+        phase_description = f"{total_jds} JD(s) loaded. Now parse candidate resumes."
+        next_steps = [
+            "Download resumes from SharePoint",
+            "Parse each resume: `parse_resume(content, filename)`",
+            "Or upload resumes directly via the UI",
+        ]
+    elif total_candidates > 0 and total_screenings == 0:
+        phase = "Screening"
+        phase_description = f"{total_candidates} candidate(s) ready for screening."
+        next_steps = [
+            "Screen all candidates: `batch_screen_resumes(jd_id)`",
+            "Or screen individually: `screen_candidate(candidate_id, jd_id)`",
+        ]
+    elif len(shortlisted) > 0 and total_question_sets == 0:
+        phase = "Assessment"
+        phase_description = f"{len(shortlisted)} candidate(s) shortlisted. Generate interview questions."
+        next_steps = [
+            "Generate questions for each shortlisted candidate",
+            "Export question sets to SharePoint",
+            "Send to candidates for completion",
+        ]
+    elif total_question_sets > 0 and total_scores == 0:
+        phase = "Evaluation"
+        phase_description = f"{total_question_sets} question set(s) generated. Awaiting/evaluating answers."
+        next_steps = [
+            "Submit candidate answers: `submit_candidate_answers(set_id, answers)`",
+            "Evaluate answers: `evaluate_candidate_answers(set_id)`",
+        ]
+    elif total_scores > 0:
+        phase = "Reporting"
+        phase_description = f"{total_scores} candidate(s) evaluated. Generate reports."
+        next_steps = [
+            "Generate scoring report: `generate_scoring_report(jd_id)`",
+            "Export to Excel: `export_scoring_excel(jd_id)`",
+            "Generate shortlist: `generate_shortlist_report(jd_id)`",
+        ]
+    else:
+        phase = "In Progress"
+        phase_description = "Recruitment workflow in progress."
+        next_steps = ["Continue with current workflow"]
+
+    # Build dashboard
+    output = f"""## Recruitment Session Dashboard
+
+**Session**: {session_id}
+**Phase**: {phase}
+**Status**: {phase_description}
+
+---
+
+### Progress Summary
+
+| Category | Count | Status |
+|----------|-------|--------|
+| Job Descriptions | {total_jds} | {'Ready' if total_jds > 0 else 'Pending'} |
+| Candidates Parsed | {total_candidates} | {'Ready' if total_candidates > 0 else 'Pending'} |
+| Screenings Completed | {total_screenings} | {'Done' if total_screenings > 0 else 'Pending'} |
+| Shortlisted | {len(shortlisted)} | {'Available' if shortlisted else 'N/A'} |
+| Question Sets | {total_question_sets} | {'Generated' if total_question_sets > 0 else 'Pending'} |
+| Evaluations Complete | {total_scores} | {'Done' if total_scores > 0 else 'Pending'} |
+
+---
+
+### Screening Breakdown
+"""
+
+    if total_screenings > 0:
+        output += f"""
+- Shortlisted: {len(shortlisted)} ({len(shortlisted)/total_screenings*100:.0f}%)
+- Passed (not shortlisted): {len(passed) - len(shortlisted)}
+- Failed: {len(failed)}
+"""
+    else:
+        output += "\n*No screenings performed yet.*\n"
+
+    output += "\n---\n\n### Recommended Next Steps\n\n"
+    for i, step in enumerate(next_steps, 1):
+        output += f"{i}. {step}\n"
+
+    # Add candidates summary if available
+    if candidates:
+        output += "\n---\n\n### Candidates Overview\n\n"
+        output += "| Name | Level | Skills | Screened |\n"
+        output += "|------|-------|--------|----------|\n"
+        for cid, c in list(candidates.items())[:10]:
+            level = c.screening_level.value if c.screening_level else "N/A"
+            screened = "Yes" if any(r.candidate_id == cid for r in results) else "No"
+            output += f"| {c.name} | {level} | {len(c.skills)} | {screened} |\n"
+
+    output += f"""
+---
+
+*Dashboard refreshed at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*
+"""
+
+    return output
+
+
+@tool
+def clear_session_data(
+    session_id: str = "default",
+    clear_candidates: bool = True,
+    clear_jds: bool = True,
+    clear_screenings: bool = True,
+) -> str:
+    """Clear session data for PII compliance and fresh starts.
+
+    Use this tool to clean up session data, especially when handling
+    sensitive candidate PII that should not be retained. Also clears
+    interview data, scoring data, and document caches.
+
+    Args:
+        session_id: Session identifier.
+        clear_candidates: Whether to clear candidate profiles.
+        clear_jds: Whether to clear job descriptions.
+        clear_screenings: Whether to clear screening results.
+
+    Returns:
+        Confirmation of cleared data.
+    """
+    cleared = []
+
+    if clear_candidates and session_id in _candidates:
+        count = len(_candidates[session_id])
+        del _candidates[session_id]
+        cleared.append(f"Candidates: {count} profiles removed")
+
+    if clear_jds and session_id in _job_descriptions:
+        count = len(_job_descriptions[session_id])
+        del _job_descriptions[session_id]
+        cleared.append(f"Job Descriptions: {count} JDs removed")
+
+    if clear_screenings and session_id in _screening_results:
+        count = len(_screening_results[session_id])
+        del _screening_results[session_id]
+        cleared.append(f"Screening Results: {count} results removed")
+
+    # Also clear interview and scoring data
+    from app.deepagents.tools.interview_tools import (
+        _question_sets,
+        _candidate_answers,
+        _evaluations,
+        _candidate_scores,
+    )
+
+    if session_id in _question_sets:
+        count = len(_question_sets[session_id])
+        del _question_sets[session_id]
+        cleared.append(f"Question Sets: {count} sets removed")
+
+    if session_id in _candidate_answers:
+        count = len(_candidate_answers[session_id])
+        del _candidate_answers[session_id]
+        cleared.append(f"Candidate Answers: {count} answers removed")
+
+    if session_id in _evaluations:
+        count = len(_evaluations[session_id])
+        del _evaluations[session_id]
+        cleared.append(f"Evaluations: {count} evaluations removed")
+
+    if session_id in _candidate_scores:
+        count = len(_candidate_scores[session_id])
+        del _candidate_scores[session_id]
+        cleared.append(f"Scores: {count} scores removed")
+
+    # Clear SharePoint document cache
+    from app.deepagents.tools.sharepoint_tools import clear_session_cache
+    clear_session_cache(session_id)
+    cleared.append("SharePoint cache: cleared")
+
+    if len(cleared) <= 1:  # Only the cache clear
+        return f"No recruitment data found for session: {session_id}. Cache cleared."
+
+    output = "## Session Data Cleared\n\n"
+    output += f"**Session**: {session_id}\n\n"
+    for item in cleared:
+        output += f"- {item}\n"
+    output += "\n*All PII data has been permanently removed from memory.*\n"
+    output += "*SharePoint document cache has been cleared.*"
+
+    return output
+
+
 __all__ = [
     "CandidateProfile",
     "JobDescription",
@@ -905,4 +1133,6 @@ __all__ = [
     "list_candidates",
     "list_job_descriptions",
     "get_shortlisted_candidates",
+    "get_session_dashboard",
+    "clear_session_data",
 ]
