@@ -111,6 +111,7 @@ def generate_scoring_report(
     jds = _get_jds(session_id)
     screening_results = _get_screening_results(session_id)
     interview_scores = _get_interview_scores(session_id)
+    config = get_recruitment_config()
 
     if jd_id not in jds:
         return f"Job description not found: {jd_id}"
