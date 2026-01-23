@@ -2,7 +2,7 @@
 
 > **Purpose**: This document serves as the authoritative knowledge source for AI agents working on this repository. It contains architectural decisions, implementation patterns, and guidelines that must be followed when making changes or enhancements.
 
-**Last Updated**: 2026-01-12 (v3.17 - Deep Agent with Streaming & Reasoning Models)
+**Last Updated**: 2026-01-23 (v3.19 - Recruitment Deep Agent with SharePoint Integration)
 
 ---
 
@@ -22,7 +22,8 @@
 12. [MCP Integration](#mcp-integration)
 13. [DeepSearch Research](#deepsearch-research)
 14. [Deep Agents](#deep-agents)
-15. [Dependencies](#dependencies)
+15. [Recruitment Deep Agent](#recruitment-deep-agent)
+16. [Dependencies](#dependencies)
 16. [Development Patterns](#development-patterns)
 17. [Testing Strategy](#testing-strategy)
 18. [Deployment](#deployment)
@@ -1947,6 +1948,514 @@ Sources are scored based on multiple factors:
 | `PARALLEL` | Execute all sub-queries simultaneously |
 | `SEQUENTIAL` | Execute sub-queries in priority order |
 | `HIERARCHICAL` | Execute based on dependencies (results feed next query) |
+
+---
+
+## Recruitment Deep Agent
+
+### Overview
+
+The **Recruitment Deep Agent** is an AI-powered end-to-end recruitment automation system that coordinates specialized subagents to handle the complete hiring workflow from resume screening to candidate shortlisting.
+
+**Key Capabilities**:
+- SharePoint integration for document management (JDs, resumes, reports)
+- Multi-level candidate screening (L1/L2/L3)
+- Automated technical interview question generation
+- Candidate answer evaluation and scoring
+- Excel report generation and shortlist production
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        Recruitment Deep Agent                                │
+│  ┌───────────────────────────────────────────────────────────────────────┐  │
+│  │                     Main Coordinator Agent                             │  │
+│  │  - Workflow orchestration                                             │  │
+│  │  - Subagent delegation                                                │  │
+│  │  - Context management                                                 │  │
+│  └───────────────────────────────────────────────────────────────────────┘  │
+│                                   │                                          │
+│          ┌────────────────────────┼────────────────────────────┐            │
+│          │                        │                            │            │
+│    ┌─────▼─────┐           ┌─────▼─────┐            ┌────────▼────────┐   │
+│    │ Document  │           │  Resume   │            │   Question      │   │
+│    │  Manager  │           │ Screener  │            │  Generator      │   │
+│    │           │           │           │            │                 │   │
+│    │ SharePoint│           │L1/L2/L3   │            │MCQ/Coding/      │   │
+│    │Operations │           │Screening  │            │Scenario         │   │
+│    └───────────┘           └───────────┘            └─────────────────┘   │
+│          │                        │                            │            │
+│    ┌─────▼─────┐           ┌─────▼─────┐                     │            │
+│    │  Answer   │           │  Report   │                     │            │
+│    │ Evaluator │           │ Generator │                     │            │
+│    │           │           │           │                     │            │
+│    │ Scoring & │           │Excel/PDF  │                     │            │
+│    │ Feedback  │           │ Exports   │                     │            │
+│    └───────────┘           └───────────┘                     │            │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+                                   │
+                    ┌──────────────┴──────────────┐
+                    │                             │
+                    ▼                             ▼
+          ┌──────────────────┐          ┌──────────────────┐
+          │   SharePoint     │          │  Persistent      │
+          │   Document       │          │  Session         │
+          │   Library        │          │  Storage         │
+          └──────────────────┘          └──────────────────┘
+```
+
+### Specialized Subagents
+
+#### 1. Document Manager
+**Purpose**: SharePoint document lifecycle management
+
+**Capabilities**:
+- List folders and files from SharePoint
+- Download documents (PDF, DOCX) for processing
+- Upload generated reports and question sets
+- Search documents by content or metadata
+- Document caching for performance
+
+**Tools**: `list_sharepoint_folder`, `download_sharepoint_document`, `upload_to_sharepoint`, `search_sharepoint_documents`, `get_cached_document`, `create_sharepoint_folder`
+
+#### 2. Resume Screener
+**Purpose**: Candidate evaluation and L1/L2/L3 classification
+
+**Capabilities**:
+- Parse resumes (PDF/DOCX) to extract structured data
+- Extract skills, experience, education, certifications
+- Match candidates against job requirements
+- Calculate weighted screening scores
+- Generate shortlists with rankings
+
+**Tools**: `parse_resume`, `parse_job_description`, `screen_candidate`, `batch_screen_resumes`, `get_candidate_profile`, `list_candidates`, `get_shortlisted_candidates`
+
+**Screening Levels**:
+- **L1 (Junior)**: 0-3 years experience, 60% passing threshold
+- **L2 (Mid-level)**: 3-7 years experience, 70% passing threshold
+- **L3 (Senior)**: 7+ years experience, 80% passing threshold
+
+#### 3. Question Generator
+**Purpose**: Technical interview question creation
+
+**Capabilities**:
+- Generate skill-matched questions by candidate level
+- Support multiple question types (MCQ, Coding, Scenario, Short Answer)
+- Difficulty distribution by level
+- Export candidate-facing question sets
+- Time limit assignment
+
+**Tools**: `generate_interview_questions`, `export_question_set`, `list_question_sets`
+
+**Question Distribution**:
+- **L1**: 50% basic, 40% intermediate, 10% advanced
+- **L2**: 20% basic, 40% intermediate, 30% advanced, 10% expert
+- **L3**: 5% basic, 25% intermediate, 40% advanced, 30% expert
+
+#### 4. Answer Evaluator
+**Purpose**: Candidate response assessment
+
+**Capabilities**:
+- Process submitted candidate answers
+- Automated MCQ grading
+- Keyword-based coding/scenario evaluation
+- Generate constructive feedback
+- Calculate percentage scores and pass/fail status
+
+**Tools**: `submit_candidate_answers`, `evaluate_candidate_answers`, `get_candidate_score`
+
+#### 5. Report Generator
+**Purpose**: Scoring reports and Excel exports
+
+**Capabilities**:
+- Comprehensive scoring reports with analytics
+- Excel-compatible CSV generation
+- Candidate rankings and comparisons
+- Final shortlist recommendations
+- L2 interview readiness reports
+
+**Tools**: `generate_scoring_report`, `export_scoring_excel`, `get_ranking_summary`, `get_passing_score_thresholds`, `generate_shortlist_report`
+
+### SharePoint Integration
+
+#### Configuration
+
+Set environment variables in `.env`:
+```bash
+SHAREPOINT_SITE_URL=https://yourcompany.sharepoint.com/sites/Recruitment
+SHAREPOINT_TENANT_ID=your-tenant-id
+SHAREPOINT_CLIENT_ID=your-app-client-id
+SHAREPOINT_CLIENT_SECRET=your-app-secret
+```
+
+#### Folder Structure
+
+Default SharePoint folder organization:
+```
+Recruitment/
+├── JobDescriptions/        # JD documents (input)
+├── Resumes/                # Candidate resumes (input)
+├── RolesResponsibilities/  # Role definitions (reference)
+├── InterviewQuestions/     # Generated question sets (output)
+├── CandidateAnswers/       # Submitted answers (input)
+├── Scoring/                # Excel scoring reports (output)
+└── Shortlisted/            # Final shortlist reports (output)
+```
+
+#### Authentication
+
+**Azure AD App Registration Required**:
+1. Register app in Azure AD
+2. Grant `Sites.ReadWrite.All` permission
+3. Create client secret
+4. Configure in environment variables
+
+**Demo Mode**: If credentials not configured, runs in demo mode with sample data.
+
+### Recruitment Workflows
+
+#### Complete Screening Workflow
+
+```python
+# 1. List and parse job description
+jds = list_sharepoint_folder(folder_type="jd")
+jd = parse_job_description(content=jd_content, title="Python Developer")
+
+# 2. Process candidate resumes
+resumes = list_sharepoint_folder(folder_type="resumes")
+for resume_file in resumes:
+    content = download_sharepoint_document(folder_type="resumes", filename=resume_file)
+    candidate = parse_resume(content=content, filename=resume_file)
+
+# 3. Screen all candidates
+screening_results = batch_screen_resumes(jd_id=jd.id)
+
+# 4. Get shortlisted candidates
+shortlist = get_shortlisted_candidates(jd_id=jd.id)
+```
+
+#### Technical Assessment Workflow
+
+```python
+# 1. Generate interview questions for shortlisted candidates
+for candidate in shortlisted_candidates:
+    questions = generate_interview_questions(
+        candidate_id=candidate.id,
+        candidate_name=candidate.name,
+        skills=candidate.skills,
+        level=candidate.level
+    )
+    
+    # 2. Export and upload to SharePoint
+    question_doc = export_question_set(set_id=questions.set_id)
+    upload_to_sharepoint(
+        folder_type="questions",
+        filename=f"{candidate.name}_Questions.docx",
+        content=question_doc
+    )
+
+# 3. After candidates submit answers
+submit_candidate_answers(set_id=questions.set_id, answers=candidate_answers)
+evaluation = evaluate_candidate_answers(set_id=questions.set_id)
+```
+
+#### Reporting Workflow
+
+```python
+# 1. Generate comprehensive scoring report
+report = generate_scoring_report(jd_id=jd.id)
+
+# 2. Export to Excel format
+excel_data = export_scoring_excel(jd_id=jd.id)
+upload_to_sharepoint(
+    folder_type="scoring",
+    filename=f"Scoring_{jd.title}.csv",
+    content=excel_data
+)
+
+# 3. Generate final shortlist
+shortlist_report = generate_shortlist_report(jd_id=jd.id)
+upload_to_sharepoint(
+    folder_type="shortlist",
+    filename=f"Shortlist_{jd.title}.txt",
+    content=shortlist_report
+)
+```
+
+### Scoring Configuration
+
+#### Default Weights
+
+```python
+scoring_weights = {
+    "technical_skills": 0.40,    # 40%
+    "experience": 0.25,          # 25%
+    "education": 0.15,           # 15%
+    "soft_skills": 0.10,         # 10%
+    "certifications": 0.10       # 10%
+}
+```
+
+#### Passing Thresholds
+
+| Level | Resume Screening | Interview | Combined |
+|-------|-----------------|-----------|----------|
+| L1    | 50%             | 60%       | 55%      |
+| L2    | 55%             | 70%       | 65%      |
+| L3    | 60%             | 80%       | 75%      |
+
+#### Customization
+
+Modify `app/deepagents/config/recruitment_config.py` to adjust:
+- Passing score thresholds
+- Score weights
+- Question counts per level
+- Difficulty distributions
+- SharePoint folder paths
+
+### API Endpoints
+
+#### Start Recruitment Session
+```http
+POST /api/recruitment-agent/start
+Content-Type: application/json
+
+{
+  "user_id": "hr_manager_001",
+  "job_description_id": "JD-PYTHON-DEV-2026"
+}
+
+Response:
+{
+  "session_id": "rec_abc123",
+  "status": "active",
+  "message": "Recruitment session started. Ready to process candidates."
+}
+```
+
+#### Chat with Recruitment Agent
+```http
+POST /api/recruitment-agent/chat
+Content-Type: application/json
+
+{
+  "session_id": "rec_abc123",
+  "message": "Screen all resumes for the Python Developer position and generate a shortlist"
+}
+
+Response:
+{
+  "response": "I've screened 15 candidates. 8 meet the requirements. Here's the shortlist:\n\n1. John Doe (L2) - 85% match\n2. Jane Smith (L3) - 82% match\n...",
+  "todos": [
+    {"task": "Generate interview questions", "status": "pending"},
+    {"task": "Upload shortlist to SharePoint", "status": "pending"}
+  ]
+}
+```
+
+#### Get Configuration
+```http
+GET /api/recruitment-agent/config
+
+Response:
+{
+  "config": {
+    "scoring": {
+      "l1_passing_score": 60.0,
+      "l2_passing_score": 70.0,
+      "l3_passing_score": 80.0,
+      "technical_weight": 0.40
+    },
+    "interview": {
+      "l1_question_count": 8,
+      "l2_question_count": 12,
+      "l3_question_count": 15
+    },
+    "sharepoint": {
+      "jd_folder": "Recruitment/JobDescriptions",
+      "resumes_folder": "Recruitment/Resumes"
+    }
+  }
+}
+```
+
+#### List Subagents
+```http
+GET /api/recruitment-agent/subagents
+
+Response:
+{
+  "subagents": [
+    {
+      "name": "document-manager",
+      "description": "SharePoint document management",
+      "tools_count": 6
+    },
+    {
+      "name": "resume-screener",
+      "description": "Resume parsing and candidate screening",
+      "tools_count": 8
+    }
+  ],
+  "count": 5
+}
+```
+
+### Tool Reference
+
+#### SharePoint Tools
+
+| Tool | Description | Input | Output |
+|------|-------------|-------|--------|
+| `list_sharepoint_folder` | List folder contents | folder_type | File list with metadata |
+| `download_sharepoint_document` | Download file | folder_type, filename | File content (cached) |
+| `upload_to_sharepoint` | Upload file | folder_type, filename, content | Upload status |
+| `search_sharepoint_documents` | Search files | query, folder_type | Matching files |
+| `get_cached_document` | Retrieve cached file | folder_type, filename | Cached content |
+| `create_sharepoint_folder` | Create new folder | folder_path | Creation status |
+
+#### Recruitment Tools
+
+| Tool | Description | Input | Output |
+|------|-------------|-------|--------|
+| `parse_resume` | Extract candidate data | content, filename | Candidate profile |
+| `parse_job_description` | Extract JD requirements | content, title | Job description object |
+| `screen_candidate` | Evaluate candidate fit | candidate_id, jd_id | Screening result with scores |
+| `batch_screen_resumes` | Screen all candidates | jd_id | Rankings and shortlist |
+| `get_candidate_profile` | Retrieve candidate details | candidate_id | Full profile |
+| `list_candidates` | List all parsed candidates | session_id | Candidate summary |
+| `list_job_descriptions` | List all parsed JDs | session_id | JD summary |
+| `get_shortlisted_candidates` | Get shortlist | jd_id | Shortlisted candidates |
+
+#### Interview Tools
+
+| Tool | Description | Input | Output |
+|------|-------------|-------|--------|
+| `generate_interview_questions` | Create question set | candidate_id, skills, level | Question set |
+| `export_question_set` | Format for candidate | set_id | Document content |
+| `submit_candidate_answers` | Record answers | set_id, answers | Submission confirmation |
+| `evaluate_candidate_answers` | Score answers | set_id | Evaluation results |
+| `get_candidate_score` | Get interview score | candidate_id | Score details |
+| `list_question_sets` | List all question sets | session_id | Question set summary |
+
+#### Scoring Tools
+
+| Tool | Description | Input | Output |
+|------|-------------|-------|--------|
+| `generate_scoring_report` | Comprehensive report | jd_id | Full scoring analysis |
+| `export_scoring_excel` | Excel CSV export | jd_id | CSV content |
+| `get_ranking_summary` | Quick rankings | jd_id, top_n | Top N candidates |
+| `get_passing_score_thresholds` | View configuration | session_id | Current thresholds |
+| `generate_shortlist_report` | Final shortlist | jd_id | Shortlist document |
+
+### Testing
+
+Run comprehensive test suite:
+
+```bash
+cd deployment
+pytest tests/test_recruitment_agent.py -v
+```
+
+**Test Coverage**:
+- SharePoint tools (7 tests)
+- Recruitment/screening tools (8 tests)
+- Interview tools (8 tests)
+- Scoring tools (5 tests)
+- Subagent definitions (4 tests)
+- Configuration (4 tests)
+- API endpoints (8 tests)
+- E2E workflows (4 tests)
+- Security tests (2 tests)
+- UI integration (2 tests)
+
+**Total**: 52 tests covering all functionality
+
+### Best Practices
+
+#### Document Processing
+1. **Always cache downloaded documents** for performance
+2. **Use batch operations** when processing multiple resumes
+3. **Verify file existence** before downloading
+4. **Handle parse errors gracefully** with fallback strategies
+
+#### Screening
+1. **Parse JD first** to understand requirements
+2. **Screen in batches** for efficiency
+3. **Document screening decisions** with justifications
+4. **Use configurable thresholds** for flexibility
+
+#### Question Generation
+1. **Match questions to candidate skills**
+2. **Balance difficulty distributions**
+3. **Include variety of question types**
+4. **Set appropriate time limits**
+
+#### Reporting
+1. **Generate reports incrementally** as candidates complete stages
+2. **Export to Excel** for stakeholder review
+3. **Upload to SharePoint** for centralized access
+4. **Include actionable recommendations**
+
+### Security Considerations
+
+#### PII Handling
+- Candidate data contains PII (names, emails, phone numbers)
+- **DO NOT** log PII to application logs
+- Use session-isolated storage
+- Clear sessions after recruitment cycle completes
+
+#### SharePoint Access
+- Use service principal authentication
+- Principle of least privilege (ReadWrite.Files only)
+- Rotate client secrets regularly
+- Monitor access logs
+
+#### Document Security
+- Validate file types before processing
+- Scan uploaded files for malware
+- Sanitize filenames to prevent path traversal
+- Limit file sizes (max 10MB)
+
+### Troubleshooting
+
+#### SharePoint Connection Issues
+
+**Problem**: `SharePoint authentication failed`
+**Solution**:
+1. Verify Azure AD credentials in `.env`
+2. Check app has `Sites.ReadWrite.All` permission
+3. Ensure client secret is not expired
+4. Test with demo mode: comment out credentials
+
+#### Resume Parsing Errors
+
+**Problem**: `Failed to extract skills from resume`
+**Solution**:
+1. Install PDF parsing libraries: `pip install PyPDF2 python-docx`
+2. Check file format (PDF/DOCX supported)
+3. Verify file is not corrupted
+4. Review extracted text for quality
+
+#### Screening Score Issues
+
+**Problem**: `All candidates scoring too low/high`
+**Solution**:
+1. Review JD requirements clarity
+2. Adjust score weights in config
+3. Check skill matching keywords
+4. Verify experience calculation logic
+
+#### Question Generation Issues
+
+**Problem**: `Questions not matching candidate level`
+**Solution**:
+1. Verify candidate level assignment (L1/L2/L3)
+2. Check difficulty distribution configuration
+3. Review question templates
+4. Ensure skills list is accurate
 
 ---
 
@@ -3998,6 +4507,40 @@ All 4 agents verified working via `test_agents_quick.py`:
 - Azure AI Agent (via webhook connectors)
 - AWS AI Agent (via Lambda integration)
 - Any HTTP-capable platform
+
+---
+
+### 2026-01-23 - Recruitment Deep Agent with SharePoint Integration (v3.19)
+
+**Added**:
+- Recruitment Deep Agent for end-to-end hiring automation
+- SharePoint document management integration
+- 5 specialized subagents: Document Manager, Resume Screener, Question Generator, Answer Evaluator, Report Generator
+- 28 recruitment-specific tools across 4 categories
+- Multi-level candidate screening (L1/L2/L3)
+- Automated technical interview question generation
+- Candidate answer evaluation and scoring
+- Excel report generation and export
+- Comprehensive recruitment configuration system
+- Azure AD authentication for SharePoint
+- Demo mode for testing without SharePoint credentials
+- 52 comprehensive tests covering all functionality
+
+**Technical Implementation**:
+- `app/deepagents/recruitment_agent.py` - Main coordinator agent
+- `app/deepagents/config/recruitment_config.py` - Configuration management
+- `app/deepagents/tools/sharepoint_tools.py` - SharePoint operations (920 lines)
+- `app/deepagents/tools/recruitment_tools.py` - Resume screening (908 lines)
+- `app/deepagents/tools/interview_tools.py` - Question generation (958 lines)
+- `app/deepagents/tools/scoring_tools.py` - Reporting and analytics (675 lines)
+- `app/deepagents/subagents/recruitment_subagents.py` - Subagent definitions (343 lines)
+- `tests/test_recruitment_agent.py` - Complete test coverage (976 lines)
+
+**Configuration**:
+- Configurable passing scores by level (L1: 60%, L2: 70%, L3: 80%)
+- Adjustable score weights (Technical: 40%, Experience: 25%, Education: 15%, etc.)
+- Customizable question counts and difficulty distributions
+- SharePoint folder structure configuration
 
 ---
 

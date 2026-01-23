@@ -73,7 +73,8 @@ This repository includes a production-ready **Enterprise Agents Platform** in th
 
 ### 🚀 Key Features
 
-- **8 Production Agents**: Research, Content Generation (HITL), Data Analysis, Document Processing, Multilingual RAG, IT Support (HITL), ServiceNow ITSM, Code Assistant
+- **9 Production Agents**: Research, Content Generation (HITL), Data Analysis, Document Processing, Multilingual RAG, IT Support (HITL), ServiceNow ITSM, Code Assistant, **Recruitment (New!)**
+- **🆕 Recruitment Deep Agent**: AI-powered end-to-end hiring automation with SharePoint integration, 5 specialized subagents, L1/L2/L3 screening, technical assessments, and Excel reporting
 - **🆕 IT Operations Deep Agent**: Advanced planning agent with 6 specialized subagents, streaming responses, and reasoning model support
 - **⚡ Real-time Streaming**: Server-Sent Events (SSE) for live progress updates and tool execution visibility
 - **🧠 Reasoning Models**: Native support for OpenAI o1/o3/o4 series with automatic temperature bypass
@@ -136,8 +137,109 @@ cd deployment
 - IT Helpdesk Agent
 - IT Operations Deep Agent (with 6 subagents)
 - Sales Intelligence Deep Agent
+- **Recruitment Deep Agent** (with 5 subagents) - **NEW!**
 
 See [LANGGRAPH_SETUP.md](deployment/LANGGRAPH_SETUP.md) for detailed setup instructions.
+
+### 🎯 Recruitment Deep Agent - AI-Powered Hiring Automation
+
+**Complete end-to-end recruitment workflow automation** with SharePoint integration:
+
+**Quick Start:**
+```bash
+# Configure SharePoint (or skip for demo mode)
+export SHAREPOINT_SITE_URL=https://yourcompany.sharepoint.com/sites/Recruitment
+export SHAREPOINT_TENANT_ID=your-tenant-id
+export SHAREPOINT_CLIENT_ID=your-client-id
+export SHAREPOINT_CLIENT_SECRET=your-secret
+
+# Start Recruitment Agent
+POST /api/recruitment-agent/start
+{
+  "user_id": "hr_manager",
+  "job_description_id": "JD-001"
+}
+
+# Chat with agent
+POST /api/recruitment-agent/chat
+{
+  "session_id": "rec_abc123",
+  "message": "Screen all resumes and generate shortlist for Python Developer position"
+}
+```
+
+**5 Specialized Subagents:**
+1. **Document Manager**: SharePoint operations (list, download, upload, search)
+2. **Resume Screener**: L1/L2/L3 candidate screening with weighted scoring
+3. **Question Generator**: Technical interview questions (MCQ, Coding, Scenario)
+4. **Answer Evaluator**: Automated grading with constructive feedback
+5. **Report Generator**: Excel exports and shortlist production
+
+**Key Features:**
+- 📄 **SharePoint Integration**: Azure AD authentication, document lifecycle management
+- 🎯 **Multi-Level Screening**: L1/L2/L3 classification (60%/70%/80% thresholds)
+- 📝 **Technical Assessments**: Skill-matched questions with difficulty distributions
+- 📊 **Excel Reporting**: CSV exports with rankings and comprehensive analytics
+- ⚙️ **Configurable**: Adjust weights, thresholds, question counts
+- 🔒 **Secure**: PII handling, session isolation, role-based access
+- 📈 **Analytics**: Candidate rankings, skill gap analysis, recommendations
+
+**Workflow Example:**
+```python
+# 1. Parse job description
+jd = parse_job_description("Python Developer - 5+ years Django/AWS")
+
+# 2. Screen candidates from SharePoint
+candidates = batch_screen_resumes(jd_id=jd.id)
+# → 15 candidates, 8 meet requirements (53% pass rate)
+
+# 3. Generate interview questions
+for candidate in shortlisted:
+    questions = generate_interview_questions(
+        candidate_id=candidate.id,
+        skills=candidate.skills,
+        level=candidate.level  # L1/L2/L3
+    )
+
+# 4. Evaluate submitted answers
+evaluation = evaluate_candidate_answers(set_id=questions.set_id)
+# → 82% score, PASSED, recommend for L2 interview
+
+# 5. Generate final reports
+report = generate_scoring_report(jd_id=jd.id)
+excel = export_scoring_excel(jd_id=jd.id)
+shortlist = generate_shortlist_report(jd_id=jd.id)
+```
+
+**Configuration** (`deployment/.env`):
+```bash
+# Passing scores by level
+L1_PASSING_SCORE=60  # Junior (0-3 years)
+L2_PASSING_SCORE=70  # Mid-level (3-7 years)
+L3_PASSING_SCORE=80  # Senior (7+ years)
+
+# Score weights
+TECHNICAL_WEIGHT=0.40    # 40% - Technical skills match
+EXPERIENCE_WEIGHT=0.25   # 25% - Years of experience
+EDUCATION_WEIGHT=0.15    # 15% - Education level
+SOFT_SKILLS_WEIGHT=0.10  # 10% - Soft skills
+CERTIFICATION_WEIGHT=0.10 # 10% - Certifications
+```
+
+**Testing:**
+```bash
+# Run comprehensive test suite (52 tests)
+pytest tests/test_recruitment_agent.py -v
+
+# Test coverage:
+# - SharePoint tools (7 tests)
+# - Resume screening (8 tests)
+# - Interview generation (8 tests)
+# - Scoring & reporting (5 tests)
+# - E2E workflows (4 tests)
+```
+
+See [deployment/KNOWLEDGE.md](deployment/KNOWLEDGE.md#recruitment-deep-agent) for complete documentation.
 
 ### 🔗 Integration Examples
 
