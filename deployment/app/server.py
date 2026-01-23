@@ -3424,6 +3424,13 @@ async def recruitment_agent_upload(
             error=f"Unsupported file type: {file_ext}. Supported: {', '.join(allowed_extensions)}",
         )
 
+    MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
+    if file.size and file.size > MAX_FILE_SIZE:
+        return DeepAgentUploadResponse(
+            success=False,
+            filename=file.filename,
+            error="File too large. Maximum size: 10MB",
+        )
     try:
         # Read file content
         content = await file.read()
