@@ -11,7 +11,6 @@ Following Enterprise Development Standards:
 """
 
 import io
-import json
 import logging
 import re
 import uuid
@@ -553,16 +552,22 @@ def screen_candidate(
     edu_score = 70  # Default
     cert_score = 60  # Default
 
-    # Calculate overall score with weights
+    # Calculate soft skills score based on extracted soft skills
+    soft_skills_count = len([s for s in candidate.skills if s.category == "soft"])
+    soft_skills_score = min(100, soft_skills_count * 15)  # 15 points per soft skill, max 100
+
+    # Calculate overall score with all configured weights
     overall_score = (
         skill_score * config.scoring.technical_weight +
         exp_score * config.scoring.experience_weight +
         edu_score * config.scoring.education_weight +
+        soft_skills_score * config.scoring.soft_skills_weight +
         cert_score * config.scoring.certification_weight
     ) / (
         config.scoring.technical_weight +
         config.scoring.experience_weight +
         config.scoring.education_weight +
+        config.scoring.soft_skills_weight +
         config.scoring.certification_weight
     )
 
