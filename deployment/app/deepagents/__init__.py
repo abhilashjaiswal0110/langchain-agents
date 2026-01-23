@@ -6,6 +6,8 @@ for complex IT operations workflows.
 
 Key Components:
 - ITOperationsDeepAgent: Main coordinator for IT managed services
+- SalesIntelligenceDeepAgent: Sales & Pre-Sales Intelligence agent
+- RecruitmentDeepAgent: Recruitment & Talent Acquisition agent
 - Subagents: Specialized agents for incident, change, problem, asset, SLA, and knowledge
 - Planning: Task decomposition and progress tracking (TodoList)
 - Context: File system for storing investigation notes and reports
@@ -23,6 +25,10 @@ from app.deepagents.it_operations_agent import (
     ITOperationsDeepAgent,
     create_it_operations_agent,
 )
+from app.deepagents.recruitment_agent import (
+    RecruitmentDeepAgent,
+    create_recruitment_agent,
+)
 
 __all__ = [
     # Types
@@ -38,6 +44,9 @@ __all__ = [
     # IT Operations
     "ITOperationsDeepAgent",
     "create_it_operations_agent",
+    # Recruitment
+    "RecruitmentDeepAgent",
+    "create_recruitment_agent",
 ]
 
 __version__ = "1.0.0"
