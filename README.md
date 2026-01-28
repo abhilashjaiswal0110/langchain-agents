@@ -74,9 +74,10 @@ This repository includes a production-ready **Enterprise Agents Platform** in th
 
 ### 🚀 Key Features
 
-- **9 Production Agents**: Research, Content Generation (HITL), Data Analysis, Document Processing, Multilingual RAG, IT Support (HITL), ServiceNow ITSM, Code Assistant, **Recruitment (New!)**
-- **🆕 Recruitment Deep Agent**: AI-powered end-to-end hiring automation with SharePoint integration, 5 specialized subagents, L1/L2/L3 screening, technical assessments, and Excel reporting
-- **🆕 IT Operations Deep Agent**: Advanced planning agent with 6 specialized subagents, streaming responses, and reasoning model support
+- **10 Production Agents**: Research, Content Generation (HITL), Data Analysis, Document Processing, Multilingual RAG, IT Support (HITL), ServiceNow ITSM, Code Assistant, Recruitment, **Software Development (New!)**
+- **🆕 Software Development Deep Agent**: AI-powered SDLC automation with 9 specialized subagents, 54 purpose-built tools, end-to-end workflow from requirements to deployment
+- **Recruitment Deep Agent**: AI-powered end-to-end hiring automation with SharePoint integration, 5 specialized subagents, L1/L2/L3 screening, technical assessments, and Excel reporting
+- **IT Operations Deep Agent**: Advanced planning agent with 6 specialized subagents, streaming responses, and reasoning model support
 - **⚡ Real-time Streaming**: Server-Sent Events (SSE) for live progress updates and tool execution visibility
 - **🧠 Reasoning Models**: Native support for OpenAI o1/o3/o4 series with automatic temperature bypass
 - **ServiceNow Integration**: Full ITSM operations with 10 tools - incidents, change requests, service requests, CMDB, SLA monitoring, knowledge base
@@ -138,7 +139,8 @@ cd deployment
 - IT Helpdesk Agent
 - IT Operations Deep Agent (with 6 subagents)
 - Sales Intelligence Deep Agent
-- **Recruitment Deep Agent** (with 5 subagents) - **NEW!**
+- Recruitment Deep Agent (with 5 subagents)
+- **Software Development Deep Agent** (with 9 subagents) - **NEW!**
 
 See [LANGGRAPH_SETUP.md](deployment/LANGGRAPH_SETUP.md) for detailed setup instructions.
 
@@ -242,7 +244,145 @@ pytest tests/test_recruitment_agent.py -v
 
 See [deployment/KNOWLEDGE.md](deployment/KNOWLEDGE.md#recruitment-deep-agent) for complete documentation.
 
-### 🔗 Integration Examples
+### � Software Development Deep Agent - AI-Powered SDLC Automation
+
+**Comprehensive end-to-end Software Development Lifecycle automation** with intelligent orchestration:
+
+**Quick Start:**
+```bash
+# Access the Software Development Agent UI
+http://localhost:8000/software-dev-chat
+
+# Or use API
+POST /api/software-dev-agent/start
+{
+  "user_id": "developer_001"
+}
+
+# Chat with agent
+POST /api/software-dev-agent/chat
+{
+  "session_id": "sdlc_xyz789",
+  "message": "Create a REST API for user authentication with JWT tokens and rate limiting"
+}
+```
+
+**9 Specialized Subagents:**
+1. **Requirements Intelligence**: Extract and validate software requirements
+2. **Architecture Design**: Design system architecture and APIs
+3. **Code Generator**: Generate production-ready code
+4. **Code Reviewer**: Perform automated code reviews
+5. **Testing Automation**: Create and run comprehensive tests
+6. **Debugging & Optimization**: Debug issues and optimize performance
+7. **Security Compliance**: Scan for vulnerabilities and ensure compliance
+8. **CI/CD Pipeline**: Setup and manage deployment pipelines
+9. **Documentation Generator**: Create technical documentation
+
+**Key Features:**
+- 🎯 **End-to-End SDLC**: Complete automation from requirements to deployment
+- 🛠️ **54 Purpose-Built Tools**: Specialized tools for every development phase
+- 📝 **Automatic Phase Transitions**: Intelligent workflow progression based on task completion
+- ⚡ **Real-Time Streaming**: Live visibility into agent thinking and tool execution
+- 🔒 **Security-First**: Built-in vulnerability scanning and security best practices
+- 🧪 **Test Automation**: Unit, integration, and E2E test generation
+- 📊 **Code Quality**: Automated reviews with actionable feedback
+- 🚀 **CI/CD Integration**: Pipeline setup with GitHub Actions, GitLab CI, Jenkins
+- 📚 **Auto Documentation**: Technical specs, API docs, and architecture diagrams
+
+**SDLC Phases:**
+1. **Requirements Analysis**: User story creation, acceptance criteria, technical specifications
+2. **Architecture Design**: System design, API specs, database schema, technology selection
+3. **Implementation**: Code generation, module development, integration
+4. **Code Review**: Static analysis, security scanning, best practices validation
+5. **Testing**: Unit tests, integration tests, E2E tests, performance testing
+6. **Debugging**: Issue diagnosis, root cause analysis, performance optimization
+7. **Security**: Vulnerability scanning, dependency audits, compliance checks
+8. **Deployment**: CI/CD pipeline setup, containerization, infrastructure as code
+9. **Documentation**: README, API docs, architecture diagrams, user guides
+
+**Workflow Example:**
+```python
+# 1. Analyze requirements
+requirements = analyze_requirements(
+    "Build a microservice for order processing with event-driven architecture"
+)
+# → 8 user stories, 15 acceptance criteria, tech stack recommendations
+
+# 2. Design architecture
+design = design_architecture(requirements_id=requirements.id)
+# → System diagram, API specs, database schema, service boundaries
+
+# 3. Generate code
+code = generate_code(design_id=design.id, component="order-service")
+# → FastAPI service with SQLAlchemy models, Pydantic schemas, async handlers
+
+# 4. Run code review
+review = review_code(code_id=code.id)
+# → 12 suggestions: 3 security issues, 5 best practices, 4 optimizations
+
+# 5. Generate tests
+tests = generate_tests(code_id=code.id, coverage_target=80)
+# → 45 unit tests, 12 integration tests, 85% coverage achieved
+
+# 6. Setup CI/CD
+pipeline = setup_cicd(project_id=code.project_id, platform="github-actions")
+# → GitHub Actions workflow: lint, test, build, deploy to staging/prod
+
+# 7. Generate documentation
+docs = generate_documentation(project_id=code.project_id)
+# → README, API docs (OpenAPI), architecture diagrams, deployment guide
+```
+
+**Configuration** (`deployment/.env`):
+```bash
+# Software Development Agent
+SOFTWARE_DEV_MODEL=gpt-4o          # Main orchestrator model
+SOFTWARE_DEV_SUBAGENT_MODEL=gpt-4o-mini  # Subagent model
+SOFTWARE_DEV_TEMPERATURE=0.7       # Creativity level
+
+# Code Generation
+DEFAULT_LANGUAGE=python            # Primary language
+CODE_STYLE=google                  # Style guide
+MAX_CODE_LENGTH=10000              # Max tokens per generation
+
+# Testing
+MIN_TEST_COVERAGE=80               # Coverage threshold
+TEST_FRAMEWORKS=pytest,unittest    # Supported frameworks
+
+# Security
+SECURITY_SCAN_ENABLED=true         # Enable vulnerability scanning
+DEPENDENCY_AUDIT=true              # Check dependency vulnerabilities
+```
+
+**Testing:**
+```bash
+# Run comprehensive test suite (64 tests)
+pytest tests/test_software_dev_agent.py -v
+
+# Test coverage:
+# - Requirements intelligence (8 tests)
+# - Architecture design (7 tests)
+# - Code generation (12 tests)
+# - Code review (9 tests)
+# - Testing automation (8 tests)
+# - Debugging & optimization (6 tests)
+# - Security compliance (7 tests)
+# - CI/CD setup (5 tests)
+# - Documentation generation (2 tests)
+```
+
+**Real-World Use Cases:**
+- 🚀 **Rapid Prototyping**: Generate MVP in hours instead of weeks
+- 🏢 **Enterprise Development**: Maintain consistency across large teams
+- 🔄 **Legacy Modernization**: Refactor and upgrade legacy systems
+- 🛡️ **Security Hardening**: Automated security reviews and remediation
+- 📈 **Performance Optimization**: Identify and fix bottlenecks
+- 📦 **Microservices**: Design and implement service architectures
+- 🔧 **DevOps Automation**: Complete CI/CD pipeline setup
+
+See [deployment/KNOWLEDGE.md](deployment/KNOWLEDGE.md#software-development-deep-agent) for complete documentation.
+
+### �🔗 Integration Examples
 
 **Copilot Studio Webhook:**
 ```
