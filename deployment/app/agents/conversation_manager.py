@@ -81,7 +81,7 @@ class ConversationManager:
             enabled = os.getenv("EMPLOYEE_EXPERIENCE_ENABLED", "true").lower() in ("1", "true", "yes", "y")
             if enabled:
                 from app.agents.employee_experience import EmployeeExperienceAgent
-                
+
                 # Read configuration from environment variables
                 model_provider = os.getenv("EMPLOYEE_EXPERIENCE_PROVIDER", "auto")
                 temperature_str = os.getenv("EMPLOYEE_EXPERIENCE_TEMPERATURE", "0.7")
@@ -89,7 +89,7 @@ class ConversationManager:
                     temperature = float(temperature_str)
                 except ValueError:
                     temperature = 0.7
-                
+
                 self._agents["employee_experience"] = EmployeeExperienceAgent(
                     model_provider=model_provider,
                     temperature=temperature,
