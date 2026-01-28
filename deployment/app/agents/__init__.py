@@ -8,6 +8,7 @@ This module provides a comprehensive suite of AI agents for IT operations:
 - RAG Agent: Multilingual document Q&A
 - IT Support Agent: Human-in-the-loop support
 - Code Assistant: Application modernization
+- Employee Experience Agent: HR support, career development, and wellbeing
 
 Following the 4-role Enterprise Development Standards from CLAUDE.md.
 """
@@ -29,6 +30,7 @@ from app.agents.rag import MultilingualRAGAgent
 from app.agents.it_support import HITLSupportAgent
 from app.agents.code_assistant import CodeAssistantAgent
 from app.agents.document_intelligence import DocumentIntelligenceAgent
+from app.agents.employee_experience import EmployeeExperienceAgent
 
 # Tracing and evaluation
 from app.agents.tracing import setup_tracing, get_tracing_status
@@ -51,6 +53,7 @@ __all__ = [
     "HITLSupportAgent",
     "CodeAssistantAgent",
     "DocumentIntelligenceAgent",
+    "EmployeeExperienceAgent",
     # Utilities
     "setup_tracing",
     "get_tracing_status",

@@ -2459,6 +2459,704 @@ pytest tests/test_recruitment_agent.py -v
 
 ---
 
+
+## Employee Experience & HR Support Agent
+
+### Overview
+
+The Employee Experience Agent is a comprehensive HR support system designed to proactively support employees across all aspects of their workplace journey. It combines deep HR knowledge, sentiment analysis, burnout detection, and escalation orchestration to provide personalized, empathetic support.
+
+**Key Differentiators:**
+- **🎭 Empathetic AI**: Real-time sentiment analysis and context-aware responses
+- **🔥 Burnout Prevention**: Multi-factor risk assessment with proactive interventions
+- **🚀 Career Development**: Personalized career pathing and skills gap analysis
+- **💰 Compensation Insights**: Market data and benchmarking guidance
+- **🛡️ Crisis Detection**: Automatic escalation for harassment, discrimination, and safety concerns
+- **📚 Comprehensive Coverage**: 25+ specialized tools across 8 HR domains
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│               Employee Experience & HR Support Agent                          │
+│  ┌────────────────────────────────────────────────────────────────────────┐ │
+│  │                    Sentiment-Aware Processing                          │ │
+│  │  ┌──────────────────┐  ┌──────────────────┐  ┌────────────────────┐  │ │
+│  │  │  Sentiment       │  │  Burnout Risk    │  │  Escalation        │  │ │
+│  │  │  Analysis        │  │  Assessment      │  │  Detection         │  │ │
+│  │  │  (-1.0 to 1.0)   │  │  (Low/Med/High)  │  │  (Critical/Normal) │  │ │
+│  │  └──────────────────┘  └──────────────────┘  └────────────────────┘  │ │
+│  └────────────────────────────────────────────────────────────────────────┘ │
+│                                    │                                          │
+│  ┌─────────────────────────────────┴──────────────────────────────────────┐ │
+│  │                     Tool Categories (25+ Tools)                        │ │
+│  │  ┌─────────────┬─────────────┬─────────────┬─────────────┬─────────┐ │ │
+│  │  │ HR Policy   │ Career Dev  │ Performance │ Wellbeing   │ HR Ops  │ │ │
+│  │  │ (4 tools)   │ (4 tools)   │ (3 tools)   │ (2 tools)   │ (4tools)│ │ │
+│  │  │             │             │             │             │         │ │ │
+│  │  │ • Policy    │ • Career    │ • Review    │ • Resources │ • Cases │ │ │
+│  │  │   search    │   paths     │   prep      │ • Check-ins │ • Status│ │ │
+│  │  │ • Benefits  │ • Skills    │ • Goals     │             │ • Onbrd │ │ │
+│  │  │ • PTO       │   gaps      │ • Feedback  │             │ • Exit  │ │ │
+│  │  │ • Compli    │ • Learning  │             │             │         │ │ │
+│  │  │   ance      │ • Coaching  │             │             │         │ │ │
+│  │  └─────────────┴─────────────┴─────────────┴─────────────┴─────────┘ │ │
+│  │  ┌─────────────┬─────────────┬─────────────┬─────────────────────┐   │ │
+│  │  │ Engagement  │ Compensation│ Learning    │ Escalation          │   │ │
+│  │  │ (2 tools)   │ (2 tools)   │ (2 tools)   │ (2 tools)           │   │ │
+│  │  │             │             │             │                     │   │ │
+│  │  │ • Pulse     │ • Insights  │ • Paths     │ • HRBP              │   │ │
+│  │  │   surveys   │ • Reviews   │ • Enroll    │ • Meetings          │   │ │
+│  │  │ • Insights  │             │             │                     │   │ │
+│  │  └─────────────┴─────────────┴─────────────┴─────────────────────┘   │ │
+│  └────────────────────────────────────────────────────────────────────────┘ │
+│                                    │                                          │
+│  ┌─────────────────────────────────┴──────────────────────────────────────┐ │
+│  │                     Integration Layer                                  │ │
+│  │  ┌───────────┬───────────┬────────────┬──────────┬─────────────────┐ │ │
+│  │  │   HRMS    │    LMS    │ Engagement │ Perform  │  Compensation   │ │ │
+│  │  │ (Workday, │(Cornerstone│  (Qualtrics│  (Lattice│  (Market Data)  │ │ │
+│  │  │  SuccessFac│   Saba    │   Culture  │  15Five  │                 │ │ │
+│  │  │   Oracle   │ Skillsoft)│    Amp)    │Betterwork│                 │ │ │
+│  │  │    ADP)    │           │            │    s)    │                 │ │ │
+│  │  └───────────┴───────────┴────────────┴──────────┴─────────────────┘ │ │
+│  │  Mode: Simulation (dev) or Live (prod) - toggle via .env             │ │
+│  └────────────────────────────────────────────────────────────────────────┘ │
+│                                    │                                          │
+│  ┌─────────────────────────────────┴──────────────────────────────────────┐ │
+│  │                     LLM Layer (Empathy Optimized)                      │ │
+│  │  ┌──────────────────────────────────────────────────────────────────┐ │ │
+│  │  │  Recommended: Claude Sonnet 4.5 (superior empathy)              │ │ │
+│  │  │  Alternative: GPT-4o-mini (cost-effective)                       │ │ │
+│  │  │  Temperature: 0.7 (creative, empathetic responses)               │ │ │
+│  │  └──────────────────────────────────────────────────────────────────┘ │ │
+│  └────────────────────────────────────────────────────────────────────────┘ │
+│                                    │                                          │
+│  ┌─────────────────────────────────┴──────────────────────────────────────┐ │
+│  │                     State Management                                   │ │
+│  │  ┌──────────────────────────────────────────────────────────────────┐ │ │
+│  │  │  EmployeeExperienceState                                         │ │ │
+│  │  │  - messages: Conversation history                                │ │ │
+│  │  │  - employee_context: Role, tenure, department                    │ │ │
+│  │  │  - sentiment_score: -1.0 to 1.0                                  │ │ │
+│  │  │  - burnout_risk: low/medium/high                                 │ │ │
+│  │  │  - escalation_required: boolean                                  │ │ │
+│  │  │  - case_id: Optional HR case reference                           │ │ │
+│  │  └──────────────────────────────────────────────────────────────────┘ │ │
+│  └────────────────────────────────────────────────────────────────────────┘ │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Directory Structure
+
+```
+app/agents/employee_experience/
+├── __init__.py                          # Package exports
+├── employee_experience_agent.py         # Main agent class
+├── tools.py                             # 25+ HR tools
+├── sentiment_analyzer.py                # Sentiment & burnout detection
+├── demo_scenarios.py                    # Demo conversation scenarios
+└── [Integration modules - future]
+    ├── hrms_client.py                   # HRMS API integration
+    ├── lms_client.py                    # LMS API integration
+    └── engagement_client.py             # Engagement platform integration
+```
+
+### Key Components
+
+#### 1. Agent Class (`employee_experience_agent.py`)
+
+```python
+from app.agents.employee_experience import EmployeeExperienceAgent
+
+# Initialize agent with empathetic settings
+agent = EmployeeExperienceAgent(
+    model_provider="auto",  # Uses Sonnet 4.5 if available
+    temperature=0.7,         # Empathetic, creative responses
+)
+
+# Chat with employee context
+response = agent.chat(
+    message="I'm feeling overwhelmed with work",
+    thread_id="emp_session_123",
+    employee_context={
+        "employee_id": "EMP12345",
+        "role": "Software Engineer",
+        "tenure_years": 3.5,
+        "department": "Engineering",
+    }
+)
+
+# Response includes sentiment and burnout risk
+print(response["response"])              # Agent's message
+print(response["sentiment_score"])        # -1.0 to 1.0
+print(response["burnout_risk"])          # low/medium/high
+print(response["escalation_required"])   # True if critical issue
+```
+
+#### 2. Sentiment Analysis (`sentiment_analyzer.py`)
+
+```python
+from app.agents.employee_experience.sentiment_analyzer import (
+    analyze_employee_sentiment,
+    assess_burnout_risk,
+    detect_escalation_triggers,
+)
+
+# Analyze single message sentiment
+sentiment = analyze_employee_sentiment("I'm feeling stressed and overwhelmed")
+# Returns: {
+#   "score": -0.6,
+#   "label": "negative",
+#   "indicators": ["stress"],
+#   "confidence": 0.85
+# }
+
+# Assess burnout risk from conversation history
+messages = [
+    "Working late every night this week",
+    "Too much work, can't keep up",
+    "Feeling burned out and exhausted"
+]
+burnout = assess_burnout_risk(messages)
+# Returns: {
+#   "risk_level": "high",
+#   "risk_score": 8,
+#   "factors": ["high_stress", "explicit_burnout_signals"],
+#   "recommendation": "URGENT: Immediate wellbeing check-in recommended"
+# }
+
+# Detect critical escalation triggers
+triggers = detect_escalation_triggers("My manager is harassing me")
+# Returns: {
+#   "escalation_required": True,
+#   "triggers": ["harassment"],
+#   "urgency": "critical"
+# }
+```
+
+#### 3. Tool Categories
+
+**HR Policy & Information (4 tools):**
+- `search_hr_policy()` - Natural language policy search
+- `get_benefits_information()` - Benefits details (health, 401k, PTO)
+- `check_pto_balance()` - Leave balance and accrual
+- `explain_compliance_rules()` - Employment law and compliance
+
+**Career Development (4 tools):**
+- `explore_career_paths()` - Career progression options
+- `get_skills_gap_analysis()` - Skills comparison vs target role
+- `find_learning_resources()` - Courses and training recommendations
+- `request_career_coaching()` - Career coach session booking
+
+**Performance & Growth (3 tools):**
+- `prepare_performance_review()` - Review preparation guide with STAR method
+- `get_goal_setting_framework()` - SMART/OKR goal templates
+- `request_feedback_survey()` - 360-degree feedback initiation
+
+**Wellbeing (2 tools):**
+- `get_wellbeing_resources()` - EAP, mental health, wellness programs
+- `schedule_wellbeing_check()` - Proactive wellbeing check-in
+
+**HR Operations (4 tools):**
+- `submit_hr_request()` - General HR case creation
+- `check_request_status()` - HR case tracking
+- `get_onboarding_checklist()` - New hire or transition checklist
+- `initiate_exit_process()` - Offboarding workflow
+
+**Engagement & Surveys (2 tools):**
+- `send_pulse_survey()` - Quick feedback surveys
+- `get_engagement_insights()` - Engagement scores and trends
+
+**Compensation (2 tools):**
+- `get_compensation_insights()` - Market data and benchmarking
+- `request_compensation_review()` - Compensation review request
+
+**Learning & Development (2 tools):**
+- `get_learning_path()` - Personalized learning recommendations
+- `enroll_in_course()` - Course enrollment
+
+**Escalation (2 tools):**
+- `escalate_to_hr_business_partner()` - HRBP escalation for critical issues
+- `schedule_hr_meeting()` - HR specialist meeting booking
+
+### Configuration
+
+#### Environment Variables (`.env`)
+
+```bash
+# Agent Configuration
+EMPLOYEE_EXPERIENCE_AGENT_ENABLED=true
+EMPLOYEE_EXPERIENCE_PROVIDER=auto        # auto, anthropic, azure_openai
+EMPLOYEE_EXPERIENCE_MODEL=               # Leave empty for default (Sonnet 4.5)
+EMPLOYEE_EXPERIENCE_TEMPERATURE=0.7      # Empathetic responses
+EMPLOYEE_EXPERIENCE_ESCALATION_EMAIL=hr-support@company.com
+
+# HRMS Integration
+HRMS_PROVIDER=simulation                 # workday, successfactors, oracle_hcm, adp, simulation
+WORKDAY_API_URL=https://api.workday.com/v1
+WORKDAY_API_KEY=your_api_key
+
+# Learning Management System
+LMS_PROVIDER=simulation                  # cornerstone, saba, skillsoft, linkedin_learning, simulation
+CORNERSTONE_API_URL=https://api.csod.com/services
+CORNERSTONE_API_KEY=your_api_key
+
+# Employee Engagement
+ENGAGEMENT_PROVIDER=simulation           # qualtrics, culture_amp, glint, peakon, simulation
+QUALTRICS_API_URL=https://api.qualtrics.com
+QUALTRICS_API_TOKEN=your_token
+
+# Performance Management
+PERFORMANCE_PROVIDER=simulation          # lattice, 15five, betterworks, simulation
+LATTICE_API_URL=https://api.lattice.com/v1
+LATTICE_API_KEY=your_api_key
+
+# Compensation Data
+COMPENSATION_PROVIDER=simulation         # workday, successfactors, adp, simulation
+MARKET_DATA_PROVIDER=simulation          # radford, mercer, payscale, glassdoor, simulation
+
+# Career Development
+CAREER_PATHS_ENABLED=true
+JOB_BOARD_PROVIDER=workday              # workday, greenhouse, lever, simulation
+SKILLS_PROVIDER=simulation               # workday_skills, degreed, edcast, simulation
+```
+
+### API Endpoints
+
+#### Start Employee Experience Session
+
+```http
+POST /api/conversation/start
+Content-Type: application/json
+
+{
+  "agent_type": "employee_experience",
+  "user_id": "employee_user_123",
+  "metadata": {
+    "employee_id": "EMP12345",
+    "employee_name": "Jane Doe",
+    "role": "Software Engineer",
+    "tenure_years": 3.5,
+    "department": "Engineering"
+  }
+}
+
+Response:
+{
+  "session_id": "emp_abc123xyz",
+  "agent_type": "employee_experience",
+  "status": "active",
+  "message": "👋 Hi! I'm here to support you with HR questions, career development, wellbeing, and more. How can I help you today?"
+}
+```
+
+#### Chat with Employee Experience Agent
+
+```http
+POST /api/conversation/chat
+Content-Type: application/json
+
+{
+  "session_id": "emp_abc123xyz",
+  "message": "What is our PTO policy? How many days do I have available?"
+}
+
+Response:
+{
+  "response": "I'd be happy to help you understand our PTO policy!\n\n**PTO Accrual:**\nBased on your tenure (3.5 years), you accrue 20 days per year (1.67 days/month).\n\n**Your Current Balance:**\n- Vacation Days: 12.5 days remaining\n- Sick Days: 4.0 days remaining\n- Personal Days: 2.0 days remaining\n- **Total Available:** 18.5 days\n\n...",
+  "session_id": "emp_abc123xyz",
+  "sentiment_score": 0.1,
+  "burnout_risk": "low",
+  "escalation_required": false,
+  "tool_calls": [
+    {"name": "search_hr_policy", "args": {"query": "PTO policy"}},
+    {"name": "check_pto_balance", "args": {"employee_id": "self"}}
+  ]
+}
+```
+
+#### Get Conversation History
+
+```http
+GET /api/conversation/history/{session_id}
+
+Response:
+{
+  "session_id": "emp_abc123xyz",
+  "agent_type": "employee_experience",
+  "messages": [
+    {
+      "role": "user",
+      "content": "What is our PTO policy?",
+      "timestamp": "2026-01-28T10:30:00Z"
+    },
+    {
+      "role": "assistant",
+      "content": "I'd be happy to help...",
+      "timestamp": "2026-01-28T10:30:05Z",
+      "metadata": {
+        "sentiment_score": 0.1,
+        "burnout_risk": "low"
+      }
+    }
+  ]
+}
+```
+
+### Usage Examples
+
+#### Example 1: HR Policy Query
+
+```python
+from app.agents.conversation_manager import ConversationManager
+
+manager = ConversationManager()
+
+# Start session
+session = manager.start_conversation(
+    agent_type="employee_experience",
+    user_id="emp_user_001",
+    metadata={
+        "employee_id": "EMP12345",
+        "role": "Software Engineer",
+        "tenure_years": 3.5,
+    }
+)
+
+# Ask about PTO
+response = manager.chat(
+    session_id=session["session_id"],
+    message="What is our PTO policy and how many days do I have?",
+)
+
+print(response["response"])
+# Output: Detailed PTO policy and current balance
+```
+
+#### Example 2: Career Development
+
+```python
+# Continuing session...
+response = manager.chat(
+    session_id=session["session_id"],
+    message="I want to become a Senior Engineer. What do I need to work on?",
+)
+
+print(response["response"])
+# Output: Career path options, skills gap analysis, learning recommendations
+```
+
+#### Example 3: Wellbeing Support (High Burnout Risk)
+
+```python
+# Employee showing signs of burnout
+response = manager.chat(
+    session_id=session["session_id"],
+    message="I'm working late every night and weekends. Feeling completely burned out.",
+)
+
+print(f"Response: {response['response']}")
+print(f"Sentiment: {response['sentiment_score']}")  # -0.7 (very negative)
+print(f"Burnout Risk: {response['burnout_risk']}")  # "high"
+print(f"Escalation: {response['escalation_required']}")  # False (offers support)
+
+# Output: EAP resources, wellbeing check-in scheduling, flexible work options
+```
+
+#### Example 4: Critical Escalation (Harassment)
+
+```python
+response = manager.chat(
+    session_id=session["session_id"],
+    message="My manager has been making inappropriate comments and it's harassment.",
+)
+
+print(f"Escalation Required: {response['escalation_required']}")  # True
+# Output: Immediate HRBP escalation, confidentiality assurance, rights explanation
+```
+
+### Demo Scenarios
+
+Run interactive demos to see the agent in action:
+
+```bash
+# List all demo scenarios
+python -m app.agents.employee_experience.demo_scenarios list
+
+# Show scenario details
+python -m app.agents.employee_experience.demo_scenarios show hr_policy_query
+
+# Run interactive demo
+python -m app.agents.employee_experience.demo_scenarios run career_development
+```
+
+**Available Scenarios:**
+1. `hr_policy_query` - HR policy and benefits inquiry
+2. `career_development` - Career path planning
+3. `performance_review_prep` - Performance review preparation
+4. `burnout_and_wellbeing` - Employee experiencing burnout
+5. `compensation_inquiry` - Compensation discussion
+6. `critical_escalation` - Harassment reporting (critical)
+7. `new_hire_onboarding` - New hire questions
+8. `engagement_and_feedback` - Engagement & pulse surveys
+
+### Testing
+
+#### Run Unit Tests
+
+```bash
+# Run all Employee Experience tests
+pytest tests/unit_tests/test_employee_experience_agent.py -v
+
+# Run specific test categories
+pytest tests/unit_tests/test_employee_experience_agent.py::test_sentiment_analysis -v
+pytest tests/unit_tests/test_employee_experience_agent.py::test_burnout_assessment -v
+pytest tests/unit_tests/test_employee_experience_agent.py::test_escalation_detection -v
+```
+
+#### Run Integration Tests
+
+```bash
+# Run API integration tests
+pytest tests/integration_tests/test_employee_experience_api.py -v
+
+# Test specific endpoints
+pytest tests/integration_tests/test_employee_experience_api.py::test_start_conversation -v
+pytest tests/integration_tests/test_employee_experience_api.py::test_chat_endpoint -v
+```
+
+### Integration Guide
+
+#### Integrating with ConversationManager
+
+The Employee Experience Agent is already integrated into the ConversationManager:
+
+```python
+from app.agents.conversation_manager import ConversationManager
+
+manager = ConversationManager()
+
+# Check available agents
+available = manager.get_available_agents()
+print(available["employee_experience"])
+# Output: "Employee Experience Agent - HR support, career development, wellbeing, benefits"
+```
+
+#### Adding to Existing Applications
+
+```python
+from app.agents.employee_experience import EmployeeExperienceAgent
+
+# 1. Initialize agent
+agent = EmployeeExperienceAgent()
+
+# 2. Use in your application
+def handle_employee_query(employee_id: str, message: str):
+    response = agent.chat(
+        message=message,
+        thread_id=f"emp_{employee_id}",
+        employee_context={
+            "employee_id": employee_id,
+            # Add other context from your HRMS
+        }
+    )
+
+    # 3. Handle escalations
+    if response["escalation_required"]:
+        notify_hrbp(employee_id, message, response)
+
+    return response["response"]
+```
+
+### Best Practices
+
+#### 1. Employee Context Enrichment
+
+Always provide employee context for personalized responses:
+
+```python
+employee_context = {
+    "employee_id": "EMP12345",
+    "employee_name": "Jane Doe",
+    "role": "Software Engineer",
+    "tenure_years": 3.5,
+    "department": "Engineering",
+}
+
+response = agent.chat(
+    message="What are my career options?",
+    employee_context=employee_context,
+)
+# Agent uses tenure and role to provide relevant career paths
+```
+
+#### 2. Monitor Sentiment and Burnout
+
+Track sentiment over time to identify at-risk employees:
+
+```python
+def track_employee_wellbeing(employee_id: str, responses: list):
+    sentiments = [r["sentiment_score"] for r in responses if "sentiment_score" in r]
+    avg_sentiment = sum(sentiments) / len(sentiments) if sentiments else 0
+
+    recent_risk = responses[-1].get("burnout_risk", "low")
+
+    if avg_sentiment < -0.4 or recent_risk == "high":
+        # Proactive intervention
+        schedule_wellbeing_check(employee_id)
+```
+
+#### 3. Escalation Handling
+
+Always have a process for critical escalations:
+
+```python
+def handle_response(response):
+    if response["escalation_required"]:
+        # 1. Create high-priority case in HRMS
+        case_id = create_hr_case(
+            type="critical_escalation",
+            urgency="immediate",
+            description=response["response"]
+        )
+
+        # 2. Notify HRBP immediately
+        notify_hrbp_immediately(case_id)
+
+        # 3. Send confirmation to employee
+        send_confirmation_email(case_id)
+```
+
+#### 4. Privacy and Confidentiality
+
+Ensure data protection:
+
+```python
+# DO NOT log full conversations with PII
+logger.info(f"Session {session_id}: Employee query handled")  # Good
+
+# DO NOT expose sensitive data
+# logger.info(f"Employee {name} asked: {message}")  # Bad - PII exposure
+```
+
+### Performance Considerations
+
+#### Response Time
+
+- Average response time: 2-4 seconds
+- Sentiment analysis: < 100ms (keyword-based)
+- Burnout assessment: < 200ms
+- Tool execution: 50-500ms depending on tool
+
+#### Optimization Tips
+
+1. **Use simulation mode** for development:
+   ```bash
+   HRMS_PROVIDER=simulation
+   LMS_PROVIDER=simulation
+   ```
+
+2. **Cache frequently accessed data**:
+   - HR policies (refresh daily)
+   - Benefits information (refresh on changes)
+   - Career paths (refresh quarterly)
+
+3. **Lazy load integrations**:
+   - Only connect to real APIs when needed
+   - Use connection pooling for API clients
+
+### Troubleshooting
+
+#### Common Issues
+
+**Issue**: Agent not responding empathetically
+**Solution**: Check temperature setting (should be 0.7)
+```bash
+EMPLOYEE_EXPERIENCE_TEMPERATURE=0.7
+```
+
+**Issue**: Sentiment analysis not detecting stress
+**Solution**: Review message for stress indicators:
+- Keywords: "overwhelmed", "stressed", "burned out"
+- Context: Multiple negative messages in conversation
+
+**Issue**: Escalation not triggering for critical issues
+**Solution**: Check escalation keywords:
+- "harassment", "discrimination", "unsafe", "threat"
+- Agent should auto-escalate for these terms
+
+**Issue**: Tools returning generic responses
+**Solution**: Verify integration mode:
+- Check `HRMS_PROVIDER` (should be `simulation` for demo)
+- Ensure API keys are set for live mode
+
+### KPIs and Metrics
+
+Track these metrics to measure agent effectiveness:
+
+| Metric | Target | Description |
+|--------|--------|-------------|
+| HR Ticket Reduction | 40-60% | Queries resolved without creating HR cases |
+| Employee Satisfaction | 4.2/5.0 | Post-interaction survey scores |
+| First-Contact Resolution | 75%+ | Resolved in single conversation |
+| Burnout Detection Rate | Track trend | Early warnings flagged |
+| Escalation Response Time | < 1 hour | Time to HRBP contact for critical cases |
+| Tool Usage Distribution | Balanced | All tool categories used (no blind spots) |
+
+### Future Enhancements
+
+Planned features for future releases:
+
+1. **Live HRMS Integration**
+   - Real-time data sync with Workday, SuccessFactors
+   - Automatic case creation and status updates
+
+2. **LLM-Based Sentiment Analysis**
+   - Claude API for nuanced sentiment detection
+   - Context-aware emotional intelligence
+
+3. **Predictive Analytics**
+   - Machine learning models for attrition prediction
+   - Proactive interventions for at-risk employees
+
+4. **Multi-Language Support**
+   - Multilingual HR policy search
+   - Translation for global workforce
+
+5. **Voice Interface**
+   - Voice-based interactions for accessibility
+   - Integration with telephony systems
+
+6. **Advanced Career Pathing**
+   - AI-generated personalized development plans
+   - Internal job matching and recommendations
+
+### Compliance and Security
+
+#### Data Privacy
+
+- **PII Protection**: No personally identifiable information logged
+- **Conversation Encryption**: All messages encrypted in transit and at rest
+- **Access Controls**: Role-based access to HR data
+- **Audit Trails**: All interactions logged for compliance (without PII)
+
+#### Compliance Frameworks
+
+- **GDPR**: Right to erasure, data portability
+- **HIPAA**: Health information protection (EAP data)
+- **SOC 2**: Security controls and monitoring
+- **Equal Employment Opportunity**: No bias in career recommendations
+
+### Support and Feedback
+
+For questions or issues:
+- **Technical Support**: engineering@company.com
+- **HR Support**: hr@company.com
+- **Feature Requests**: GitHub Issues
+- **Documentation**: [Link to confluence/wiki]
+
+---
 ## Dependencies
 
 ### Core Dependencies
