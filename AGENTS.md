@@ -10,27 +10,98 @@ This is a Python monorepo with multiple independently versioned packages that us
 
 ```txt
 langchain/
+├── deployment/               # Enterprise Agents Platform (production-ready)
+│   ├── app/                 # Main application code
+│   │   ├── agents/          # Agent implementations
+│   │   ├── deepagents/      # Deep Agents framework
+│   │   │   ├── core/        # Core components (middleware, types)
+│   │   │   ├── config/      # Agent configurations
+│   │   │   ├── software_dev/ # Software Development Deep Agent
+│   │   │   ├── recruitment_agent.py # Recruitment Deep Agent
+│   │   │   └── it_operations_agent.py # IT Ops Deep Agent
+│   │   ├── auth/            # Authentication
+│   │   ├── chains/          # LangChain chains
+│   │   ├── governance/      # Governance framework
+│   │   ├── integrations/    # External integrations
+│   │   ├── memory/          # Session and conversation memory
+│   │   ├── static/          # Web UI files
+│   │   └── server.py        # FastAPI server
+│   ├── data/                # Data storage
+│   ├── docs/                # Documentation
+│   ├── infrastructure/      # Azure Bicep IaC
+│   ├── tests/               # Test suite
+│   ├── pyproject.toml       # Dependencies
+│   ├── langgraph.json       # LangGraph Studio config
+│   └── README.md            # Deployment guide
 ├── libs/
-│   ├── core/             # `langchain-core` primitives and base abstractions
-│   ├── langchain/        # `langchain-classic` (legacy, no new features)
-│   ├── langchain_v1/     # Actively maintained `langchain` package
-│   ├── partners/         # Third-party integrations
-│   │   ├── openai/       # OpenAI models and embeddings
-│   │   ├── anthropic/    # Anthropic (Claude) integration
-│   │   ├── ollama/       # Local model support
-│   │   └── ... (other integrations maintained by the LangChain team)
-│   ├── text-splitters/   # Document chunking utilities
-│   ├── standard-tests/   # Shared test suite for integrations
-│   ├── model-profiles/   # Model configuration profiles
-├── .github/              # CI/CD workflows and templates
-├── .vscode/              # VSCode IDE standard settings and recommended extensions
-└── README.md             # Information about LangChain
+│   ├── core/                # `langchain-core` primitives and base abstractions
+│   ├── langchain/           # `langchain-classic` (legacy, no new features)
+│   ├── langchain_v1/        # Actively maintained `langchain` package
+│   ├── partners/            # Third-party integrations
+│   │   ├── openai/          # OpenAI models and embeddings
+│   │   ├── anthropic/       # Anthropic (Claude) integration
+│   │   ├── ollama/          # Local model support
+│   │   └── ...              # Other integrations maintained by the LangChain team
+│   ├── text-splitters/      # Document chunking utilities
+│   ├── standard-tests/      # Shared test suite for integrations
+│   └── model-profiles/      # Model configuration profiles
+├── .github/                 # CI/CD workflows and templates
+├── .vscode/                 # VSCode IDE standard settings and recommended extensions
+└── README.md                # Information about LangChain
 ```
 
+- **Deployment layer** (`deployment/`): Production-ready enterprise agents platform with 10 specialized agents, REST APIs, Web UI, and comprehensive documentation. See [deployment/README.md](deployment/README.md) for details.
 - **Core layer** (`langchain-core`): Base abstractions, interfaces, and protocols. Users should not need to know about this layer directly.
 - **Implementation layer** (`langchain`): Concrete implementations and high-level public utilities
 - **Integration layer** (`partners/`): Third-party service integrations. Note that this monorepo is not exhaustive of all LangChain integrations; some are maintained in separate repos, such as `langchain-ai/langchain-google` and `langchain-ai/langchain-aws`. Usually these repos are cloned at the same level as this monorepo, so if needed, you can refer to their code directly by navigating to `../langchain-google/` from this monorepo.
 - **Testing layer** (`standard-tests/`): Standardized integration tests for partner integrations
+
+## Enterprise Agents Platform
+
+The `deployment/` folder contains a production-ready enterprise agents platform built with LangChain and LangGraph. This is a separate application layer on top of the core LangChain libraries.
+
+### Key Features
+
+- **10 Production Agents**: Research, Content Generation, Data Analysis, Document Processing, Multilingual RAG, IT Support, ServiceNow ITSM, Code Assistant, Recruitment, Software Development
+- **Deep Agents Framework**: Advanced agents with planning, subagent delegation, and context management
+- **REST API**: FastAPI server with LangServe integration
+- **Web UI**: Interactive chat interfaces for agent testing
+- **LangGraph Studio**: Visual development and debugging interface
+- **Security**: API key authentication, CORS, secrets management
+- **Observability**: LangSmith tracing and evaluation framework
+- **Docker Deployment**: Production-ready containerization
+
+### Development Context
+
+When working on enterprise agents in the `deployment/` folder, follow these additional guidelines:
+
+**File Organization:**
+- Agent implementations: `deployment/app/agents/` or `deployment/app/deepagents/`
+- API routes: `deployment/app/server.py` or agent-specific `routes.py` files
+- Tests: `deployment/tests/` (mirror source structure)
+- Documentation: `deployment/docs/` and `deployment/KNOWLEDGE.md`
+
+**Agent Development Patterns:**
+- Inherit from `BaseAgent` for standard agents
+- Use LangGraph StateGraph for workflow orchestration
+- Implement streaming endpoints for real-time feedback
+- Add comprehensive tests with pytest
+- Update `deployment/KNOWLEDGE.md` with architecture details
+
+**Testing Requirements:**
+- Unit tests: No external dependencies
+- Integration tests: Test with real LLM providers
+- Evaluation tests: Use LangSmith datasets for agent performance
+- All tests in `deployment/tests/` with clear naming
+
+**Commit Scope for Deployment:**
+Use `deployment` or specific agent scopes for enterprise agents work:
+```txt
+feat(deployment): add new enterprise agent
+feat(software-dev-agent): add code generation tools
+fix(recruitment-agent): resolve SharePoint authentication
+docs(deployment): update architecture documentation
+```
 
 ### Development tools & commands
 
@@ -185,5 +256,11 @@ def send_email(to: str, msg: str, *, priority: str = "normal") -> bool:
 
 ## Additional resources
 
-- **Documentation:** https://docs.langchain.com/oss/python/langchain/overview and source at https://github.com/langchain-ai/docs or `../docs/`. Prefer the local install and use file search tools for best results. If needed, use the docs MCP server as defined in `.mcp.json` for programmatic access.
+- **LangChain Documentation:** https://docs.langchain.com/oss/python/langchain/overview and source at https://github.com/langchain-ai/docs or `../docs/`. Prefer the local install and use file search tools for best results. If needed, use the docs MCP server as defined in `.mcp.json` for programmatic access.
 - **Contributing Guide:** [Contributing Guide](https://docs.langchain.com/oss/python/contributing/overview)
+- **Enterprise Agents Platform:**
+  - [Deployment Guide](deployment/README.md) – Quick start and feature overview
+  - [Knowledge Base](deployment/KNOWLEDGE.md) – Comprehensive technical documentation
+  - [Architecture Blueprint](deployment/docs/Project_Architecture_Blueprint.md) – System design and patterns
+  - [API Reference](deployment/docs/api/README.md) – Complete endpoint documentation
+  - [LangGraph Setup](deployment/LANGGRAPH_SETUP.md) – Visual development with LangGraph Studio
