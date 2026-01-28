@@ -1269,7 +1269,7 @@ def get_wellbeing_resources(resource_type: str = "general") -> str:
 🌟 **Quick Links:**
 - **EAP (Employee Assistance Program):** 1-800-XXX-XXXX (24/7, confidential)
 - **Mental Health Support:** See `mental_health` resources
-- **Physical Wellness:** See `physical_health` resources  
+- **Physical Wellness:** See `physical_health` resources
 - **Financial Wellness:** See `financial` resources
 - **Work-Life Balance:** See `work_life_balance` resources
 
