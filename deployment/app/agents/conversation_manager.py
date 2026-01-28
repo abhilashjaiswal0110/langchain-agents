@@ -41,6 +41,7 @@ class ConversationManager:
         "it_helpdesk": "IT Helpdesk Agent - General IT support, password resets, troubleshooting",
         "servicenow": "ServiceNow Agent - Ticket management, change requests, CMDB",
         "document_intelligence": "Document Intelligence Agent - Multi-format document analysis, RAG, translation",
+        "employee_experience": "Employee Experience Agent - HR support, career development, wellbeing, benefits",
     }
 
     def __init__(self, session_store: BaseSessionStore | None = None) -> None:
@@ -75,6 +76,27 @@ class ConversationManager:
         except Exception as e:
             print(f"Failed to load Document Intelligence Agent: {e}")
 
+        # Load Employee Experience Agent with environment variable configuration
+        try:
+            enabled = os.getenv("EMPLOYEE_EXPERIENCE_ENABLED", "true").lower() in ("1", "true", "yes", "y")
+            if enabled:
+                from app.agents.employee_experience import EmployeeExperienceAgent
+                
+                # Read configuration from environment variables
+                model_provider = os.getenv("EMPLOYEE_EXPERIENCE_PROVIDER", "auto")
+                temperature_str = os.getenv("EMPLOYEE_EXPERIENCE_TEMPERATURE", "0.7")
+                try:
+                    temperature = float(temperature_str)
+                except ValueError:
+                    temperature = 0.7
+                
+                self._agents["employee_experience"] = EmployeeExperienceAgent(
+                    model_provider=model_provider,
+                    temperature=temperature,
+                )
+        except Exception as e:
+            print(f"Failed to load Employee Experience Agent: {e}")
+
     def get_available_agents(self) -> dict[str, str]:
         """Get list of available agents."""
         return {k: v for k, v in self.AVAILABLE_AGENTS.items() if k in self._agents}
@@ -82,7 +104,7 @@ class ConversationManager:
     @traceable(name="conversation_start", tags=["conversation", "session"])
     def start_conversation(
         self,
-        agent_type: Literal["it_helpdesk", "servicenow"],
+        agent_type: Literal["it_helpdesk", "servicenow", "document_intelligence", "employee_experience"],
         user_id: str | None = None,
         metadata: dict | None = None,
     ) -> dict[str, Any]:
