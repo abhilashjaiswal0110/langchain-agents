@@ -3033,8 +3033,12 @@ def handle_response(response):
 Ensure data protection:
 
 ```python
-# DO NOT log full conversations with PII
-logger.info(f"Session {session_id}: Employee query handled")  # Good
+# DO mask session IDs in logs (they act as bearer tokens)
+safe_session_id = session_id[-6:]  # Last 6 chars only
+logger.info(f"Session ****{safe_session_id}: Employee query handled")  # Good
+
+# DO NOT log full session IDs
+# logger.info(f"Session {session_id}: Employee query handled")  # Bad - credential exposure
 
 # DO NOT expose sensitive data
 # logger.info(f"Employee {name} asked: {message}")  # Bad - PII exposure

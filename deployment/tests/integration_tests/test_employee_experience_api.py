@@ -7,12 +7,16 @@ Tests the REST API endpoints and UI accessibility for the Employee Experience Ag
 - Full request/response cycle
 """
 
+import os
 import pytest
 from fastapi.testclient import TestClient
 from unittest.mock import patch, Mock
 
 # Import the FastAPI app
 from app.server import app
+
+# Environment variable for gating integration tests
+RUN_INTEGRATION_TESTS = os.getenv("RUN_INTEGRATION_TESTS", "false").lower() in ("1", "true", "yes", "y")
 
 
 # =============================================================================
@@ -88,8 +92,8 @@ def test_start_conversation_endpoint_exists(client):
 
 
 @pytest.mark.skipif(
-    True,
-    reason="Requires environment setup and LLM configuration",
+    not RUN_INTEGRATION_TESTS,
+    reason="Requires environment setup and LLM configuration. Set RUN_INTEGRATION_TESTS=true to enable.",
 )
 def test_start_conversation_with_employee_experience(client):
     """Test starting a conversation with Employee Experience Agent."""
@@ -120,8 +124,8 @@ def test_start_conversation_with_employee_experience(client):
 
 
 @pytest.mark.skipif(
-    True,
-    reason="Requires environment setup and LLM configuration",
+    not RUN_INTEGRATION_TESTS,
+    reason="Requires environment setup and LLM configuration. Set RUN_INTEGRATION_TESTS=true to enable.",
 )
 def test_chat_endpoint_with_hr_query(client):
     """Test chat endpoint with HR policy query."""
@@ -150,8 +154,8 @@ def test_chat_endpoint_with_hr_query(client):
 
 
 @pytest.mark.skipif(
-    True,
-    reason="Requires environment setup and LLM configuration",
+    not RUN_INTEGRATION_TESTS,
+    reason="Requires environment setup and LLM configuration. Set RUN_INTEGRATION_TESTS=true to enable.",
 )
 def test_chat_endpoint_with_career_query(client):
     """Test chat endpoint with career development query."""
@@ -179,8 +183,8 @@ def test_chat_endpoint_with_career_query(client):
 
 
 @pytest.mark.skipif(
-    True,
-    reason="Requires environment setup and LLM configuration",
+    not RUN_INTEGRATION_TESTS,
+    reason="Requires environment setup and LLM configuration. Set RUN_INTEGRATION_TESTS=true to enable.",
 )
 def test_chat_endpoint_with_wellbeing_query(client):
     """Test chat endpoint with wellbeing query."""
@@ -215,8 +219,8 @@ def test_chat_endpoint_with_wellbeing_query(client):
 
 
 @pytest.mark.skipif(
-    True,
-    reason="Requires environment setup and LLM configuration",
+    not RUN_INTEGRATION_TESTS,
+    reason="Requires environment setup and LLM configuration. Set RUN_INTEGRATION_TESTS=true to enable.",
 )
 def test_conversation_history_endpoint(client):
     """Test getting conversation history."""
@@ -372,8 +376,8 @@ def test_chat_without_message(client):
 
 
 @pytest.mark.skipif(
-    True,
-    reason="Requires environment setup and LLM configuration",
+    not RUN_INTEGRATION_TESTS,
+    reason="Requires environment setup and LLM configuration. Set RUN_INTEGRATION_TESTS=true to enable.",
 )
 def test_chat_response_format(client):
     """Test that chat response has correct format."""
@@ -448,8 +452,8 @@ def test_cors_headers_present(client):
 
 
 @pytest.mark.skipif(
-    True,
-    reason="Webhook integration may require authentication",
+    not RUN_INTEGRATION_TESTS,
+    reason="Webhook integration may require authentication. Set RUN_INTEGRATION_TESTS=true to enable.",
 )
 def test_webhook_chat_endpoint_with_employee_experience():
     """Test webhook chat endpoint with Employee Experience Agent."""

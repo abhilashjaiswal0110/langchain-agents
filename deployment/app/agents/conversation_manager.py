@@ -76,9 +76,24 @@ class ConversationManager:
         except Exception as e:
             print(f"Failed to load Document Intelligence Agent: {e}")
 
+        # Load Employee Experience Agent with environment variable configuration
         try:
-            from app.agents.employee_experience import EmployeeExperienceAgent
-            self._agents["employee_experience"] = EmployeeExperienceAgent(model_provider="auto", temperature=0.7)
+            enabled = os.getenv("EMPLOYEE_EXPERIENCE_ENABLED", "true").lower() in ("1", "true", "yes", "y")
+            if enabled:
+                from app.agents.employee_experience import EmployeeExperienceAgent
+                
+                # Read configuration from environment variables
+                model_provider = os.getenv("EMPLOYEE_EXPERIENCE_PROVIDER", "auto")
+                temperature_str = os.getenv("EMPLOYEE_EXPERIENCE_TEMPERATURE", "0.7")
+                try:
+                    temperature = float(temperature_str)
+                except ValueError:
+                    temperature = 0.7
+                
+                self._agents["employee_experience"] = EmployeeExperienceAgent(
+                    model_provider=model_provider,
+                    temperature=temperature,
+                )
         except Exception as e:
             print(f"Failed to load Employee Experience Agent: {e}")
 

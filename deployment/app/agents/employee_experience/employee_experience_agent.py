@@ -9,9 +9,7 @@ A comprehensive HR support agent providing:
 - Escalation orchestration to HR business partners
 """
 
-import os
 import uuid
-from datetime import datetime
 from typing import Annotated, Any, Literal
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
@@ -20,7 +18,7 @@ from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode
 from langsmith import traceable
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.agents.base.llm_factory import get_llm
 from app.agents.employee_experience.tools import (
@@ -62,6 +60,7 @@ from app.agents.employee_experience.tools import (
 from app.agents.employee_experience.sentiment_analyzer import (
     analyze_employee_sentiment,
     assess_burnout_risk,
+    detect_escalation_triggers,
 )
 
 
@@ -83,7 +82,7 @@ class EmployeeExperienceState(BaseModel):
     burnout_risk: Literal["low", "medium", "high"] | None = None
     case_id: str | None = None
     escalation_required: bool = False
-    context: dict[str, Any] = {}
+    context: dict[str, Any] = Field(default_factory=dict)
 
 
 # =============================================================================
@@ -305,6 +304,10 @@ class EmployeeExperienceAgent:
         # Analyze sentiment
         sentiment_result = analyze_employee_sentiment(latest_message)
 
+        # Detect critical escalation triggers (harassment, safety, self-harm, etc.)
+        escalation_result = detect_escalation_triggers(latest_message)
+        escalation_required = escalation_result.get("escalation_required", False)
+
         # Assess burnout risk if we have conversation history
         burnout_risk = "low"
         if len(human_messages) >= 3:
@@ -316,6 +319,7 @@ class EmployeeExperienceAgent:
         return {
             "sentiment_score": sentiment_result.get("score", 0.0),
             "burnout_risk": burnout_risk,
+            "escalation_required": escalation_required,
         }
 
     def _agent_node(self, state: EmployeeExperienceState) -> dict:

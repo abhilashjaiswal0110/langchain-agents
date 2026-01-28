@@ -10,7 +10,6 @@ Comprehensive toolkit for HR support including:
 - Escalation and case management
 """
 
-import os
 import uuid
 from datetime import datetime
 from typing import Literal
@@ -1265,6 +1264,26 @@ def get_wellbeing_resources(resource_type: str = "general") -> str:
         Wellbeing resources, programs, and contact information.
     """
     resources = {
+        "general": """**General Wellbeing Resources Overview:**
+
+🌟 **Quick Links:**
+- **EAP (Employee Assistance Program):** 1-800-XXX-XXXX (24/7, confidential)
+- **Mental Health Support:** See `mental_health` resources
+- **Physical Wellness:** See `physical_health` resources  
+- **Financial Wellness:** See `financial` resources
+- **Work-Life Balance:** See `work_life_balance` resources
+
+💙 **Immediate Support:**
+- Crisis hotline: 988 (Suicide & Crisis Lifeline)
+- EAP counseling: Free, confidential, available 24/7
+- Manager 1:1: Schedule via Outlook
+
+📋 **How to Get Started:**
+1. Identify your wellbeing need (mental health, physical, financial, work-life)
+2. Use the specific resource type for detailed information
+3. Contact HR or EAP if you're unsure where to start
+
+**Remember:** Your wellbeing is a priority. All resources are confidential and available to support you.""",
         "mental_health": """**Mental Health & EAP Resources:**
 
 🧠 **Employee Assistance Program (EAP):**
@@ -1462,7 +1481,7 @@ For general wellbeing support, contact:
 
 
 @tool
-def schedule_wellbeing_check(reason: str, preferred_contact: str = "confidential") -> str:
+def schedule_wellbeing_check(reason: str, preferred_contact: str = "confidential_eap") -> str:
     """Schedule a proactive wellbeing check-in with HR or EAP.
 
     Args:

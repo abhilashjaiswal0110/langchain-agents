@@ -9,7 +9,6 @@ For production use, consider integrating with:
 - Integration with engagement platforms (Qualtrics, CultureAmp, Glint)
 """
 
-import re
 from typing import Literal
 
 
@@ -212,10 +211,12 @@ def assess_burnout_risk(messages: list[str]) -> dict:
     # Factor 2: Sentiment declining trend (weight: 0.20)
     if len(sentiment_scores) >= 3:
         recent_sentiment = sum(sentiment_scores[-3:]) / 3
-        earlier_sentiment = sum(sentiment_scores[:-3]) / (len(sentiment_scores) - 3) if len(sentiment_scores) > 3 else recent_sentiment
-        if recent_sentiment < earlier_sentiment - 0.3:
-            risk_score += 2
-            risk_factors.append("declining_sentiment")
+        # Guard against division by zero when len == 3
+        if len(sentiment_scores) > 3:
+            earlier_sentiment = sum(sentiment_scores[:-3]) / (len(sentiment_scores) - 3)
+            if recent_sentiment < earlier_sentiment - 0.3:
+                risk_score += 2
+                risk_factors.append("declining_sentiment")
 
     # Factor 3: Stress indicators (weight: 0.20)
     stress_frequency = total_stress / len(messages)
@@ -264,7 +265,7 @@ def assess_burnout_risk(messages: list[str]) -> dict:
         "sentiment_trend": {
             "average": round(avg_sentiment, 2),
             "recent": round(sum(sentiment_scores[-3:]) / 3, 2) if len(sentiment_scores) >= 3 else round(avg_sentiment, 2),
-            "trend": "declining" if len(sentiment_scores) >= 3 and (sum(sentiment_scores[-3:]) / 3) < (sum(sentiment_scores[:-3]) / (len(sentiment_scores) - 3) - 0.2) else "stable",
+            "trend": "declining" if len(sentiment_scores) > 3 and (sum(sentiment_scores[-3:]) / 3) < (sum(sentiment_scores[:-3]) / (len(sentiment_scores) - 3) - 0.2) else "stable",
         },
         "indicator_counts": {
             "stress": total_stress,
