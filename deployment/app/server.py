@@ -618,6 +618,14 @@ try:
 except ImportError as e:
     print(f"[--] Integration routes not loaded: {e}")
 
+# Include Software Development Deep Agent routes
+try:
+    from app.deepagents.software_dev.routes import router as software_dev_router
+    app.include_router(software_dev_router)
+    print("[OK] Software Development Deep Agent routes loaded")
+except ImportError as e:
+    print(f"[--] Software Development Deep Agent routes not loaded: {e}")
+
 
 # ============================================================================
 # Response Models
@@ -3683,6 +3691,37 @@ async def chat_ui() -> HTMLResponse:
 async def chatui_redirect() -> RedirectResponse:
     """Redirect legacy /chatui to /chat for backwards compatibility."""
     return RedirectResponse(url="/chat", status_code=301)
+
+
+@app.get("/software-dev-chat", response_class=HTMLResponse)
+async def software_dev_chat_ui() -> HTMLResponse:
+    """Serve the Software Development Deep Agent chat UI.
+
+    Returns the HTML with no-cache headers for the SDLC automation interface.
+    """
+    chat_file = STATIC_DIR / "software_dev_chat.html"
+    if chat_file.exists():
+        html_content = chat_file.read_text(encoding="utf-8")
+
+        # Inject server timestamp for cache verification
+        server_timestamp = f"<!-- Server-rendered: {time.time()} -->\n"
+        html_content = server_timestamp + html_content
+
+        return HTMLResponse(
+            content=html_content,
+            headers={
+                "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0",
+                "Pragma": "no-cache",
+                "Expires": "0",
+                "X-Content-Type-Options": "nosniff",
+                "ETag": f'"{int(time.time())}"',
+            },
+        )
+
+    return HTMLResponse(
+        content="<h1>Software Development Chat UI not found</h1><p>Please ensure app/static/software_dev_chat.html exists.</p>",
+        status_code=404,
+    )
 
 
 # Mount static files if directory exists
