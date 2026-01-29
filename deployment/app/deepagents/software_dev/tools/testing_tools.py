@@ -412,7 +412,7 @@ def run_tests(
 @tool
 @traceable(name="generate_test_data", tags=["testing", "data"])
 def generate_test_data(
-    schema: dict,
+    data_schema: dict,
     count: int = 10,
     include_edge_cases: bool = True,
 ) -> str:
@@ -424,7 +424,7 @@ def generate_test_data(
     - Unit test fixtures
 
     Args:
-        schema: Data schema definition.
+        data_schema: Data schema definition with field names and types.
         count: Number of records to generate.
         include_edge_cases: Include edge case data.
 
@@ -439,7 +439,7 @@ def generate_test_data(
     for i in range(count):
         record = {"id": f"test-{i+1:04d}"}
 
-        for field, field_type in schema.items():
+        for field, field_type in data_schema.items():
             if field == "id":
                 continue
 
@@ -466,13 +466,13 @@ def generate_test_data(
     edge_cases = []
     if include_edge_cases:
         edge_cases = [
-            {"id": "edge-empty", **{k: "" if v == "string" else None for k, v in schema.items() if k != "id"}},
-            {"id": "edge-null", **{k: None for k in schema.keys() if k != "id"}},
-            {"id": "edge-special", **{k: "!@#$%^&*()" if v == "string" else 0 for k, v in schema.items() if k != "id"}},
+            {"id": "edge-empty", **{k: "" if v == "string" else None for k, v in data_schema.items() if k != "id"}},
+            {"id": "edge-null", **{k: None for k in data_schema.keys() if k != "id"}},
+            {"id": "edge-special", **{k: "!@#$%^&*()" if v == "string" else 0 for k, v in data_schema.items() if k != "id"}},
         ]
 
     result = {
-        "schema": schema,
+        "data_schema": data_schema,
         "count": len(data),
         "data": data,
         "edge_cases": edge_cases if include_edge_cases else [],
