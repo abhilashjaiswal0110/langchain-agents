@@ -280,8 +280,9 @@ class SubAgentMiddleware:
     def _create_task_tool(self):
         """Create the task tool for spawning subagents."""
         available_subagents = list(self.subagents.keys())
+        available_str = ", ".join(available_subagents) if available_subagents else "general-purpose"
 
-        @tool
+        @tool(description=f"Delegate a task to a specialized subagent. Available subagents: {available_str}")
         def task(
             subagent_type: str,
             task_description: str,
@@ -292,8 +293,6 @@ class SubAgentMiddleware:
             Subagents work in isolation and return a final report.
             Use this for complex subtasks that need focused investigation.
 
-            Available subagents: {available}
-
             Args:
                 subagent_type: Type of subagent to spawn.
                 task_description: What the subagent should do.
@@ -301,8 +300,7 @@ class SubAgentMiddleware:
 
             Returns:
                 Result from the subagent.
-            """.format(available=", ".join(available_subagents) or "general-purpose")
-
+            """
             if subagent_type not in available_subagents and subagent_type != "general-purpose":
                 return f"Error: Unknown subagent '{subagent_type}'. Available: {available_subagents}"
 
