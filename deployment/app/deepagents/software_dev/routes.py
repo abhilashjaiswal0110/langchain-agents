@@ -12,7 +12,7 @@ import logging
 from datetime import datetime
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 import json
@@ -28,16 +28,22 @@ logger = logging.getLogger(__name__)
 # Create router
 router = APIRouter(prefix="/api/software-dev-agent", tags=["Software Development Agent"])
 
-# Global agent instance (singleton)
+# Thread-safe agent instance management
+import threading
+
 _agent_instance: SoftwareDevDeepAgent | None = None
+_agent_lock = threading.Lock()
 
 
 def get_agent() -> SoftwareDevDeepAgent:
-    """Get or create the agent instance."""
+    """Get or create the agent instance in a thread-safe manner."""
     global _agent_instance
     if _agent_instance is None:
-        _agent_instance = create_software_dev_agent()
-        logger.info("Software Development DeepAgent initialized")
+        with _agent_lock:
+            # Double-check locking pattern
+            if _agent_instance is None:
+                _agent_instance = create_software_dev_agent()
+                logger.info("Software Development DeepAgent initialized")
     return _agent_instance
 
 

@@ -24,18 +24,14 @@ from langgraph.prebuilt import ToolNode
 from langsmith import traceable
 
 from app.agents.base.llm_factory import get_llm
-from app.deepagents.core.types import Todo, TodoStatus, SubAgentResult
+from app.deepagents.core.types import TodoStatus
 from app.deepagents.core.middleware import (
     TodoListMiddleware,
     FilesystemMiddleware,
     SubAgentMiddleware,
 )
 from app.deepagents.software_dev.state import SoftwareDevState
-from app.deepagents.software_dev.subagents import (
-    get_all_subagents,
-    get_subagent_tools,
-    get_subagent_for_phase,
-)
+from app.deepagents.software_dev.subagents import get_all_subagents
 from app.deepagents.config.software_dev_config import (
     SoftwareDevAgentConfig,
     SDLCPhase,

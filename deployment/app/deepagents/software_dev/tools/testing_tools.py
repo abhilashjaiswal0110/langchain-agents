@@ -1,6 +1,11 @@
 """Testing Automation Tools.
 
 Tools for generating tests, analyzing coverage, and managing test suites.
+
+⚠️ **NOTE:** These tools currently use simulated/mock implementations for demonstration.
+- Test execution results use random pass/fail (not actual test runs)
+- Coverage metrics are randomized (not from actual coverage.py)
+- For production use, integrate with real testing frameworks (pytest, unittest, coverage.py)
 """
 
 import json

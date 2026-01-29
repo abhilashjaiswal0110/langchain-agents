@@ -1,6 +1,11 @@
 """Security & Compliance Tools.
 
 Tools for security scanning, vulnerability detection, and compliance checking.
+
+⚠️ **NOTE:** These tools currently use simulated/mock implementations for demonstration.
+- Vulnerability database is static and may be outdated
+- For production use, integrate with real security scanners (Safety, Bandit, Snyk)
+- Consider connecting to NVD (National Vulnerability Database) API for current data
 """
 
 import json

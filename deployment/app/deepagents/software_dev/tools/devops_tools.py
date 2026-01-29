@@ -116,7 +116,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Build Docker image
         run: docker build -t {project}:${{{{ github.sha }}}} .
-'''.format(project=project_name.lower())
+''' % {"project": project_name.lower()}
 
     elif platform == "gitlab-ci":
         config = f'''stages:

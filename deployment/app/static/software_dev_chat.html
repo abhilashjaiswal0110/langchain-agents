@@ -579,10 +579,19 @@
             const messageDiv = document.createElement('div');
             messageDiv.className = `message ${role}`;
 
-            // Format content (basic markdown-like formatting)
-            let formattedContent = content
-                .replace(/```(\w+)?\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>')
-                .replace(/`([^`]+)`/g, '<code>$1</code>')
+            // Format content (safely escaped to prevent XSS)
+            // Use textContent first to escape HTML, then apply basic formatting
+            const tempDiv = document.createElement('div');
+            tempDiv.textContent = content;
+            let formattedContent = tempDiv.innerHTML
+                .replace(/```(\w+)?\n([\s\S]*?)```/g, (match, lang, code) => {
+                    const escapedCode = code.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                    return `<pre><code>${escapedCode}</code></pre>`;
+                })
+                .replace(/`([^`]+)`/g, (match, code) => {
+                    const escapedCode = code.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                    return `<code>${escapedCode}</code>`;
+                })
                 .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
                 .replace(/\n/g, '<br>');
 
