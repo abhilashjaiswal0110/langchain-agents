@@ -78,7 +78,12 @@ class ConversationManager:
 
         # Load Employee Experience Agent with environment variable configuration
         try:
-            enabled = os.getenv("EMPLOYEE_EXPERIENCE_ENABLED", "true").lower() in ("1", "true", "yes", "y")
+            # Prefer the documented variable EMPLOYEE_EXPERIENCE_AGENT_ENABLED, but
+            # fall back to the legacy EMPLOYEE_EXPERIENCE_ENABLED for compatibility.
+            enabled_env = os.getenv("EMPLOYEE_EXPERIENCE_AGENT_ENABLED")
+            if enabled_env is None:
+                enabled_env = os.getenv("EMPLOYEE_EXPERIENCE_ENABLED", "true")
+            enabled = enabled_env.lower() in ("1", "true", "yes", "y")
             if enabled:
                 from app.agents.employee_experience import EmployeeExperienceAgent
 

@@ -7,8 +7,6 @@ Usage:
     python -m app.agents.employee_experience.demo_scenarios
 """
 
-from typing import Literal
-
 
 # =============================================================================
 # Demo Scenario Definitions
