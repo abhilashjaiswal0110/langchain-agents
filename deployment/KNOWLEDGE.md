@@ -2,7 +2,7 @@
 
 > **Purpose**: This document serves as the authoritative knowledge source for AI agents working on this repository. It contains architectural decisions, implementation patterns, and guidelines that must be followed when making changes or enhancements.
 
-**Last Updated**: 2026-01-23 (v3.19 - Recruitment Deep Agent with SharePoint Integration)
+**Last Updated**: 2026-01-28 (v3.20 - Software Development Deep Agent with SDLC Automation)
 
 ---
 
@@ -23,14 +23,15 @@
 13. [DeepSearch Research](#deepsearch-research)
 14. [Deep Agents](#deep-agents)
 15. [Recruitment Deep Agent](#recruitment-deep-agent)
-16. [Dependencies](#dependencies)
-16. [Development Patterns](#development-patterns)
-17. [Testing Strategy](#testing-strategy)
-18. [Deployment](#deployment)
-19. [Common Tasks](#common-tasks)
-20. [Troubleshooting](#troubleshooting)
-21. [Production Certification](#production-certification)
-22. [Change Log](#change-log)
+16. [Software Development Deep Agent](#software-development-deep-agent)
+17. [Dependencies](#dependencies)
+18. [Development Patterns](#development-patterns)
+19. [Testing Strategy](#testing-strategy)
+20. [Deployment](#deployment)
+21. [Common Tasks](#common-tasks)
+22. [Troubleshooting](#troubleshooting)
+23. [Production Certification](#production-certification)
+24. [Change Log](#change-log)
 
 ---
 
@@ -191,13 +192,30 @@ deployment/
 │   │   ├── sqlite_store.py      # SQLite session store
 │   │   ├── conversation_memory.py # LangChain integration
 │   │   └── config.py            # Configuration and factories
-│   ├── integrations/            # External integrations (NEW)
+│   ├── integrations/            # External integrations
 │   │   ├── __init__.py          # Module exports
 │   │   ├── teams_webhook.py     # Microsoft Teams webhook
 │   │   ├── slack_webhook.py     # Slack webhook
 │   │   └── routes.py            # FastAPI routes
+│   ├── deepagents/              # Deep Agents framework
+│   │   ├── __init__.py          # Module exports
+│   │   ├── core/                # Core DeepAgent components
+│   │   ├── config/              # Agent configurations
+│   │   ├── storage/             # Storage backends
+│   │   ├── tools/               # IT Operations tools
+│   │   ├── subagents/           # Subagent definitions
+│   │   ├── it_operations_agent.py   # IT Ops Deep Agent
+│   │   ├── recruitment_agent.py     # Recruitment Deep Agent
+│   │   └── software_dev/        # Software Dev Deep Agent
+│   │       ├── __init__.py
+│   │       ├── software_dev_agent.py
+│   │       ├── state.py
+│   │       ├── subagents.py
+│   │       ├── routes.py
+│   │       └── tools/           # 54 SDLC tools
 │   └── static/                  # Static web files
-│       └── chat.html            # Web UI for demos
+│       ├── chat.html            # Web UI for demos
+│       └── software_dev_chat.html  # Software Dev Agent UI
 ├── tests/                       # Test suite
 │   ├── __init__.py
 │   └── test_server.py           # Server endpoint tests
@@ -3159,6 +3177,919 @@ For questions or issues:
 - **HR Support**: hr@company.com
 - **Feature Requests**: GitHub Issues
 - **Documentation**: [Link to confluence/wiki]
+
+---
+
+## Software Development Deep Agent
+
+### Overview
+
+The **Software Development Deep Agent** is a comprehensive AI-powered SDLC (Software Development Lifecycle) automation system that orchestrates specialized subagents to support the complete software development process from requirements analysis to documentation.
+
+**Key Capabilities**:
+- End-to-end SDLC support across all development phases
+- 9 specialized subagents for domain-specific tasks
+- 58 purpose-built tools for software development (including bash execution)
+- Real-time event streaming with thinking visibility
+- Automatic phase transition based on workflow progress
+- Integration with LangSmith for observability
+- Bash command execution with security validation
+
+### Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                     Software Development Deep Agent                           │
+│  ┌────────────────────────────────────────────────────────────────────────┐ │
+│  │                     SDLC Orchestrator Agent                            │ │
+│  │  - Workflow orchestration across SDLC phases                          │ │
+│  │  - Subagent delegation and coordination                               │ │
+│  │  - Context and state management                                       │ │
+│  │  - Quality gate enforcement                                           │ │
+│  └────────────────────────────────────────────────────────────────────────┘ │
+│                                   │                                          │
+│  ┌────────────────────────────────┴─────────────────────────────────────┐  │
+│  │                     Specialized Subagents                             │  │
+│  │  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌─────────────┐    │  │
+│  │  │ Requirements│ │ Architecture│ │ Code        │ │ Code        │    │  │
+│  │  │ Intelligence│ │ & Design    │ │ Generator   │ │ Reviewer    │    │  │
+│  │  └─────────────┘ └─────────────┘ └─────────────┘ └─────────────┘    │  │
+│  │  ┌─────────────┐ ┌─────────────┐ ┌─────────────┐ ┌─────────────┐    │  │
+│  │  │ Testing     │ │ Debugging & │ │ Security &  │ │ DevOps      │    │  │
+│  │  │ Automation  │ │ Optimization│ │ Compliance  │ │ Integration │    │  │
+│  │  └─────────────┘ └─────────────┘ └─────────────┘ └─────────────┘    │  │
+│  │  ┌─────────────┐                                                     │  │
+│  │  │ Documentation│                                                    │  │
+│  │  │ Generator   │                                                     │  │
+│  │  └─────────────┘                                                     │  │
+│  └──────────────────────────────────────────────────────────────────────┘  │
+│                                   │                                          │
+│  ┌────────────────────────────────┴─────────────────────────────────────┐  │
+│  │                     Tool Categories (58 tools)                        │  │
+│  │  ┌─────────────────────────────────────────────────────────────────┐ │  │
+│  │  │ Requirements: analyze, extract_stories, validate, prioritize    │ │  │
+│  │  │ Architecture: design, api_spec, tech_stack, data_model          │ │  │
+│  │  │ CodeGen: generate, refactor, patterns, boilerplate              │ │  │
+│  │  │ Review: review, style, complexity, code_smells                  │ │  │
+│  │  │ Testing: unit_tests, integration_tests, coverage, test_plan     │ │  │
+│  │  │ Security: scan, owasp, secrets, dependency_audit                │ │  │
+│  │  │ DevOps: ci_pipeline, cd_pipeline, dockerfile, k8s_config        │ │  │
+│  │  │ Debugging: analyze_error, trace, root_cause, performance        │ │  │
+│  │  │ Documentation: api_docs, readme, architecture_docs, changelog   │ │  │
+│  │  │ Bash: execute_command, execute_python, execute_tests, install   │ │  │
+│  │  └─────────────────────────────────────────────────────────────────┘ │  │
+│  └──────────────────────────────────────────────────────────────────────┘  │
+│                                   │                                          │
+│  ┌────────────────────────────────┴─────────────────────────────────────┐  │
+│  │                     Streaming Layer (SSE)                             │  │
+│  │  - thinking: Agent reasoning steps                                   │  │
+│  │  - tool_call: Tool invocation with args                              │  │
+│  │  - tool_result: Execution results                                    │  │
+│  │  - phase_change: SDLC phase transitions                              │  │
+│  │  - content: Final response                                           │  │
+│  └──────────────────────────────────────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### SDLC Phases
+
+The Software Development Deep Agent supports all 9 SDLC phases:
+
+| Phase | Description | Primary Subagent |
+|-------|-------------|------------------|
+| **Requirements** | Analyze and refine software requirements | requirements-intelligence |
+| **Design** | Design system architecture and APIs | architecture-design |
+| **Implementation** | Generate and refactor code | code-generator |
+| **Review** | Perform code reviews and quality checks | code-reviewer |
+| **Testing** | Create and run tests | testing-automation |
+| **Security** | Scan for security vulnerabilities | security-compliance |
+| **DevOps** | Create CI/CD pipelines and deployment configs | devops-integration |
+| **Debugging** | Debug issues and optimize performance | debugging-optimization |
+| **Documentation** | Generate technical documentation | documentation |
+
+### Directory Structure
+
+```
+app/deepagents/software_dev/
+├── __init__.py                 # Module exports
+├── software_dev_agent.py       # Main orchestrator agent
+├── state.py                    # SoftwareDevState management
+├── subagents.py                # 9 subagent definitions
+├── routes.py                   # FastAPI REST routes
+└── tools/
+    ├── __init__.py             # Tool exports (54 tools)
+    ├── requirements_tools.py   # Requirements analysis tools (6)
+    ├── architecture_tools.py   # Architecture design tools (6)
+    ├── codegen_tools.py        # Code generation tools (6)
+    ├── review_tools.py         # Code review tools (6)
+    ├── testing_tools.py        # Testing automation tools (6)
+    ├── security_tools.py       # Security scanning tools (6)
+    ├── devops_tools.py         # DevOps/CI-CD tools (6)
+    ├── debugging_tools.py      # Debugging tools (6)
+    ├── documentation_tools.py  # Documentation tools (6)
+    └── bash_execution_tools.py # Bash execution tools (4)
+```
+
+### Specialized Subagents
+
+#### 1. Requirements Intelligence Agent
+**Purpose**: Analyze, refine, and manage software requirements
+
+**Tools**:
+- `analyze_requirements`: Extract structured requirements from text
+- `extract_user_stories`: Convert requirements to user stories
+- `validate_requirements`: Check for completeness and clarity (SMART criteria)
+- `prioritize_requirements`: MoSCoW or weighted prioritization
+- `detect_ambiguities`: Find vague or unclear statements
+- `generate_acceptance_criteria`: Create BDD-style acceptance criteria
+
+#### 2. Architecture & Design Agent
+**Purpose**: Design system architecture, APIs, and data models
+
+**Tools**:
+- `design_architecture`: Create architecture for patterns (microservices, serverless, etc.)
+- `create_api_spec`: Generate REST API specifications
+- `suggest_tech_stack`: Recommend technology stack
+- `design_data_model`: Design entity relationships
+- `create_component_diagram`: Generate Mermaid diagrams
+- `analyze_dependencies`: Analyze package dependencies
+
+#### 3. Code Generator Agent
+**Purpose**: Generate, refactor, and optimize code with execution capabilities
+
+**Tools**:
+- `generate_code`: Generate functions/classes in Python, TypeScript, Go
+- `refactor_code`: Apply refactoring patterns (extract method, rename, etc.)
+- `apply_design_pattern`: Implement design patterns (singleton, factory, etc.)
+- `generate_boilerplate`: Create project scaffolding
+- `optimize_imports`: Clean up and organize imports
+- `format_code`: Format code according to style guides
+- `execute_bash_command`: Execute bash commands for formatters, linters
+- `execute_python_code`: Execute Python code to verify functionality
+- `install_dependencies`: Install required packages and dependencies
+
+#### 4. Code Reviewer Agent
+**Purpose**: Perform comprehensive code reviews with executable linters
+
+**Tools**:
+- `review_code`: Full code review with security, quality, and style checks
+- `check_code_style`: Validate against style guides (PEP8, etc.)
+- `analyze_complexity`: Calculate cyclomatic and cognitive complexity
+- `detect_code_smells`: Identify antipatterns and code smells
+- `suggest_improvements`: Generate improvement recommendations
+- `check_best_practices`: Validate against domain best practices
+- `execute_bash_command`: Execute linters and static analysis tools (ruff, eslint, mypy)
+
+#### 5. Testing Automation Agent
+**Purpose**: Generate and manage tests, execute real test frameworks
+
+**Tools**:
+- `generate_unit_tests`: Create pytest/jest unit tests
+- `generate_integration_tests`: Create API integration tests
+- `analyze_test_coverage`: Analyze code coverage metrics
+- `run_tests`: Execute test suites (mock execution)
+- `generate_test_data`: Create mock/test data from schemas
+- `create_test_plan`: Generate comprehensive test plans
+- `execute_bash_command`: Execute bash commands for running tests
+- `execute_tests_real`: Execute actual test frameworks (pytest, jest, cargo test, etc.)
+- `execute_python_code`: Execute Python code snippets
+
+#### 6. Security & Compliance Agent
+**Purpose**: Security scanning and vulnerability detection
+
+**Tools**:
+- `scan_security_issues`: Detect security vulnerabilities in code
+- `check_owasp_compliance`: Validate against OWASP Top 10
+- `detect_secrets`: Find hardcoded secrets and credentials
+- `analyze_dependencies_security`: Check for vulnerable dependencies
+- `generate_security_report`: Create security assessment reports
+- `suggest_security_fixes`: Provide remediation guidance
+
+#### 7. DevOps Integration Agent
+**Purpose**: CI/CD pipeline and deployment automation with execution capabilities
+
+**Tools**:
+- `create_ci_pipeline`: Generate GitHub Actions/GitLab CI pipelines
+- `create_cd_pipeline`: Create deployment pipelines
+- `configure_deployment`: Generate deployment configurations
+- `generate_dockerfile`: Create optimized Dockerfiles
+- `create_kubernetes_config`: Generate K8s manifests
+- `setup_monitoring`: Configure Prometheus/monitoring
+- `execute_bash_command`: Execute Docker, Kubernetes, and deployment commands
+- `install_dependencies`: Install deployment tools and dependencies
+
+#### 8. Debugging & Optimization Agent
+**Purpose**: Debug issues and optimize performance with execution capabilities
+
+**Tools**:
+- `analyze_error`: Parse and analyze error messages/stack traces
+- `trace_execution`: Trace code execution flow
+- `identify_root_cause`: 5 Whys analysis for root cause
+- `propose_fix`: Suggest code fixes for errors
+- `analyze_performance`: Identify performance bottlenecks
+- `detect_memory_issues`: Find memory leaks and issues
+- `execute_bash_command`: Execute profilers and diagnostic tools
+- `execute_python_code`: Run code to reproduce bugs
+- `execute_tests_real`: Run tests to verify fixes
+
+#### 9. Documentation Agent
+**Purpose**: Generate technical documentation
+
+**Tools**:
+- `generate_api_docs`: Create OpenAPI/Swagger documentation
+- `create_readme`: Generate README files
+- `document_architecture`: Create architecture documentation
+- `generate_changelog`: Generate changelogs from changes
+- `add_inline_comments`: Add code comments
+- `create_user_guide`: Generate user documentation
+
+### Bash Execution Tools
+
+The Software Development Deep Agent now includes powerful bash execution capabilities that enable real command execution for testing, building, deployment, and debugging tasks.
+
+#### Overview
+
+These tools provide secure, cross-platform command execution with:
+- **Security validation**: Dangerous commands are blocked before execution
+- **Multi-platform support**: Automatically detects and uses appropriate shell (Bash on Linux/Mac, PowerShell on Windows)
+- **Fallback mechanisms**: Gracefully degrades if primary shell unavailable
+- **Timeout protection**: Commands are limited to prevent hanging processes
+- **Command history tracking**: All executions are logged for audit purposes
+
+#### Available Tools
+
+##### 1. execute_bash_command
+
+Execute shell commands securely with automatic platform detection.
+
+**Parameters**:
+- `command` (str, required): The shell command to execute
+- `timeout` (int, optional): Maximum execution time in seconds (default: 30)
+- `working_directory` (str, optional): Directory to execute command in
+
+**Returns**:
+```python
+{
+    "success": bool,           # Whether command succeeded (exit code 0)
+    "stdout": str,             # Standard output
+    "stderr": str,             # Standard error
+    "exit_code": int,          # Process exit code
+    "command": str,            # The executed command
+    "shell_type": str,         # Shell used (bash, powershell, cmd)
+    "warning": str (optional)  # Security warnings if any
+}
+```
+
+**Security Features**:
+- Blocks dangerous patterns (rm -rf /, fork bombs, disk operations)
+- Warns about risky operations (sudo, recursive deletes)
+- Validates command structure before execution
+
+**Usage Examples**:
+```python
+# Run tests
+execute_bash_command(command="pytest tests/unit/")
+
+# Build project with custom timeout
+execute_bash_command(command="npm run build", timeout=120)
+
+# Git operations in specific directory
+execute_bash_command(
+    command="git status",
+    working_directory="/path/to/repo"
+)
+```
+
+##### 2. execute_python_code
+
+Execute Python code snippets directly.
+
+**Parameters**:
+- `code` (str, required): Python code to execute
+- `timeout` (int, optional): Maximum execution time in seconds (default: 30)
+- `working_directory` (str, optional): Directory to execute code in
+
+**Returns**:
+```python
+{
+    "success": bool,
+    "stdout": str,
+    "stderr": str,
+    "exit_code": int,
+    "code": str  # First 200 chars of executed code
+}
+```
+
+**Security Features**:
+- Blocks eval() and exec() for security
+- Isolated execution context
+- Timeout protection
+
+**Usage Examples**:
+```python
+# Quick calculation
+execute_python_code(code="print(sum(range(100)))")
+
+# Test Python functionality
+execute_python_code(code="""
+import json
+data = {'key': 'value'}
+print(json.dumps(data))
+""")
+```
+
+##### 3. execute_tests_real
+
+Execute test frameworks with standardized interface.
+
+**Parameters**:
+- `test_framework` (str, optional): Framework to use (pytest, unittest, jest, mocha, cargo, go) - default: pytest
+- `test_path` (str, optional): Path to tests directory or files (default: "tests/")
+- `additional_args` (str, optional): Additional command line arguments
+- `timeout` (int, optional): Maximum execution time (default: 120s)
+
+**Returns**:
+Same as execute_bash_command, plus:
+```python
+{
+    "test_framework": str,  # Framework used
+    "test_path": str        # Path tested
+}
+```
+
+**Supported Frameworks**:
+- **pytest**: Python testing (pytest tests/)
+- **unittest**: Python unittest (python -m unittest discover)
+- **jest**: JavaScript/TypeScript (npm test or jest)
+- **mocha**: JavaScript (npx mocha)
+- **cargo**: Rust (cargo test)
+- **go**: Go (go test)
+
+**Usage Examples**:
+```python
+# Run Python unit tests
+execute_tests_real(
+    test_framework="pytest",
+    test_path="tests/unit/"
+)
+
+# Run JavaScript tests with coverage
+execute_tests_real(
+    test_framework="jest",
+    additional_args="--coverage"
+)
+
+# Run Rust tests in release mode
+execute_tests_real(
+    test_framework="cargo",
+    additional_args="--release"
+)
+```
+
+##### 4. install_dependencies
+
+Install project dependencies using appropriate package manager.
+
+**Parameters**:
+- `package_manager` (str, optional): Package manager to use (pip, npm, yarn, cargo, go) - default: pip
+- `packages` (str, optional): Specific packages to install (space-separated)
+- `requirements_file` (str, optional): Path to requirements/dependencies file
+- `timeout` (int, optional): Maximum execution time (default: 300s)
+
+**Returns**:
+Same as execute_bash_command, plus:
+```python
+{
+    "package_manager": str,
+    "packages": str (optional),
+    "requirements_file": str (optional)
+}
+```
+
+**Usage Examples**:
+```python
+# Install Python requirements
+install_dependencies(
+    package_manager="pip",
+    requirements_file="requirements.txt"
+)
+
+# Install npm packages
+install_dependencies(package_manager="npm")
+
+# Install specific Python packages
+install_dependencies(
+    package_manager="pip",
+    packages="pytest black ruff"
+)
+```
+
+#### Security Considerations
+
+**Dangerous Command Patterns (Blocked)**:
+- `rm -rf /`: Delete root directory
+- `:(){ :|:& };:`: Fork bombs
+- `dd if=... of=/dev/`: Writing to devices
+- `mkfs.`: Formatting filesystems
+- `chmod -R 777 /`: Setting dangerous permissions on root
+
+**Risky Command Patterns (Warned)**:
+- `rm -rf`: Recursive force delete
+- `sudo`: Elevated privileges
+- `curl ... | bash`: Piping web content to shell
+- `eval()`: Dynamic code evaluation
+
+**Best Practices**:
+1. Always review command outputs for errors
+2. Use timeout parameters for long-running operations
+3. Specify working_directory to avoid path confusion
+4. Check exit_code to verify success
+5. Handle stderr appropriately for error messages
+
+#### Integration with Subagents
+
+Bash execution tools are integrated into these subagents:
+
+| Subagent | Bash Tools Available | Primary Use Cases |
+|----------|---------------------|-------------------|
+| **Testing Automation** | execute_bash_command, execute_tests_real, execute_python_code | Running actual test frameworks, generating coverage reports |
+| **Code Generator** | execute_bash_command, execute_python_code, install_dependencies | Running formatters (black, prettier), linters, installing deps |
+| **Code Reviewer** | execute_bash_command | Running linters (ruff, eslint), static analysis (mypy, tsc) |
+| **DevOps Integration** | execute_bash_command, install_dependencies | Docker builds, kubectl commands, deployment scripts |
+| **Debugging & Optimization** | execute_bash_command, execute_python_code, execute_tests_real | Running profilers, reproducing bugs, verifying fixes |
+
+#### Terminal vs UI Compatibility
+
+The bash execution tools work seamlessly in both terminal and UI environments:
+
+**Terminal Usage**:
+- Commands execute in shell subprocess
+- Output streamed to stdout/stderr
+- Full ANSI color support preserved
+- Exit codes propagated correctly
+
+**UI Usage**:
+- Results returned as JSON structures
+- Stdout/stderr captured in response
+- Errors displayed in UI notifications
+- Command history tracked in session
+
+#### Cross-Platform Support
+
+The tools automatically adapt to the host platform:
+
+| Platform | Primary Shell | Fallback | Notes |
+|----------|--------------|----------|-------|
+| **Linux** | bash | sh | Native Unix environment |
+| **macOS** | bash | zsh | Modern macOS uses zsh by default |
+| **Windows** | PowerShell | cmd | Automatically detects available shell |
+
+**Platform-Specific Considerations**:
+- Path separators handled automatically (/ vs \)
+- Command syntax may differ (ls vs dir, cat vs type)
+- Use cross-platform tools where possible (Python, Node.js)
+
+#### Azure Integration
+
+The Software Development Deep Agent now includes comprehensive Azure integration for deploying and executing bash commands on Azure infrastructure. This integration supports the **langchain-azure** framework.
+
+##### Azure Integration Module
+
+**File**: [`app/deepagents/software_dev/tools/azure_integration.py`](app/deepagents/software_dev/tools/azure_integration.py)
+
+**New Tools**:
+- `execute_bash_command_azure`: Execute commands on Azure services (ACI, Functions, AKS)
+- `deploy_to_azure`: Deploy bash execution infrastructure to Azure
+- `get_azure_secret`: Retrieve secrets from Azure Key Vault
+- `get_azure_config_status`: Check Azure configuration status
+
+##### Supported Azure Services
+
+| Service | Status | Use Case | Bash Support |
+|---------|--------|----------|--------------|
+| **Azure Container Instances (ACI)** | Ready (Placeholder) | Isolated command execution | Full Linux bash |
+| **Azure Functions** | Ready (Placeholder) | Serverless execution | Python runtime with subprocess |
+| **Azure Kubernetes Service (AKS)** | Ready (Placeholder) | Scalable execution | Full Kubernetes Jobs |
+| **Azure App Service** | Ready (Placeholder) | Long-running services | Linux App Service plans |
+| **Azure Key Vault** | Ready (Placeholder) | Secure secrets management | N/A |
+
+**Note**: Implementation placeholders are included. User must provide Azure resource details.
+
+##### Configuration
+
+**Template File**: [`.azure.config.example`](.azure.config.example)
+
+Copy to `.azure.config` and fill in your Azure resources:
+
+```bash
+# Azure Subscription
+AZURE_SUBSCRIPTION_ID=your-subscription-id
+AZURE_RESOURCE_GROUP=rg-langchain-agents
+AZURE_LOCATION=eastus
+
+# Container Instances
+ACI_CONTAINER_IMAGE=myregistry.azurecr.io/bash-executor:latest
+
+# Azure Functions
+AZURE_FUNCTIONS_APP_NAME=func-langchain-bash-executor
+
+# AKS
+AKS_CLUSTER_NAME=aks-langchain-agents
+
+# Key Vault
+AZURE_KEY_VAULT_NAME=kv-langchain-bash
+```
+
+**Security**: `.azure.config` is added to `.gitignore` to prevent committing secrets.
+
+##### Usage Examples
+
+**Execute command on Azure Container Instances**:
+```python
+from app.deepagents.software_dev.tools.azure_integration import execute_bash_command_azure
+
+result = execute_bash_command_azure.invoke({
+    "command": "docker build -t myapp .",
+    "execution_mode": "aci",
+    "timeout": 300
+})
+```
+
+**Deploy to Azure Functions**:
+```python
+from app.deepagents.software_dev.tools.azure_integration import deploy_to_azure
+
+result = deploy_to_azure.invoke({
+    "deployment_type": "functions",
+    "function_code_path": "./azure-functions/"
+})
+```
+
+**Retrieve secret from Key Vault**:
+```python
+from app.deepagents.software_dev.tools.azure_integration import get_azure_secret
+
+result = get_azure_secret.invoke({
+    "secret_name": "github-api-token"
+})
+```
+
+##### Azure Execution Modes
+
+The `execute_bash_command_azure` tool supports multiple execution modes:
+
+1. **local** (default): Executes locally using base bash tools
+2. **aci**: Creates Azure Container Instance for isolated execution
+3. **functions**: Invokes Azure Function for serverless execution
+4. **aks**: Runs as Kubernetes Job in AKS cluster
+
+**Automatic Fallback**: If Azure is not configured, commands automatically fall back to local execution with a warning.
+
+##### Integration with langchain-azure
+
+The bash execution tools are designed to work seamlessly with the [langchain-azure framework](https://github.com/abhilashjaiswal0110/langchain-azure.git):
+
+1. **Azure OpenAI Integration**: Use bash tools to manage Azure OpenAI deployments
+2. **Azure Storage**: Execute az cli commands for blob storage operations
+3. **Azure Cosmos DB**: Run database migration and seeding scripts
+4. **Azure Monitor**: Execute queries and fetch logs via az cli
+
+##### Prerequisites for Azure Deployment
+
+**Required Azure Resources**:
+1. Azure subscription with appropriate permissions
+2. Resource group for LangChain agents
+3. Container Registry (for ACI and AKS images)
+4. Service Principal or Managed Identity for authentication
+5. Azure Key Vault for secrets management
+
+**Required Azure CLI Commands**:
+```bash
+# Login to Azure
+az login
+
+# Set subscription
+az account set --subscription "your-subscription-id"
+
+# Create resource group
+az group create --name rg-langchain-agents --location eastus
+
+# Create Key Vault
+az keyvault create --name kv-langchain-bash --resource-group rg-langchain-agents --location eastus
+
+# Create Container Registry
+az acr create --name myregistry --resource-group rg-langchain-agents --sku Basic
+```
+
+**Required Python Packages** (for full Azure integration):
+```txt
+azure-identity>=1.14.0
+azure-mgmt-containerinstance>=10.1.0
+azure-mgmt-web>=7.0.0
+azure-keyvault-secrets>=4.7.0
+azure-mgmt-containerservice>=20.0.0
+kubernetes>=28.0.0
+```
+
+##### Configuration Status Check
+
+Check if Azure is properly configured:
+
+```python
+from app.deepagents.software_dev.tools.azure_integration import get_azure_config_status
+
+status = get_azure_config_status()
+print(status)
+# {
+#     "configured": False,
+#     "missing_config": ["SUBSCRIPTION_ID", "RESOURCE_GROUP", ...],
+#     "execution_mode": "local",
+#     ...
+# }
+```
+
+##### Limitations and Considerations
+
+**Current Limitations**:
+- Azure execution backends use placeholders - implementation required
+- Requires user to provide actual Azure resource details
+- Windows-based Azure services have limited bash support (use PowerShell)
+- Sandboxed environments may restrict certain commands
+
+**Recommendations**:
+1. Start with local execution mode for testing
+2. Use Azure Key Vault for all secrets in production
+3. Enable Application Insights for monitoring
+4. Use private networking (VNet) for sensitive workloads
+5. Implement proper RBAC and access controls
+
+##### Future Enhancements
+
+**Planned Features**:
+- Complete ACI implementation with Azure SDK
+- Azure Functions HTTP trigger for command execution
+- AKS Kubernetes Job execution with log streaming
+- Azure DevOps pipeline integration
+- Terraform templates for infrastructure provisioning
+- Azure Monitor integration for execution metrics
+
+### API Endpoints
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/software-dev-agent/start` | POST | Start a development session |
+| `/api/software-dev-agent/chat` | POST | Send message to agent |
+| `/api/software-dev-agent/chat/stream` | POST | Stream response (SSE) |
+| `/api/software-dev-agent/session/{id}` | GET | Get session state |
+| `/api/software-dev-agent/session/{id}/phase` | POST | Transition SDLC phase |
+| `/api/software-dev-agent/session/{id}` | DELETE | End session |
+| `/api/software-dev-agent/subagents` | GET | List available subagents |
+| `/api/software-dev-agent/config` | GET | Get agent configuration |
+| `/api/software-dev-agent/phases` | GET | List SDLC phases |
+| `/api/software-dev-agent/health` | GET | Health check |
+
+#### Start Session
+
+```bash
+curl -X POST http://localhost:8000/api/software-dev-agent/start \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user_id": "developer123",
+    "project_name": "my-api",
+    "initial_context": "Help me build a REST API for user management"
+  }'
+```
+
+Response:
+```json
+{
+  "session_id": "sd-abc123...",
+  "status": "active",
+  "message": "Hello! I'm ready to help with your user management API...",
+  "project_name": "my-api",
+  "available_phases": ["requirements", "design", "implementation", ...],
+  "available_subagents": ["requirements-intelligence", "architecture-design", ...]
+}
+```
+
+#### Chat with Agent
+
+```bash
+curl -X POST http://localhost:8000/api/software-dev-agent/chat \
+  -H "Content-Type: application/json" \
+  -d '{
+    "session_id": "sd-abc123...",
+    "message": "Analyze these requirements and extract user stories"
+  }'
+```
+
+Response:
+```json
+{
+  "session_id": "sd-abc123...",
+  "response": "I'll analyze the requirements and extract user stories...",
+  "phase": "requirements",
+  "todos": [...],
+  "metrics": {
+    "requirements_count": 5,
+    "code_files_count": 0,
+    "test_coverage": 0.0,
+    "security_issues_count": 0
+  },
+  "tool_calls": ["analyze_requirements", "extract_user_stories"],
+  "thinking_steps": ["Analyzing input text...", "Extracting user stories..."]
+}
+```
+
+#### Stream Agent Response (SSE)
+
+```bash
+curl -N -X POST http://localhost:8000/api/software-dev-agent/chat/stream \
+  -H "Content-Type: application/json" \
+  -d '{
+    "session_id": "sd-abc123...",
+    "message": "Review this code for security issues"
+  }'
+```
+
+Event Stream:
+```
+data: {"type": "thinking", "content": "I'll scan this code for security vulnerabilities..."}
+
+data: {"type": "tool_call", "tool": "scan_security_issues", "args": {...}}
+
+data: {"type": "tool_result", "tool": "scan_security_issues", "result": "Found 3 issues..."}
+
+data: {"type": "content", "response": "Security scan complete. Here are the findings..."}
+
+data: {"type": "done", "session_id": "sd-abc123..."}
+```
+
+### Configuration
+
+```python
+from app.deepagents.config.software_dev_config import SoftwareDevAgentConfig
+
+config = SoftwareDevAgentConfig(
+    model="gpt-4o-mini",            # LLM model
+    max_iterations=50,              # Max agent iterations
+    recursion_limit=100,            # LangGraph recursion limit
+    supported_languages=["python", "typescript", "go"],
+    quality_gates=QualityGates(
+        min_code_coverage=80.0,
+        max_complexity=10,
+        max_critical_issues=0,
+        require_tests=True,
+        require_docs=True,
+        require_security_scan=True,
+    ),
+    test_config=TestConfig(
+        framework="pytest",
+        coverage_threshold=80.0,
+        parallel_execution=True,
+    ),
+    security_config=SecurityConfig(
+        scan_dependencies=True,
+        check_owasp=True,
+        detect_secrets=True,
+        severity_threshold="medium",
+    ),
+)
+```
+
+### State Management
+
+The `SoftwareDevState` extends the base `DeepAgentState` with SDLC-specific context:
+
+```python
+from app.deepagents.software_dev.state import SoftwareDevState
+
+state = SoftwareDevState(
+    messages=[],                    # Conversation history
+    todos=[],                       # Planning tasks
+    files={},                       # Virtual file system
+
+    # SDLC-specific state
+    current_phase=SDLCPhase.REQUIREMENTS,
+    requirements=[],                # Requirement objects
+    user_stories=[],                # User story objects
+    architecture_components=[],     # Architecture components
+    api_endpoints=[],               # API endpoint definitions
+    code_files=[],                  # Generated code files
+    review_issues=[],               # Code review issues
+    test_cases=[],                  # Test cases
+    security_issues=[],             # Security findings
+    pipelines=[],                   # CI/CD pipelines
+    debug_sessions=[],              # Debug sessions
+    documentation_entries=[],       # Documentation entries
+
+    # Metrics
+    test_coverage=0.0,
+    security_score=0.0,
+    iteration_count=0,
+)
+```
+
+### Usage Examples
+
+#### Requirements Analysis
+
+```
+User: I need to build a user authentication system with OAuth support,
+      password reset, and session management.
+
+Agent Response:
+1. Analyzes requirements text
+2. Extracts 8 functional requirements
+3. Converts to user stories
+4. Detects ambiguities (e.g., "should support" is vague)
+5. Generates acceptance criteria for each story
+6. Provides prioritized backlog using MoSCoW
+```
+
+#### Code Review Workflow
+
+```
+User: Review this Python code for security and quality issues:
+      [code snippet]
+
+Agent Response:
+1. Performs security scan (OWASP compliance)
+2. Checks code style (PEP8)
+3. Analyzes complexity metrics
+4. Detects code smells
+5. Generates comprehensive report with:
+   - 2 security issues (SQL injection, hardcoded secret)
+   - 3 style violations
+   - Complexity score: 8 (acceptable)
+   - Suggested fixes with code examples
+```
+
+#### CI/CD Pipeline Generation
+
+```
+User: Create a CI/CD pipeline for a Python FastAPI project
+      with tests, linting, and Docker deployment to Kubernetes.
+
+Agent Response:
+1. Generates GitHub Actions CI workflow
+   - Lint stage (ruff)
+   - Test stage (pytest with coverage)
+   - Build stage (Docker)
+2. Generates CD workflow
+   - Staging deployment
+   - Production deployment with approval
+3. Creates Dockerfile (multi-stage build)
+4. Generates Kubernetes manifests
+   - Deployment
+   - Service
+   - ConfigMap
+5. Sets up Prometheus monitoring config
+```
+
+### Web UI
+
+The Software Development Deep Agent is available in the Web UI at `/software-dev-chat`:
+
+**Features**:
+- Dark theme interface optimized for developers
+- SDLC phase indicator and navigation
+- Real-time metrics panel (requirements, code files, coverage, security issues)
+- Todo list with task progress tracking
+- Quick action buttons for common tasks:
+  - Analyze Requirements
+  - Design Architecture
+  - Generate Code
+  - Review Code
+  - Run Security Scan
+  - Generate Tests
+  - Create Docs
+- Streaming response with visible thinking steps
+
+### Testing
+
+Run Software Development Deep Agent tests:
+
+```bash
+pytest tests/test_software_dev_agent.py -v
+```
+
+Test categories:
+- `TestConfiguration` - Config enums and models
+- `TestStateModels` - State management models
+- `TestSoftwareDevState` - Main state with summaries
+- `TestRequirementsTools` - Requirements analysis tools
+- `TestArchitectureTools` - Architecture design tools
+- `TestCodeGenTools` - Code generation tools
+- `TestReviewTools` - Code review tools
+- `TestTestingTools` - Testing automation tools
+- `TestSecurityTools` - Security scanning tools
+- `TestDevOpsTools` - DevOps/CI-CD tools
+- `TestDebuggingTools` - Debugging tools
+- `TestDocumentationTools` - Documentation tools
+- `TestSubagents` - Subagent definitions
+- `TestSoftwareDevAgent` - Main agent
+- `TestAPIRoutes` - REST API endpoints
 
 ---
 ## Dependencies

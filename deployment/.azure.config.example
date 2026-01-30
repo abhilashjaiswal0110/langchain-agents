@@ -1,0 +1,179 @@
+# Azure Configuration Template for Bash Execution Tools
+# ======================================================
+#
+# Copy this file to .azure.config and fill in your actual Azure resource details.
+# Do NOT commit .azure.config to version control - it contains sensitive information.
+#
+# This configuration enables Azure-based execution for bash commands through:
+# - Azure Container Instances (ACI)
+# - Azure Functions
+# - Azure Kubernetes Service (AKS)
+# - Azure App Service
+# - Azure Key Vault (for secrets management)
+
+# =============================================================================
+# Azure Subscription and Resource Group
+# =============================================================================
+
+# Your Azure subscription ID (find in Azure Portal > Subscriptions)
+AZURE_SUBSCRIPTION_ID=00000000-0000-0000-0000-000000000000
+
+# Resource group name for bash execution resources
+AZURE_RESOURCE_GROUP=rg-langchain-agents
+
+# Azure region/location (e.g., eastus, westus2, westeurope)
+AZURE_LOCATION=eastus
+
+# =============================================================================
+# Azure Container Instances (ACI) Configuration
+# =============================================================================
+
+# Container group name for bash executor
+ACI_CONTAINER_GROUP_NAME=langchain-bash-executor
+
+# Container image (from Azure Container Registry or Docker Hub)
+# Example: myregistry.azurecr.io/bash-executor:latest
+ACI_CONTAINER_IMAGE=myregistry.azurecr.io/bash-executor:latest
+
+# Container resources
+ACI_CPU_CORES=1.0
+ACI_MEMORY_GB=1.5
+
+# Azure Container Registry credentials (if using private registry)
+ACR_REGISTRY=myregistry.azurecr.io
+ACR_USERNAME=your-acr-username
+ACR_PASSWORD=your-acr-password
+
+# =============================================================================
+# Azure Functions Configuration
+# =============================================================================
+
+# Azure Functions app name
+AZURE_FUNCTIONS_APP_NAME=func-langchain-bash-executor
+
+# Resource group for Functions app
+AZURE_FUNCTIONS_RESOURCE_GROUP=rg-langchain-agents
+
+# Storage account for Functions app
+AZURE_FUNCTIONS_STORAGE_ACCOUNT=stlangchainbash
+
+# Functions runtime (python, node, dotnet)
+AZURE_FUNCTIONS_RUNTIME=python
+
+# Functions runtime version
+AZURE_FUNCTIONS_RUNTIME_VERSION=3.11
+
+# =============================================================================
+# Azure Kubernetes Service (AKS) Configuration
+# =============================================================================
+
+# AKS cluster name
+AKS_CLUSTER_NAME=aks-langchain-agents
+
+# Kubernetes namespace
+AKS_NAMESPACE=langchain-agents
+
+# Kubernetes deployment name for bash executor
+AKS_DEPLOYMENT_NAME=bash-executor
+
+# Container image for AKS pods
+AKS_CONTAINER_IMAGE=myregistry.azurecr.io/bash-executor:latest
+
+# =============================================================================
+# Azure App Service Configuration
+# =============================================================================
+
+# App Service name
+AZURE_APP_SERVICE_NAME=app-langchain-bash-executor
+
+# App Service plan name
+AZURE_APP_SERVICE_PLAN=asp-langchain-agents
+
+# App Service SKU (B1, B2, S1, S2, P1V2, etc.)
+AZURE_APP_SERVICE_SKU=B1
+
+# App Service runtime (PYTHON|3.11, NODE|18-lts, etc.)
+AZURE_APP_SERVICE_RUNTIME=PYTHON|3.11
+
+# =============================================================================
+# Azure Key Vault Configuration
+# =============================================================================
+
+# Key Vault name for storing secrets
+AZURE_KEY_VAULT_NAME=kv-langchain-bash
+
+# Key Vault URL (automatically derived from name)
+AZURE_KEY_VAULT_URL=https://kv-langchain-bash.vault.azure.net/
+
+# Secrets to store in Key Vault (examples)
+# - github-api-token
+# - openai-api-key
+# - database-connection-string
+# - docker-registry-password
+
+# =============================================================================
+# Execution Mode Configuration
+# =============================================================================
+
+# Default execution mode: local, aci, functions, aks, app_service
+AZURE_EXECUTION_MODE=local
+
+# Enable Azure execution (set to true when Azure is configured)
+AZURE_ENABLED=false
+
+# =============================================================================
+# Authentication Configuration
+# =============================================================================
+
+# Authentication method: default, cli, msi, service_principal
+AZURE_AUTH_METHOD=default
+
+# Service Principal credentials (if using service_principal auth)
+AZURE_CLIENT_ID=00000000-0000-0000-0000-000000000000
+AZURE_CLIENT_SECRET=your-client-secret
+AZURE_TENANT_ID=00000000-0000-0000-0000-000000000000
+
+# =============================================================================
+# Monitoring and Logging
+# =============================================================================
+
+# Application Insights instrumentation key (optional)
+AZURE_APPINSIGHTS_INSTRUMENTATION_KEY=your-instrumentation-key
+
+# Log Analytics workspace ID (optional)
+AZURE_LOG_ANALYTICS_WORKSPACE_ID=your-workspace-id
+
+# =============================================================================
+# Networking Configuration (optional)
+# =============================================================================
+
+# Virtual Network (VNet) name (for private networking)
+AZURE_VNET_NAME=vnet-langchain-agents
+
+# Subnet name for container execution
+AZURE_SUBNET_NAME=subnet-containers
+
+# Network security group
+AZURE_NSG_NAME=nsg-langchain-agents
+
+# =============================================================================
+# Tags (for resource organization)
+# =============================================================================
+
+AZURE_TAG_ENVIRONMENT=production
+AZURE_TAG_PROJECT=langchain-agents
+AZURE_TAG_OWNER=devops-team
+AZURE_TAG_COST_CENTER=engineering
+
+# =============================================================================
+# Notes
+# =============================================================================
+#
+# 1. Copy this file to .azure.config and update with your actual values
+# 2. Add .azure.config to .gitignore to prevent committing secrets
+# 3. Use Azure Key Vault for sensitive values in production
+# 4. Test locally first (AZURE_EXECUTION_MODE=local) before enabling Azure execution
+# 5. Ensure Azure resources are created before enabling Azure execution
+# 6. Use Azure CLI or Terraform to provision required resources
+#
+# =============================================================================

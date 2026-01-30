@@ -74,9 +74,10 @@ This repository includes a production-ready **Enterprise Agents Platform** in th
 
 ### 🚀 Key Features
 
-- **9 Production Agents**: Research, Content Generation (HITL), Data Analysis, Document Processing, Multilingual RAG, IT Support (HITL), ServiceNow ITSM, Code Assistant, **Recruitment (New!)**
-- **🆕 Recruitment Deep Agent**: AI-powered end-to-end hiring automation with SharePoint integration, 5 specialized subagents, L1/L2/L3 screening, technical assessments, and Excel reporting
-- **🆕 IT Operations Deep Agent**: Advanced planning agent with 6 specialized subagents, streaming responses, and reasoning model support
+- **10 Production Agents**: Research, Content Generation (HITL), Data Analysis, Document Processing, Multilingual RAG, IT Support (HITL), ServiceNow ITSM, Code Assistant, Recruitment, **Software Development (New!)**
+- **🆕 Software Development Deep Agent**: AI-powered SDLC automation with 9 specialized subagents, 54 purpose-built tools, end-to-end workflow from requirements to deployment
+- **Recruitment Deep Agent**: AI-powered end-to-end hiring automation with SharePoint integration, 5 specialized subagents, L1/L2/L3 screening, technical assessments, and Excel reporting
+- **IT Operations Deep Agent**: Advanced planning agent with 6 specialized subagents, streaming responses, and reasoning model support
 - **⚡ Real-time Streaming**: Server-Sent Events (SSE) for live progress updates and tool execution visibility
 - **🧠 Reasoning Models**: Native support for OpenAI o1/o3/o4 series with automatic temperature bypass
 - **ServiceNow Integration**: Full ITSM operations with 10 tools - incidents, change requests, service requests, CMDB, SLA monitoring, knowledge base
@@ -138,7 +139,8 @@ cd deployment
 - IT Helpdesk Agent
 - IT Operations Deep Agent (with 6 subagents)
 - Sales Intelligence Deep Agent
-- **Recruitment Deep Agent** (with 5 subagents) - **NEW!**
+- Recruitment Deep Agent (with 5 subagents)
+- **Software Development Deep Agent** (with 9 subagents) - **NEW!**
 
 See [LANGGRAPH_SETUP.md](deployment/LANGGRAPH_SETUP.md) for detailed setup instructions.
 
@@ -242,7 +244,288 @@ pytest tests/test_recruitment_agent.py -v
 
 See [deployment/KNOWLEDGE.md](deployment/KNOWLEDGE.md#recruitment-deep-agent) for complete documentation.
 
-### 🔗 Integration Examples
+### � Software Development Deep Agent - AI-Powered SDLC Automation
+
+**Comprehensive end-to-end Software Development Lifecycle automation** with intelligent orchestration:
+
+**Quick Start:**
+```bash
+# Access the Software Development Agent UI
+http://localhost:8000/software-dev-chat
+
+# Or use API
+POST /api/software-dev-agent/start
+{
+  "user_id": "developer_001"
+}
+
+# Chat with agent
+POST /api/software-dev-agent/chat
+{
+  "session_id": "sdlc_xyz789",
+  "message": "Create a REST API for user authentication with JWT tokens and rate limiting"
+}
+```
+
+**9 Specialized Subagents:**
+1. **Requirements Intelligence**: Extract and validate software requirements
+2. **Architecture Design**: Design system architecture and APIs
+3. **Code Generator**: Generate production-ready code
+4. **Code Reviewer**: Perform automated code reviews
+5. **Testing Automation**: Create and run comprehensive tests
+6. **Debugging & Optimization**: Debug issues and optimize performance
+7. **Security Compliance**: Scan for vulnerabilities and ensure compliance
+8. **CI/CD Pipeline**: Setup and manage deployment pipelines
+9. **Documentation Generator**: Create technical documentation
+
+**Key Features:**
+- 🎯 **End-to-End SDLC**: Complete automation from requirements to deployment
+- 🛠️ **54 Purpose-Built Tools**: Specialized tools for every development phase
+- 📝 **Automatic Phase Transitions**: Intelligent workflow progression based on task completion
+- ⚡ **Real-Time Streaming**: Live visibility into agent thinking and tool execution
+- 🔒 **Security-First**: Built-in vulnerability scanning and security best practices
+- 🧪 **Test Automation**: Unit, integration, and E2E test generation
+- 📊 **Code Quality**: Automated reviews with actionable feedback
+- 🚀 **CI/CD Integration**: Pipeline setup with GitHub Actions, GitLab CI, Jenkins
+- 📚 **Auto Documentation**: Technical specs, API docs, and architecture diagrams
+
+**SDLC Phases:**
+1. **Requirements Analysis**: User story creation, acceptance criteria, technical specifications
+2. **Architecture Design**: System design, API specs, database schema, technology selection
+3. **Implementation**: Code generation, module development, integration
+4. **Code Review**: Static analysis, security scanning, best practices validation
+5. **Testing**: Unit tests, integration tests, E2E tests, performance testing
+6. **Debugging**: Issue diagnosis, root cause analysis, performance optimization
+7. **Security**: Vulnerability scanning, dependency audits, compliance checks
+8. **Deployment**: CI/CD pipeline setup, containerization, infrastructure as code
+9. **Documentation**: README, API docs, architecture diagrams, user guides
+
+**Workflow Example:**
+```python
+# 1. Analyze requirements
+requirements = analyze_requirements(
+    "Build a microservice for order processing with event-driven architecture"
+)
+# → 8 user stories, 15 acceptance criteria, tech stack recommendations
+
+# 2. Design architecture
+design = design_architecture(requirements_id=requirements.id)
+# → System diagram, API specs, database schema, service boundaries
+
+# 3. Generate code
+code = generate_code(design_id=design.id, component="order-service")
+# → FastAPI service with SQLAlchemy models, Pydantic schemas, async handlers
+
+# 4. Run code review
+review = review_code(code_id=code.id)
+# → 12 suggestions: 3 security issues, 5 best practices, 4 optimizations
+
+# 5. Generate tests
+tests = generate_tests(code_id=code.id, coverage_target=80)
+# → 45 unit tests, 12 integration tests, 85% coverage achieved
+
+# 6. Setup CI/CD
+pipeline = setup_cicd(project_id=code.project_id, platform="github-actions")
+# → GitHub Actions workflow: lint, test, build, deploy to staging/prod
+
+# 7. Generate documentation
+docs = generate_documentation(project_id=code.project_id)
+# → README, API docs (OpenAPI), architecture diagrams, deployment guide
+```
+
+**Configuration** (`deployment/.env`):
+```bash
+# Software Development Agent
+SOFTWARE_DEV_MODEL=gpt-4o          # Main orchestrator model
+SOFTWARE_DEV_SUBAGENT_MODEL=gpt-4o-mini  # Subagent model
+SOFTWARE_DEV_TEMPERATURE=0.7       # Creativity level
+
+# Code Generation
+DEFAULT_LANGUAGE=python            # Primary language
+CODE_STYLE=google                  # Style guide
+MAX_CODE_LENGTH=10000              # Max tokens per generation
+
+# Testing
+MIN_TEST_COVERAGE=80               # Coverage threshold
+TEST_FRAMEWORKS=pytest,unittest    # Supported frameworks
+
+# Security
+SECURITY_SCAN_ENABLED=true         # Enable vulnerability scanning
+DEPENDENCY_AUDIT=true              # Check dependency vulnerabilities
+```
+
+**Testing:**
+```bash
+# Run comprehensive test suite (64 tests)
+pytest tests/test_software_dev_agent.py -v
+
+# Test coverage:
+# - Requirements intelligence (8 tests)
+# - Architecture design (7 tests)
+# - Code generation (12 tests)
+# - Code review (9 tests)
+# - Testing automation (8 tests)
+# - Debugging & optimization (6 tests)
+# - Security compliance (7 tests)
+# - CI/CD setup (5 tests)
+# - Documentation generation (2 tests)
+```
+
+#### 🔧 Bash Execution & Azure Integration - NEW!
+
+The Software Development Deep Agent now includes **secure bash execution** capabilities and **Azure cloud integration** for automated SDLC workflows.
+
+**Bash Execution Tools** (`deployment/app/deepagents/software_dev/tools/bash_execution_tools.py`):
+
+**Key Features:**
+- ✅ **Multi-platform Support**: Bash (Linux/macOS), PowerShell (Windows), CMD fallback
+- 🛡️ **Security Validation**: Blocks dangerous commands (rm -rf /, fork bombs, dd to devices)
+- ⚠️ **Warning System**: Flags risky operations (sudo, recursive deletes, curl | bash)
+- 🔄 **Cross-platform Detection**: Automatic shell selection based on OS
+- ⏱️ **Timeout Protection**: Configurable execution timeout (default 30s)
+- 📜 **Command History**: Tracks executed commands for auditing
+
+**Available Tools** (4 total):
+
+| Tool | Purpose |
+|------|---------|
+| `execute_bash_command` | Execute shell commands with security validation |
+| `execute_python_code` | Run Python code snippets in isolated environment |
+| `execute_tests_real` | Run test suites (pytest, npm test, cargo test) |
+| `install_dependencies` | Install package dependencies (pip, npm, cargo) |
+
+**Security Patterns:**
+
+```python
+# 🚫 Blocked dangerous commands
+rm -rf /                    # Root directory deletion
+:(){ :|:& };:              # Fork bomb
+dd if=... of=/dev/...      # Writing to devices
+mkfs.ext4 /dev/...         # Filesystem formatting
+
+# ⚠️ Warned risky commands
+rm -rf /tmp/mydir          # Recursive deletion
+sudo apt-get install       # Elevated privileges
+curl ... | bash            # Piping web content to shell
+```
+
+**Usage Example:**
+
+```python
+from app.deepagents.software_dev.tools.bash_execution_tools import (
+    execute_bash_command,
+    execute_python_code,
+    execute_tests_real,
+)
+
+# Execute a bash command
+result = execute_bash_command.invoke({
+    "command": "pytest tests/",
+    "timeout": 60,
+    "working_directory": "/path/to/project"
+})
+# → { "success": true, "stdout": "...", "exit_code": 0, "shell_type": "bash" }
+
+# Run Python code
+result = execute_python_code.invoke({
+    "code": "print('Hello, World!')",
+    "timeout": 10
+})
+# → { "success": true, "stdout": "Hello, World!\n", "stderr": "", "exit_code": 0, "code": "print('Hello, World!')" }
+
+# Run tests
+result = execute_tests_real.invoke({
+    "test_framework": "pytest",
+    "test_path": "tests/unit/",
+    "additional_args": "-v --cov"
+})
+# → { "success": true, "stdout": "...", "stderr": "", "exit_code": 0, "command": "pytest tests/unit/ -v --cov", "shell_type": "bash", "test_framework": "pytest", "test_path": "tests/unit/" }
+```
+
+**Azure Integration** (`deployment/app/deepagents/software_dev/tools/azure_integration.py`):
+
+**Supported Azure Services:**
+
+| Service | Purpose | Configuration |
+|---------|---------|---------------|
+| **Azure Container Instances (ACI)** | Ephemeral command execution | `ACI_CONTAINER_GROUP_NAME`, `ACI_CONTAINER_IMAGE` |
+| **Azure Functions** | Serverless command execution | `AZURE_FUNCTIONS_APP_NAME`, `AZURE_FUNCTIONS_RUNTIME` |
+| **Azure Kubernetes Service (AKS)** | Production-grade container orchestration | `AKS_CLUSTER_NAME`, `AKS_DEPLOYMENT_NAME` |
+| **Azure App Service** | Web app deployment and execution | `AZURE_APP_SERVICE_NAME`, `AZURE_APP_SERVICE_PLAN` |
+| **Azure Key Vault** | Secrets management for credentials | `AZURE_KEY_VAULT_NAME`, `AZURE_KEY_VAULT_URI` |
+
+**Configuration** (`.azure.config`):
+
+```bash
+# Copy example and configure your Azure resources
+cp deployment/.azure.config.example deployment/.azure.config
+
+# Azure subscription
+AZURE_SUBSCRIPTION_ID=your-subscription-id
+AZURE_RESOURCE_GROUP=rg-langchain-agents
+AZURE_LOCATION=eastus
+
+# Container Instances
+ACI_CONTAINER_IMAGE=myregistry.azurecr.io/bash-executor:latest
+ACI_CPU_CORES=1.0
+ACI_MEMORY_GB=1.5
+
+# Azure Functions
+AZURE_FUNCTIONS_APP_NAME=func-langchain-bash-executor
+AZURE_FUNCTIONS_RUNTIME=python
+```
+
+**Security Best Practices:**
+- ✅ `.azure.config` excluded from version control via `.gitignore`
+- ✅ Use Azure Key Vault for sensitive credentials
+- ✅ Configure managed identities for passwordless authentication
+- ✅ Implement RBAC policies for least-privilege access
+- ✅ Enable Azure Monitor for audit logging
+
+**Integration with Code Generation:**
+
+The Code Generator subagent now has access to bash execution tools for:
+- 🎨 Running code formatters (black, prettier, gofmt)
+- 🔍 Executing linters (ruff, eslint, clippy)
+- ✅ Verifying generated code through execution
+- 📦 Installing dependencies automatically
+
+**Testing:**
+
+```bash
+# Run comprehensive bash execution test suite
+pytest tests/test_bash_execution_tools.py -v
+
+# Test coverage (52 tests):
+# - Security validation (10 tests) - dangerous/risky command detection
+# - Cross-platform shell detection (4 tests)
+# - Command execution (15 tests) - various scenarios
+# - Error handling and timeout (8 tests)
+# - Python code execution (8 tests)
+# - Test framework integration (7 tests)
+```
+
+**Real-World Use Cases:**
+- 🚀 **Automated Formatting**: Run black, prettier, gofmt on generated code
+- 🔍 **Lint Enforcement**: Execute ruff, eslint, clippy to catch issues early
+- ✅ **Continuous Testing**: Run pytest, npm test, cargo test after code changes
+- 📦 **Dependency Management**: Auto-install packages with pip, npm, cargo
+- 🏗️ **Build Automation**: Execute build commands (npm run build, cargo build)
+- 🔄 **Git Operations**: Automate git commands (status, commit, push)
+- ☁️ **Cloud Deployment**: Deploy to Azure via ACI, Functions, AKS, App Service
+
+**Real-World Use Cases:**
+- 🚀 **Rapid Prototyping**: Generate MVP in hours instead of weeks
+- 🏢 **Enterprise Development**: Maintain consistency across large teams
+- 🔄 **Legacy Modernization**: Refactor and upgrade legacy systems
+- 🛡️ **Security Hardening**: Automated security reviews and remediation
+- 📈 **Performance Optimization**: Identify and fix bottlenecks
+- 📦 **Microservices**: Design and implement service architectures
+- 🔧 **DevOps Automation**: Complete CI/CD pipeline setup
+
+See [deployment/KNOWLEDGE.md](deployment/KNOWLEDGE.md#software-development-deep-agent) for complete documentation.
+
+### �🔗 Integration Examples
 
 **Copilot Studio Webhook:**
 ```
