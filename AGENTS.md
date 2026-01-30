@@ -17,6 +17,9 @@ langchain/
 │   │   │   ├── core/        # Core components (middleware, types)
 │   │   │   ├── config/      # Agent configurations
 │   │   │   ├── software_dev/ # Software Development Deep Agent
+│   │   │   │   ├── tools/    # 54+ SDLC tools including bash execution
+│   │   │   │   │   ├── bash_execution_tools.py  # Secure command execution
+│   │   │   │   │   └── azure_integration.py     # Azure deployment tools
 │   │   │   ├── recruitment_agent.py # Recruitment Deep Agent
 │   │   │   └── it_operations_agent.py # IT Ops Deep Agent
 │   │   ├── auth/            # Authentication
@@ -253,6 +256,140 @@ def send_email(to: str, msg: str, *, priority: str = "normal") -> bool:
 - Document all parameters, return values, and exceptions
 - Keep descriptions concise but clear
 - Ensure American English spelling (e.g., "behavior", not "behaviour")
+
+## Software Development Deep Agent - Bash Execution & Azure Integration
+
+### Overview
+
+The Software Development Deep Agent now includes secure bash execution capabilities and Azure cloud integration for automated SDLC workflows.
+
+### Bash Execution Tools
+
+**Location**: `deployment/app/deepagents/software_dev/tools/bash_execution_tools.py`
+
+**Key Features**:
+- **Multi-platform support**: Bash (Linux/macOS), PowerShell (Windows), CMD fallback
+- **Security validation**: Blocks dangerous commands (rm -rf /, fork bombs, dd to devices)
+- **Warning system**: Flags risky operations (sudo, recursive deletes, curl | bash)
+- **Cross-platform detection**: Automatic shell selection based on OS
+- **Timeout protection**: Configurable execution timeout (default 30s)
+- **Command history**: Tracks executed commands for auditing
+
+**Available Tools** (4 total):
+| Tool | Purpose |
+|------|---------|
+| `execute_bash_command` | Execute shell commands with security validation |
+| `execute_python_code` | Run Python code snippets in isolated environment |
+| `execute_tests_real` | Run test suites (pytest, npm test, cargo test) |
+| `install_dependencies` | Install package dependencies (pip, npm, cargo) |
+
+**Security Patterns**:
+```python
+# Blocked dangerous commands
+rm -rf /                    # Root directory deletion
+:(){ :|:& };:              # Fork bomb
+dd if=... of=/dev/...      # Writing to devices
+mkfs.ext4 /dev/...         # Filesystem formatting
+
+# Warned risky commands
+rm -rf /tmp/mydir          # Recursive deletion
+sudo apt-get install       # Elevated privileges
+curl ... | bash            # Piping web content to shell
+```
+
+**Usage Example**:
+```python
+from app.deepagents.software_dev.tools.bash_execution_tools import (
+    execute_bash_command,
+    execute_python_code,
+    execute_tests_real,
+)
+
+# Execute a bash command
+result = execute_bash_command.invoke({
+    "command": "pytest tests/",
+    "timeout": 60,
+    "working_directory": "/path/to/project"
+})
+
+# Run Python code
+result = execute_python_code.invoke({
+    "code": "print('Hello, World!')",
+    "timeout": 10
+})
+
+# Run tests
+result = execute_tests_real.invoke({
+    "test_framework": "pytest",
+    "test_path": "tests/unit/",
+    "additional_args": "-v --cov"
+})
+```
+
+### Azure Integration
+
+**Location**: `deployment/app/deepagents/software_dev/tools/azure_integration.py`
+
+**Purpose**: Enable Azure cloud-based execution for bash commands and deployments.
+
+**Supported Azure Services**:
+| Service | Purpose | Configuration |
+|---------|---------|---------------|
+| **Azure Container Instances (ACI)** | Ephemeral command execution | `ACI_CONTAINER_GROUP_NAME`, `ACI_CONTAINER_IMAGE` |
+| **Azure Functions** | Serverless command execution | `AZURE_FUNCTIONS_APP_NAME`, `AZURE_FUNCTIONS_RUNTIME` |
+| **Azure Kubernetes Service (AKS)** | Production-grade container orchestration | `AKS_CLUSTER_NAME`, `AKS_DEPLOYMENT_NAME` |
+| **Azure App Service** | Web app deployment and execution | `AZURE_APP_SERVICE_NAME`, `AZURE_APP_SERVICE_PLAN` |
+| **Azure Key Vault** | Secrets management for credentials | `AZURE_KEY_VAULT_NAME`, `AZURE_KEY_VAULT_URI` |
+
+**Configuration**:
+1. Copy `.azure.config.example` to `.azure.config`
+2. Fill in your Azure subscription details:
+```bash
+# Azure subscription
+AZURE_SUBSCRIPTION_ID=your-subscription-id
+AZURE_RESOURCE_GROUP=rg-langchain-agents
+AZURE_LOCATION=eastus
+
+# Container Instances
+ACI_CONTAINER_IMAGE=myregistry.azurecr.io/bash-executor:latest
+ACI_CPU_CORES=1.0
+ACI_MEMORY_GB=1.5
+
+# Azure Functions
+AZURE_FUNCTIONS_APP_NAME=func-langchain-bash-executor
+AZURE_FUNCTIONS_RUNTIME=python
+```
+
+**Security Considerations**:
+- `.azure.config` is excluded from version control via `.gitignore`
+- Use Azure Key Vault for sensitive credentials
+- Configure managed identities for passwordless authentication
+- Implement RBAC policies for least-privilege access
+- Enable Azure Monitor for audit logging
+
+**Integration with Code Generation**:
+The Code Generator subagent now has access to bash execution tools for:
+- Running code formatters (black, prettier, gofmt)
+- Executing linters (ruff, eslint, clippy)
+- Verifying generated code through execution
+- Installing dependencies automatically
+
+**Testing**:
+Comprehensive test suite available at `deployment/tests/test_bash_execution_tools.py`:
+- Security validation tests (dangerous/risky command detection)
+- Cross-platform shell detection
+- Command execution with various scenarios
+- Error handling and timeout protection
+- Python code execution
+- Test framework integration
+
+**Best Practices**:
+1. Always validate commands before execution
+2. Use appropriate timeouts for long-running operations
+3. Specify working directory for context-aware execution
+4. Review security warnings before proceeding with risky commands
+5. Use Azure Key Vault for production credentials
+6. Monitor execution logs via LangSmith tracing
 
 ## Additional resources
 

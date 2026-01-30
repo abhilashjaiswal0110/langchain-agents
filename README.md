@@ -371,6 +371,149 @@ pytest tests/test_software_dev_agent.py -v
 # - Documentation generation (2 tests)
 ```
 
+#### 🔧 Bash Execution & Azure Integration - NEW!
+
+The Software Development Deep Agent now includes **secure bash execution** capabilities and **Azure cloud integration** for automated SDLC workflows.
+
+**Bash Execution Tools** (`deployment/app/deepagents/software_dev/tools/bash_execution_tools.py`):
+
+**Key Features:**
+- ✅ **Multi-platform Support**: Bash (Linux/macOS), PowerShell (Windows), CMD fallback
+- 🛡️ **Security Validation**: Blocks dangerous commands (rm -rf /, fork bombs, dd to devices)
+- ⚠️ **Warning System**: Flags risky operations (sudo, recursive deletes, curl | bash)
+- 🔄 **Cross-platform Detection**: Automatic shell selection based on OS
+- ⏱️ **Timeout Protection**: Configurable execution timeout (default 30s)
+- 📜 **Command History**: Tracks executed commands for auditing
+
+**Available Tools** (4 total):
+
+| Tool | Purpose |
+|------|---------|
+| `execute_bash_command` | Execute shell commands with security validation |
+| `execute_python_code` | Run Python code snippets in isolated environment |
+| `execute_tests_real` | Run test suites (pytest, npm test, cargo test) |
+| `install_dependencies` | Install package dependencies (pip, npm, cargo) |
+
+**Security Patterns:**
+
+```python
+# 🚫 Blocked dangerous commands
+rm -rf /                    # Root directory deletion
+:(){ :|:& };:              # Fork bomb
+dd if=... of=/dev/...      # Writing to devices
+mkfs.ext4 /dev/...         # Filesystem formatting
+
+# ⚠️ Warned risky commands
+rm -rf /tmp/mydir          # Recursive deletion
+sudo apt-get install       # Elevated privileges
+curl ... | bash            # Piping web content to shell
+```
+
+**Usage Example:**
+
+```python
+from app.deepagents.software_dev.tools.bash_execution_tools import (
+    execute_bash_command,
+    execute_python_code,
+    execute_tests_real,
+)
+
+# Execute a bash command
+result = execute_bash_command.invoke({
+    "command": "pytest tests/",
+    "timeout": 60,
+    "working_directory": "/path/to/project"
+})
+# → { "success": true, "stdout": "...", "exit_code": 0, "shell_type": "bash" }
+
+# Run Python code
+result = execute_python_code.invoke({
+    "code": "print('Hello, World!')",
+    "timeout": 10
+})
+# → { "success": true, "output": "Hello, World!\n", "execution_time": 0.05 }
+
+# Run tests
+result = execute_tests_real.invoke({
+    "test_framework": "pytest",
+    "test_path": "tests/unit/",
+    "additional_args": "-v --cov"
+})
+# → { "success": true, "tests_passed": 45, "tests_failed": 0, "coverage": 85% }
+```
+
+**Azure Integration** (`deployment/app/deepagents/software_dev/tools/azure_integration.py`):
+
+**Supported Azure Services:**
+
+| Service | Purpose | Configuration |
+|---------|---------|---------------|
+| **Azure Container Instances (ACI)** | Ephemeral command execution | `ACI_CONTAINER_GROUP_NAME`, `ACI_CONTAINER_IMAGE` |
+| **Azure Functions** | Serverless command execution | `AZURE_FUNCTIONS_APP_NAME`, `AZURE_FUNCTIONS_RUNTIME` |
+| **Azure Kubernetes Service (AKS)** | Production-grade container orchestration | `AKS_CLUSTER_NAME`, `AKS_DEPLOYMENT_NAME` |
+| **Azure App Service** | Web app deployment and execution | `AZURE_APP_SERVICE_NAME`, `AZURE_APP_SERVICE_PLAN` |
+| **Azure Key Vault** | Secrets management for credentials | `AZURE_KEY_VAULT_NAME`, `AZURE_KEY_VAULT_URI` |
+
+**Configuration** (`.azure.config`):
+
+```bash
+# Copy example and configure your Azure resources
+cp deployment/.azure.config.example deployment/.azure.config
+
+# Azure subscription
+AZURE_SUBSCRIPTION_ID=your-subscription-id
+AZURE_RESOURCE_GROUP=rg-langchain-agents
+AZURE_LOCATION=eastus
+
+# Container Instances
+ACI_CONTAINER_IMAGE=myregistry.azurecr.io/bash-executor:latest
+ACI_CPU_CORES=1.0
+ACI_MEMORY_GB=1.5
+
+# Azure Functions
+AZURE_FUNCTIONS_APP_NAME=func-langchain-bash-executor
+AZURE_FUNCTIONS_RUNTIME=python
+```
+
+**Security Best Practices:**
+- ✅ `.azure.config` excluded from version control via `.gitignore`
+- ✅ Use Azure Key Vault for sensitive credentials
+- ✅ Configure managed identities for passwordless authentication
+- ✅ Implement RBAC policies for least-privilege access
+- ✅ Enable Azure Monitor for audit logging
+
+**Integration with Code Generation:**
+
+The Code Generator subagent now has access to bash execution tools for:
+- 🎨 Running code formatters (black, prettier, gofmt)
+- 🔍 Executing linters (ruff, eslint, clippy)
+- ✅ Verifying generated code through execution
+- 📦 Installing dependencies automatically
+
+**Testing:**
+
+```bash
+# Run comprehensive bash execution test suite
+pytest tests/test_bash_execution_tools.py -v
+
+# Test coverage (52 tests):
+# - Security validation (10 tests) - dangerous/risky command detection
+# - Cross-platform shell detection (4 tests)
+# - Command execution (15 tests) - various scenarios
+# - Error handling and timeout (8 tests)
+# - Python code execution (8 tests)
+# - Test framework integration (7 tests)
+```
+
+**Real-World Use Cases:**
+- 🚀 **Automated Formatting**: Run black, prettier, gofmt on generated code
+- 🔍 **Lint Enforcement**: Execute ruff, eslint, clippy to catch issues early
+- ✅ **Continuous Testing**: Run pytest, npm test, cargo test after code changes
+- 📦 **Dependency Management**: Auto-install packages with pip, npm, cargo
+- 🏗️ **Build Automation**: Execute build commands (npm run build, cargo build)
+- 🔄 **Git Operations**: Automate git commands (status, commit, push)
+- ☁️ **Cloud Deployment**: Deploy to Azure via ACI, Functions, AKS, App Service
+
 **Real-World Use Cases:**
 - 🚀 **Rapid Prototyping**: Generate MVP in hours instead of weeks
 - 🏢 **Enterprise Development**: Maintain consistency across large teams
