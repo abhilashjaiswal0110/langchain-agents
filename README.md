@@ -431,7 +431,7 @@ result = execute_python_code.invoke({
     "code": "print('Hello, World!')",
     "timeout": 10
 })
-# → { "success": true, "output": "Hello, World!\n", "execution_time": 0.05 }
+# → { "success": true, "stdout": "Hello, World!\n", "stderr": "", "exit_code": 0, "code": "print('Hello, World!')" }
 
 # Run tests
 result = execute_tests_real.invoke({
@@ -439,7 +439,7 @@ result = execute_tests_real.invoke({
     "test_path": "tests/unit/",
     "additional_args": "-v --cov"
 })
-# → { "success": true, "tests_passed": 45, "tests_failed": 0, "coverage": 85% }
+# → { "success": true, "stdout": "...", "stderr": "", "exit_code": 0, "command": "pytest tests/unit/ -v --cov", "shell_type": "bash", "test_framework": "pytest", "test_path": "tests/unit/" }
 ```
 
 **Azure Integration** (`deployment/app/deepagents/software_dev/tools/azure_integration.py`):

@@ -14,7 +14,6 @@ Features:
 Configuration placeholders are included for user-provided Azure resources.
 """
 
-import os
 from typing import Any, Literal
 from langchain_core.tools import tool
 from langsmith import traceable
@@ -150,9 +149,9 @@ def execute_bash_command_azure(
             "stderr": f"Azure not configured. Missing: {', '.join(missing)}",
             "exit_code": -1,
             "command": command,
-            "execution_mode": "local",
+            "execution_mode": execution_mode,
             "azure_configured": False,
-            "warning": "Falling back to local execution due to missing Azure configuration"
+            "warning": "Requested Azure execution mode but Azure is not configured; command was not executed"
         }
 
     # Route to appropriate execution backend

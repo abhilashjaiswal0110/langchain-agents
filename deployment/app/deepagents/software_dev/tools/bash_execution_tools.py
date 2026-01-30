@@ -11,11 +11,14 @@ Provides secure command execution capabilities with:
 Inspired by Claude Code's hook-based security system.
 """
 
+import ast
 import os
 import platform
 import re
+import shlex
 import subprocess
 import sys
+from pathlib import Path
 from typing import Any, Literal
 from langchain_core.tools import tool
 from langsmith import traceable
@@ -27,7 +30,6 @@ DANGEROUS_PATTERNS = [
     (r":\(\)\{\s*:\|:&\s*\};:", "Fork bomb detected"),
     (r"dd\s+if=.*\s+of=/dev/", "Attempting to write to device"),
     (r"mkfs\.", "Attempting to format filesystem"),
-    (r":(){ :|:& };:", "Bash fork bomb detected"),
     (r"mv\s+.*\s+/dev/null", "Moving files to /dev/null"),
     (r">\s*/dev/sda", "Writing to disk device"),
     (r"chmod\s+-R\s+777\s+/", "Setting dangerous permissions on root"),
@@ -54,11 +56,11 @@ def detect_dangerous_command(command: str) -> tuple[bool, str | None]:
     Returns:
         Tuple of (is_dangerous, reason). If is_dangerous is True, reason explains why.
     """
-    command_lower = command.lower().strip()
+    cmd = command.strip()
 
     # Check dangerous patterns
     for pattern, reason in DANGEROUS_PATTERNS:
-        if re.search(pattern, command_lower, re.IGNORECASE):
+        if re.search(pattern, cmd, re.IGNORECASE):
             return True, reason
 
     return False, None
@@ -184,8 +186,32 @@ def execute_bash_command(
     else:  # cmd
         cmd_list = ["cmd", "/c", command]
 
-    # Set working directory
-    cwd = working_directory or os.getcwd()
+    # Validate and set working directory
+    if working_directory:
+        cwd_path = Path(working_directory).resolve()
+        if not cwd_path.exists():
+            return {
+                "success": False,
+                "stdout": "",
+                "stderr": f"Working directory does not exist: {working_directory}",
+                "exit_code": -1,
+                "command": command,
+                "shell_type": shell_type,
+                "error": "InvalidWorkingDirectory",
+            }
+        if not cwd_path.is_dir():
+            return {
+                "success": False,
+                "stdout": "",
+                "stderr": f"Working directory is not a directory: {working_directory}",
+                "exit_code": -1,
+                "command": command,
+                "shell_type": shell_type,
+                "error": "InvalidWorkingDirectory",
+            }
+        cwd = str(cwd_path)
+    else:
+        cwd = os.getcwd()
 
     try:
         # Execute command
@@ -274,12 +300,24 @@ def execute_python_code(
         >>> execute_python_code(code="print('Hello, World!')")
         >>> execute_python_code(code="import sys; print(sys.version)")
     """
-    # Basic security check
-    if "eval(" in code or "exec(" in code:
+    # Enhanced security check using AST parsing
+    try:
+        tree = ast.parse(code)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Call):
+                if isinstance(node.func, ast.Name) and node.func.id in ('eval', 'exec'):
+                    return {
+                        "success": False,
+                        "stdout": "",
+                        "stderr": "⚠️ Security: eval() and exec() calls are disabled",
+                        "exit_code": -1,
+                        "code": code[:200],
+                    }
+    except SyntaxError:
         return {
             "success": False,
             "stdout": "",
-            "stderr": "⚠️ Warning: eval() and exec() are disabled for security",
+            "stderr": "Syntax error in Python code",
             "exit_code": -1,
             "code": code[:200],
         }
@@ -362,14 +400,18 @@ def execute_tests_real(
         >>> execute_tests_real(test_framework="jest", additional_args="--coverage")
         >>> execute_tests_real(test_framework="cargo", additional_args="--release")
     """
-    # Build command based on framework
+    # Build command based on framework with proper shell escaping
+    quoted_path = shlex.quote(test_path)
+    # Split additional_args and quote each argument
+    quoted_args = ' '.join(shlex.quote(arg) for arg in additional_args.split()) if additional_args else ""
+
     commands = {
-        "pytest": f"pytest {test_path} {additional_args}",
-        "unittest": f"python -m unittest discover {test_path} {additional_args}",
-        "jest": f"npm test {additional_args}" if not test_path or test_path == "tests/" else f"jest {test_path} {additional_args}",
-        "mocha": f"npx mocha {test_path} {additional_args}",
-        "cargo": f"cargo test {additional_args}",
-        "go": f"go test {test_path} {additional_args}",
+        "pytest": f"pytest {quoted_path} {quoted_args}",
+        "unittest": f"python -m unittest discover {quoted_path} {quoted_args}",
+        "jest": f"npm test {quoted_args}" if not test_path or test_path == "tests/" else f"jest {quoted_path} {quoted_args}",
+        "mocha": f"npx mocha {quoted_path} {quoted_args}",
+        "cargo": f"cargo test {quoted_args}",
+        "go": f"go test {quoted_path} {quoted_args}",
     }
 
     command = commands.get(test_framework, f"{test_framework} {test_path} {additional_args}")
@@ -417,18 +459,21 @@ def install_dependencies(
         >>> install_dependencies(package_manager="npm")
         >>> install_dependencies(package_manager="pip", packages="pytest black ruff")
     """
-    # Build command based on package manager
+    # Build command based on package manager with proper shell escaping
     if packages:
+        # Quote each package individually
+        quoted_packages = ' '.join(shlex.quote(pkg) for pkg in packages.split())
         commands = {
-            "pip": f"pip install {packages}",
-            "npm": f"npm install {packages}",
-            "yarn": f"yarn add {packages}",
-            "cargo": f"cargo add {packages}",
-            "go": f"go get {packages}",
+            "pip": f"pip install {quoted_packages}",
+            "npm": f"npm install {quoted_packages}",
+            "yarn": f"yarn add {quoted_packages}",
+            "cargo": f"cargo add {quoted_packages}",
+            "go": f"go get {quoted_packages}",
         }
     elif requirements_file:
+        quoted_file = shlex.quote(requirements_file)
         commands = {
-            "pip": f"pip install -r {requirements_file}",
+            "pip": f"pip install -r {quoted_file}",
             "npm": "npm install",
             "yarn": "yarn install",
             "cargo": "cargo build",
@@ -458,10 +503,13 @@ def install_dependencies(
     return result
 
 
-# Export all tools
+# Export all tools and helper functions
 __all__ = [
     "execute_bash_command",
     "execute_python_code",
     "execute_tests_real",
     "install_dependencies",
+    "detect_dangerous_command",
+    "detect_risky_command",
+    "get_shell_type",
 ]
