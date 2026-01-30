@@ -441,7 +441,6 @@ def test_cors_headers_present(client):
     response = client.get("/health")
 
     # Should have CORS headers (if CORS is enabled)
-    headers = response.headers
     # This is informational - CORS may or may not be configured
     assert response.status_code == 200
 
@@ -511,8 +510,6 @@ def test_openapi_json_accessible(client):
 
 def test_agent_respects_environment_config():
     """Test that agent respects environment configuration."""
-    import os
-
     # Set environment variable
     os.environ["EMPLOYEE_EXPERIENCE_TEMPERATURE"] = "0.8"
 

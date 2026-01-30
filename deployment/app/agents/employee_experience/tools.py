@@ -1463,7 +1463,6 @@ def get_wellbeing_resources(resource_type: str = "general") -> str:
     if resource_type_lower in resources:
         return resources[resource_type_lower]
 
-    available_types = ", ".join(resources.keys())
     return f"""Resource type '{resource_type}' not found.
 
 **Available Wellbeing Resources:**
@@ -2538,7 +2537,6 @@ Access your customized total rewards statement:
     if insight_type_lower in insights:
         return insights[insight_type_lower]
 
-    available_types = ", ".join(insights.keys())
     return f"""Insight type '{insight_type}' not found.
 
 **Available Compensation Insights:**

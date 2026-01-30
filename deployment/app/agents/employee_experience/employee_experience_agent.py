@@ -487,6 +487,8 @@ class EmployeeExperienceAgent:
                     if not isinstance(m, SystemMessage)
                 ]
         except Exception:
+            # Gracefully handle state retrieval errors (e.g., thread not found,
+            # corrupted state) by returning empty list - allows system to continue
             pass
 
         return []
