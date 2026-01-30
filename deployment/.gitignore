@@ -3,6 +3,10 @@
 .env.local
 .env.*.local
 
+# Azure configuration (contains sensitive Azure resource details)
+.azure.config
+.azure.*.config
+
 # Python
 __pycache__/
 *.py[cod]
