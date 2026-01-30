@@ -464,19 +464,6 @@ def analyze_sentiment_with_llm(message: str, llm_client=None) -> dict:
     # 2. Parse structured output with sentiment score, indicators, and reasoning
     # 3. Return result in same format as keyword-based analysis
 
-    prompt = f"""Analyze the sentiment and emotional state of this employee message.
-
-Message: "{message}"
-
-Provide:
-1. Sentiment score (-1.0 to 1.0, where -1.0 is very negative, 0 is neutral, 1.0 is very positive)
-2. Sentiment label (positive, neutral, negative)
-3. Indicators (list any of: stress, burnout_risk, disengagement, conflict, positive_tone)
-4. Confidence (0.0 to 1.0)
-5. Brief reasoning
-
-Return as JSON with keys: score, label, indicators, confidence, reasoning"""
-
-    # This would call Claude API and parse response
-    # For now, fall back to keyword analysis
+    # This would call Claude API with a constructed prompt and parse the response.
+    # For now, we fall back to keyword analysis to keep behavior consistent.
     return analyze_employee_sentiment(message)
