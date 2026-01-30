@@ -12,6 +12,7 @@ organized by SDLC phase:
 - DevOps: create_pipeline, configure_deployment, manage_env
 - Debugging: analyze_error, trace_issue, propose_fix
 - Documentation: generate_docs, create_readme, document_api
+- Bash Execution: execute_bash_command, execute_python_code, execute_tests_real, install_dependencies
 """
 
 from app.deepagents.software_dev.tools.requirements_tools import (
@@ -95,6 +96,13 @@ from app.deepagents.software_dev.tools.documentation_tools import (
     create_user_guide,
 )
 
+from app.deepagents.software_dev.tools.bash_execution_tools import (
+    execute_bash_command,
+    execute_python_code,
+    execute_tests_real,
+    install_dependencies,
+)
+
 # Export all tools
 __all__ = [
     # Requirements
@@ -160,4 +168,9 @@ __all__ = [
     "generate_changelog",
     "add_inline_comments",
     "create_user_guide",
+    # Bash Execution
+    "execute_bash_command",
+    "execute_python_code",
+    "execute_tests_real",
+    "install_dependencies",
 ]

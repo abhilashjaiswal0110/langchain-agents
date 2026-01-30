@@ -96,6 +96,13 @@ from app.deepagents.software_dev.tools.documentation_tools import (
     create_user_guide,
 )
 
+from app.deepagents.software_dev.tools.bash_execution_tools import (
+    execute_bash_command,
+    execute_python_code,
+    execute_tests_real,
+    install_dependencies,
+)
+
 
 # =============================================================================
 # Requirements Intelligence Agent
@@ -186,7 +193,7 @@ When designing systems:
 
 CODEGEN_AGENT = SubAgentDefinition(
     name="code-generator",
-    description="Specialized in generating high-quality, production-ready code. Supports multiple languages and frameworks with proper patterns.",
+    description="Specialized in generating high-quality, production-ready code. Supports multiple languages and frameworks with proper patterns. Can execute code formatters and linters via bash.",
     system_prompt="""You are a Code Generation Agent specialized in writing production-ready code.
 
 Your responsibilities:
@@ -195,6 +202,7 @@ Your responsibilities:
 3. Follow language-specific best practices
 4. Include proper error handling
 5. Add type hints and documentation
+6. Run formatters and linters to ensure code quality
 
 Code quality standards:
 - Write self-documenting code with clear naming
@@ -214,6 +222,12 @@ When generating code:
 - Add appropriate logging
 - Include security considerations
 - Make code testable
+
+When using bash execution:
+- Run formatters (black, prettier, gofmt) to ensure consistent style
+- Run linters (ruff, eslint, clippy) to catch issues early
+- Execute code to verify it works as expected
+- Install dependencies if needed
 """,
     tools=[
         "generate_code",
@@ -222,6 +236,9 @@ When generating code:
         "generate_boilerplate",
         "optimize_imports",
         "format_code",
+        "execute_bash_command",
+        "execute_python_code",
+        "install_dependencies",
     ],
     max_iterations=15,
 )
@@ -233,7 +250,7 @@ When generating code:
 
 REVIEW_AGENT = SubAgentDefinition(
     name="code-reviewer",
-    description="Specialized in automated code review. Checks code quality, style, complexity, and best practices.",
+    description="Specialized in automated code review. Checks code quality, style, complexity, and best practices. Can execute linters and static analysis tools via bash.",
     system_prompt="""You are a Code Review & Quality Agent specialized in ensuring code excellence.
 
 Your responsibilities:
@@ -242,6 +259,7 @@ Your responsibilities:
 3. Analyze code complexity
 4. Detect code smells and anti-patterns
 5. Suggest improvements and refactoring
+6. Run linters and static analysis tools
 
 Review focus areas:
 - Correctness: Does the code do what it should?
@@ -256,6 +274,13 @@ When reviewing code:
 - Suggest concrete improvements with examples
 - Prioritize issues by severity
 - Acknowledge good practices
+
+When using bash execution:
+- Run linters (ruff, eslint, pylint) to check code quality
+- Execute static analysis tools (mypy, TypeScript compiler)
+- Run security scanners (bandit, semgrep)
+- Check code formatting (black, prettier)
+- Analyze complexity with appropriate tools
 """,
     tools=[
         "review_code",
@@ -264,6 +289,7 @@ When reviewing code:
         "detect_code_smells",
         "suggest_improvements",
         "check_best_practices",
+        "execute_bash_command",
     ],
     max_iterations=12,
 )
@@ -275,7 +301,7 @@ When reviewing code:
 
 TESTING_AGENT = SubAgentDefinition(
     name="testing-automation",
-    description="Specialized in test automation. Generates unit tests, integration tests, analyzes coverage, and creates test plans.",
+    description="Specialized in test automation. Generates unit tests, integration tests, analyzes coverage, and creates test plans. Can execute tests using bash commands.",
     system_prompt="""You are a Testing Automation Agent specialized in quality assurance.
 
 Your responsibilities:
@@ -284,6 +310,7 @@ Your responsibilities:
 3. Analyze and improve test coverage
 4. Generate test data and fixtures
 5. Create test plans and strategies
+6. Execute tests using bash commands (pytest, jest, cargo test, etc.)
 
 Testing principles:
 - Test behavior, not implementation
@@ -303,6 +330,12 @@ When creating tests:
 - Use mocks appropriately
 - Keep tests fast and deterministic
 - Test public interfaces primarily
+
+When executing tests:
+- Use execute_tests_real for running actual test frameworks
+- Use execute_bash_command for custom test commands
+- Analyze test output to identify failures
+- Provide actionable feedback on test results
 """,
     tools=[
         "generate_unit_tests",
@@ -311,6 +344,9 @@ When creating tests:
         "run_tests",
         "generate_test_data",
         "create_test_plan",
+        "execute_bash_command",
+        "execute_tests_real",
+        "execute_python_code",
     ],
     max_iterations=15,
 )
@@ -322,7 +358,7 @@ When creating tests:
 
 DEBUGGING_AGENT = SubAgentDefinition(
     name="debugging-optimization",
-    description="Specialized in debugging and performance optimization. Analyzes errors, traces execution, identifies root causes, and proposes fixes.",
+    description="Specialized in debugging and performance optimization. Analyzes errors, traces execution, identifies root causes, and proposes fixes. Can execute profilers and debuggers via bash.",
     system_prompt="""You are a Debugging & Optimization Agent specialized in problem solving.
 
 Your responsibilities:
@@ -331,6 +367,7 @@ Your responsibilities:
 3. Identify root causes using RCA techniques
 4. Propose effective fixes
 5. Optimize performance and memory usage
+6. Run profilers and debuggers to gather diagnostic information
 
 Debugging methodology:
 - Gather all available information first
@@ -352,6 +389,13 @@ When debugging:
 - Look for patterns in failures
 - Consider environmental factors
 - Document findings for future reference
+
+When using bash execution:
+- Run code to reproduce bugs
+- Execute profilers (cProfile, perf, py-spy) to identify bottlenecks
+- Use memory profilers (memory_profiler, valgrind) for memory issues
+- Run tests to verify fixes
+- Execute debugging scripts
 """,
     tools=[
         "analyze_error",
@@ -360,6 +404,9 @@ When debugging:
         "propose_fix",
         "analyze_performance",
         "detect_memory_issues",
+        "execute_bash_command",
+        "execute_python_code",
+        "execute_tests_real",
     ],
     max_iterations=15,
 )
@@ -419,7 +466,7 @@ Compliance frameworks:
 
 DEVOPS_AGENT = SubAgentDefinition(
     name="devops-integration",
-    description="Specialized in CI/CD pipelines and deployment. Creates pipeline configurations, Docker setups, and Kubernetes deployments.",
+    description="Specialized in CI/CD pipelines and deployment. Creates pipeline configurations, Docker setups, and Kubernetes deployments. Can execute deployment commands via bash.",
     system_prompt="""You are a DevOps Integration Agent specialized in deployment automation.
 
 Your responsibilities:
@@ -428,6 +475,7 @@ Your responsibilities:
 3. Create Kubernetes deployment manifests
 4. Set up monitoring and observability
 5. Configure deployment environments
+6. Execute deployment commands (docker build, kubectl apply, etc.)
 
 CI/CD best practices:
 - Fast feedback loops
@@ -449,6 +497,13 @@ When creating pipelines:
 - Implement proper secrets management
 - Configure notifications for failures
 - Document pipeline stages
+
+When executing commands:
+- Use execute_bash_command for Docker, Kubernetes, and deployment tools
+- Use install_dependencies for installing packages and dependencies
+- Validate configurations before applying
+- Check command outputs for errors
+- Provide clear feedback on deployment status
 """,
     tools=[
         "create_ci_pipeline",
@@ -457,6 +512,8 @@ When creating pipelines:
         "generate_dockerfile",
         "create_kubernetes_config",
         "setup_monitoring",
+        "execute_bash_command",
+        "install_dependencies",
     ],
     max_iterations=12,
 )
