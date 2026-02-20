@@ -1,7 +1,7 @@
 # Development Setup Guide
 
-> **Last Updated**: 2025-12-19
-> **Version**: 2.0.0
+> **Last Updated**: 2026-02-20
+> **Version**: 2.1.0
 > **Audience**: Developers, Contributors
 
 ---
@@ -192,14 +192,27 @@ deployment/
 ### Development Mode (with reload)
 
 ```bash
+# Linux / macOS
 python -m uvicorn app.server:app --reload --host 0.0.0.0 --port 8000
+
+# Windows (use deployment .venv directly — avoids uv VIRTUAL_ENV conflict)
+.venv\Scripts\uvicorn.exe app.server:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 ### Production Mode
 
 ```bash
+# Linux / macOS
 python -m uvicorn app.server:app --host 0.0.0.0 --port 8000
+
+# Windows (recommended — bypass uv sync errors)
+.venv\Scripts\uvicorn.exe app.server:app --host 0.0.0.0 --port 8000
 ```
+
+> **Windows Note**: `uv run uvicorn ...` may fail if the root-level monorepo `.venv`
+> is activated, causing a `VIRTUAL_ENV` conflict and `Access denied` errors on
+> `langgraph_cli` dist-info. Use `.venv\Scripts\uvicorn.exe` directly from the
+> `deployment/` directory instead.
 
 ### Docker Mode
 
@@ -208,19 +221,49 @@ docker compose up -d
 docker compose logs -f
 ```
 
+### LangGraph Studio (Visual Development)
+
+```bash
+# Windows (from deployment/ directory)
+.venv\Scripts\python.exe -m langgraph_cli dev --port 2024 --allow-blocking
+
+# Access: https://smith.langchain.com/studio/?baseUrl=http://127.0.0.1:2024
+# Or use: .\start_studio.ps1
+```
+
 ### Verify Server
 
 ```bash
-# Health check
+# Health check — all flags should be true when API keys are configured
 curl http://localhost:8000/health
 
-# List agents
+# List all enterprise agents
 curl http://localhost:8000/api/enterprise/agents
 
-# Test research agent
+# List IT Support agents (it_helpdesk, servicenow, document_intelligence, employee_experience)
+curl http://localhost:8000/api/agents
+
+# List Deep Agent subagents
+curl http://localhost:8000/api/deepagent/subagents
+
+# Test Enterprise Research Agent (live query)
 curl -X POST http://localhost:8000/api/enterprise/research/invoke \
   -H "Content-Type: application/json" \
   -d '{"query": "What is LangChain?"}'
+
+# Test IT Operations Deep Agent
+curl -X POST http://localhost:8000/api/deepagent/start \
+  -H "Content-Type: application/json" \
+  -d '{"user_id": "ops_user"}'
+# → returns session_id, then use it:
+curl -X POST http://localhost:8000/api/deepagent/chat \
+  -H "Content-Type: application/json" \
+  -d '{"session_id": "<session_id>", "message": "Show all open P1 incidents"}'
+
+# Test IT Helpdesk Agent
+curl -X POST http://localhost:8000/api/conversation/start \
+  -H "Content-Type: application/json" \
+  -d '{"agent_type": "it_helpdesk"}'
 ```
 
 ---
@@ -481,8 +524,35 @@ def test_my_agent_invoke():
 |-------|-------|----------|
 | Import errors | Missing dependencies | `pip install -e ".[dev]"` |
 | Server won't start | Port in use | Kill process on 8000 |
-| Agents not loading | No API keys | Check .env file |
+| Agents not loading | No API keys | Check `.env` file |
 | Tests failing | Outdated mocks | Update test fixtures |
+| `uv run uvicorn` fails (Windows) | `VIRTUAL_ENV` conflict with root `.venv` | Use `.venv\Scripts\uvicorn.exe` directly |
+| `Access denied` on `langgraph_cli` | Windows file lock on dist-info | Run as Administrator or restart terminal |
+| `No module named uvicorn` | Wrong Python / `.venv` | Ensure you are in `deployment/` directory |
+
+### Windows Startup Issues
+
+**Symptom**: `uv run uvicorn app.server:app` fails with one of:
+- `VIRTUAL_ENV=...\.venv does not match the project environment path`
+- `error: failed to remove directory ... Access is denied. (os error 5)`
+- `No module named uvicorn`
+
+**Root cause**: The monorepo root `.venv` is activated in the shell but `uv` detects
+the deployment-specific `.venv` and tries to re-sync packages, hitting permission errors.
+
+**Solution**: Use the deployment `.venv` executable directly:
+```bash
+# From deployment/ directory:
+.venv\Scripts\uvicorn.exe app.server:app --host 0.0.0.0 --port 8000
+
+# Or if using bash/git-bash on Windows:
+.venv/Scripts/uvicorn.exe app.server:app --host 0.0.0.0 --port 8000
+```
+
+**Fix incomplete installs** (run from `deployment/` in an Administrator terminal):
+```bash
+.venv\Scripts\pip install --force-reinstall langchain-core langgraph
+```
 
 ### Debug Mode
 
@@ -495,8 +565,12 @@ logging.basicConfig(level=logging.DEBUG)
 ### Check Dependencies
 
 ```bash
-pip list | grep langchain
-pip list | grep langgraph
+# Check deployment .venv packages (Windows)
+.venv\Scripts\pip list | grep langchain
+.venv\Scripts\pip list | grep langgraph
+
+# Linux/macOS
+.venv/bin/pip list | grep langchain
 ```
 
 ---
