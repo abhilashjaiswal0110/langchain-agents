@@ -2,7 +2,7 @@
 
 > **Purpose**: This document serves as the authoritative knowledge source for AI agents working on this repository. It contains architectural decisions, implementation patterns, and guidelines that must be followed when making changes or enhancements.
 
-**Last Updated**: 2026-01-28 (v3.20 - Software Development Deep Agent with SDLC Automation)
+**Last Updated**: 2026-02-20 (v3.21 - Live Test Certification & Startup Documentation)
 
 ---
 
@@ -4738,15 +4738,68 @@ ensure_tracing_enabled()
 
 ## Production Certification
 
-### Certification Status: ⚠️ CONDITIONAL PASS
+### Latest Certification: ✅ FULL PASS
+
+**Certification Date**: 2026-02-20
+**Version**: v3.21
+**Server**: uvicorn via `deployment/.venv/Scripts/uvicorn.exe`
+**LLM Provider**: Azure OpenAI (`o4-mini` deployment)
+**ServiceNow**: Live (`SERVICENOW_MODE=live`, dev295615 instance)
+
+All agents loaded and verified responding with live AI-generated content — no dummy data detected.
+
+### Live Test Results (2026-02-20)
+
+| Component | Status | Details |
+|-----------|--------|---------|
+| Health Endpoint | ✅ PASS | All flags `true`, tracing enabled |
+| 8 Enterprise Agents | ✅ PASS | research, content, data_analyst, document, multilingual_rag, hitl_support, code_assistant, document_intelligence |
+| 3 Deep Agents | ✅ PASS | IT Operations, Sales Intelligence, Recruitment |
+| 4 IT Support Agents | ✅ PASS | it_helpdesk, servicenow, document_intelligence, employee_experience |
+| LangChain Chains | ✅ PASS | chat, rag, agent_executor loaded |
+| LangGraph Agent | ✅ PASS | Azure OpenAI provider |
+| Document RAG | ✅ PASS | Loaded |
+| LangSmith Tracing | ✅ PASS | Project: langchain-platform |
+| Enterprise Research Agent | ✅ LIVE | Real web search, 3 cited URLs (aws, dzone, educative) |
+| IT Operations DeepAgent | ✅ LIVE | 23 real P1 incidents from ServiceNow (New/In Progress/On Hold) |
+| IT Helpdesk Agent | ✅ LIVE | Contextual VPN troubleshooting, session-based memory |
+
+### Verified Agent Inventory (2026-02-20)
+
+#### IT Support Agents (`/api/conversation/`)
+| Agent | Type | Status |
+|-------|------|--------|
+| it_helpdesk | IT Helpdesk Agent | ✅ Loaded |
+| servicenow | ServiceNow ITSM Agent | ✅ Loaded |
+| document_intelligence | Document Intelligence Agent | ✅ Loaded |
+| employee_experience | Employee Experience Agent | ✅ Loaded |
+
+#### Enterprise Agents (`/api/enterprise/`)
+| Agent | Endpoint | Status |
+|-------|----------|--------|
+| Research | `/api/enterprise/research/invoke` | ✅ Loaded |
+| Content | `/api/enterprise/content/invoke` | ✅ Loaded |
+| Data Analyst | `/api/enterprise/data-analyst/invoke` | ✅ Loaded |
+| Document | `/api/enterprise/documents/invoke` | ✅ Loaded |
+| Multilingual RAG | `/api/enterprise/rag/invoke` | ✅ Loaded |
+| HITL Support | `/api/enterprise/support/invoke` | ✅ Loaded |
+| Code Assistant | `/api/enterprise/code/invoke` | ✅ Loaded |
+| Document Intelligence | `/api/enterprise/document-intelligence/invoke` | ✅ Loaded |
+
+#### Deep Agents (`/api/deepagent/`, `/api/sales-agent/`, `/api/recruitment-agent/`)
+| Agent | Type | Subagents | Status |
+|-------|------|-----------|--------|
+| IT Operations | `it_operations` | 6 (incident, change, problem, asset, sla, knowledge) | ✅ Loaded |
+| Sales Intelligence | `sales_intelligence` | - | ✅ Loaded |
+| Recruitment | `recruitment` | 5 (document, resume_screener, question_gen, answer_eval, report_gen) | ✅ Loaded |
+
+### Previous Certification: ⚠️ CONDITIONAL PASS
 
 **Certification Date**: 2026-01-02
 **Version**: v3.11
 **Merge Commit**: `368c9304c3`
 
-The platform has been certified for production deployment with mandatory remediation items.
-
-### Test Results Summary
+### Previous Test Results Summary (v3.11)
 
 | Test Category | Result | Details |
 |--------------|--------|---------|
@@ -5321,6 +5374,51 @@ The Deep Agent provides a `get_graph()` function for LangGraph Studio:
 ---
 
 ## Change Log
+
+### 2026-02-20 - Live Test Certification & Startup Documentation (v3.21)
+
+**Verified**:
+- **Full live test pass** against merged codebase with Azure OpenAI (`o4-mini`) provider
+- All 15+ agents confirmed loading and responding with live AI content (no dummy data)
+- ServiceNow live mode verified: 23 real P1 incidents returned from dev295615 instance
+- LangSmith tracing confirmed active (project: `langchain-platform`)
+
+**Server Startup (Windows)**:
+The correct startup command on Windows when `uv run` fails due to `.venv` conflicts:
+```bash
+# From deployment/ directory — use the deployment .venv directly
+cd deployment
+.venv/Scripts/uvicorn.exe app.server:app --host 0.0.0.0 --port 8000
+
+# With auto-reload (development)
+.venv/Scripts/uvicorn.exe app.server:app --host 0.0.0.0 --port 8000 --reload
+```
+
+**Known Issue — `uv run` on Windows**:
+Running `uv run uvicorn ...` from the deployment directory may fail with:
+- `VIRTUAL_ENV` conflict: root-level `.venv` activated but deployment expects its own
+- `Access denied` on `langgraph_cli` dist-info removal (Windows file lock)
+- Missing `RECORD` files for `langchain_core` and `langgraph` (incomplete uninstall markers)
+
+**Root cause**: Root-level `.venv` from the monorepo is activated when `uv run` is invoked,
+conflicting with the deployment-specific `.venv`. Use the `.venv` executable directly.
+
+**Fix if needed (run as Administrator)**:
+```bash
+.venv/Scripts/pip install --force-reinstall langchain-core langgraph
+```
+
+**IT Support Agents — Updated Inventory**:
+- `it_helpdesk` — IT Helpdesk Agent (general support, password resets, troubleshooting)
+- `servicenow` — ServiceNow ITSM Agent (tickets, changes, CMDB)
+- `document_intelligence` — Document Intelligence Agent (multi-format analysis, RAG)
+- `employee_experience` — Employee Experience Agent (HR support, career, wellbeing)
+
+**Documentation**:
+- `deployment/docs/SETUP.md` — Updated Windows startup commands and troubleshooting
+- `deployment/KNOWLEDGE.md` — This file, Production Certification section updated
+
+---
 
 ### 2026-01-09 - IT Operations Deep Agent (v3.16)
 
