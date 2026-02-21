@@ -65,14 +65,38 @@ The `deployment/` folder contains a production-ready enterprise agents platform 
 
 ### Key Features
 
-- **10 Production Agents**: Research, Content Generation, Data Analysis, Document Processing, Multilingual RAG, IT Support, ServiceNow ITSM, Code Assistant, Recruitment, Software Development
-- **Deep Agents Framework**: Advanced agents with planning, subagent delegation, and context management
+- **12 Production Agents**: Research, Content Generation, Data Analysis, Document Processing, Multilingual RAG, HITL IT Support, ServiceNow ITSM, Code Assistant, Document Intelligence, Employee Experience, Recruitment, Software Development
+- **Deep Agents Framework**: Three advanced agents with planning, subagent delegation, and context management (IT Operations, Sales Intelligence, Recruitment)
+- **IT Support Agents**: Four conversational agents with session memory (IT Helpdesk, ServiceNow, Document Intelligence, Employee Experience)
 - **REST API**: FastAPI server with LangServe integration
 - **Web UI**: Interactive chat interfaces for agent testing
 - **LangGraph Studio**: Visual development and debugging interface
 - **Security**: API key authentication, CORS, secrets management
 - **Observability**: LangSmith tracing and evaluation framework
 - **Docker Deployment**: Production-ready containerization
+
+### Verified Agent Inventory (2026-02-20)
+
+All agents below confirmed loaded and live-tested against Azure OpenAI (`o4-mini`):
+
+| Category | Agent | API Path | Status |
+|----------|-------|----------|--------|
+| Enterprise | Research | `/api/enterprise/research/invoke` | ✅ Live |
+| Enterprise | Content | `/api/enterprise/content/invoke` | ✅ Loaded |
+| Enterprise | Data Analyst | `/api/enterprise/data-analyst/invoke` | ✅ Loaded |
+| Enterprise | Document | `/api/enterprise/documents/invoke` | ✅ Loaded |
+| Enterprise | Multilingual RAG | `/api/enterprise/rag/invoke` | ✅ Loaded |
+| Enterprise | HITL Support | `/api/enterprise/support/invoke` | ✅ Loaded |
+| Enterprise | Code Assistant | `/api/enterprise/code/invoke` | ✅ Loaded |
+| Enterprise | Document Intelligence | `/api/enterprise/document-intelligence/invoke` | ✅ Loaded |
+| Deep Agent | IT Operations | `/api/deepagent/start` + `/api/deepagent/chat` | ✅ Live |
+| Deep Agent | Sales Intelligence | `/api/sales-agent/start` + `/api/sales-agent/chat` | ✅ Loaded |
+| Deep Agent | Recruitment | `/api/recruitment-agent/start` + `/api/recruitment-agent/chat` | ✅ Loaded |
+| IT Support | IT Helpdesk | `/api/conversation/start` (`it_helpdesk`) | ✅ Live |
+| IT Support | ServiceNow | `/api/conversation/start` (`servicenow`) | ✅ Loaded |
+| IT Support | Document Intelligence | `/api/conversation/start` (`document_intelligence`) | ✅ Loaded |
+| IT Support | Employee Experience | `/api/conversation/start` (`employee_experience`) | ✅ Loaded |
+| Software Dev | Software Dev Agent | `/api/software-dev-agent/start` | ✅ Loaded |
 
 ### Development Context
 

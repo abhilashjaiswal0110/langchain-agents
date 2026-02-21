@@ -74,8 +74,11 @@ This repository includes a production-ready **Enterprise Agents Platform** in th
 
 ### 🚀 Key Features
 
-- **10 Production Agents**: Research, Content Generation (HITL), Data Analysis, Document Processing, Multilingual RAG, IT Support (HITL), ServiceNow ITSM, Code Assistant, Recruitment, **Software Development (New!)**
+- **12 Production Agents**: Research, Content Generation (HITL), Data Analysis, Document Processing, Multilingual RAG, IT Support (HITL), ServiceNow ITSM, Code Assistant, Document Intelligence, Employee Experience, Recruitment, **Software Development**
+- **3 Deep Agents**: IT Operations (6 subagents), Sales Intelligence, Recruitment (5 subagents) — all with planning, streaming, and context persistence
+- **4 IT Support Agents**: IT Helpdesk, ServiceNow, Document Intelligence, Employee Experience — conversational agents with session memory
 - **🆕 Software Development Deep Agent**: AI-powered SDLC automation with 9 specialized subagents, 54 purpose-built tools, end-to-end workflow from requirements to deployment
+- **Sales Intelligence Deep Agent**: AI-powered sales analysis with CRM, competitor, pricing, and knowledge tools
 - **Recruitment Deep Agent**: AI-powered end-to-end hiring automation with SharePoint integration, 5 specialized subagents, L1/L2/L3 screening, technical assessments, and Excel reporting
 - **IT Operations Deep Agent**: Advanced planning agent with 6 specialized subagents, streaming responses, and reasoning model support
 - **⚡ Real-time Streaming**: Server-Sent Events (SSE) for live progress updates and tool execution visibility
@@ -99,19 +102,25 @@ pip install -e .
 
 # Configure environment
 cp .env.example .env
-# Edit .env with your API keys (OPENAI_API_KEY, LANGSMITH_API_KEY, etc.)
+# Edit .env with your API keys (Azure OpenAI or OpenAI/Anthropic + LangSmith)
 
-# Run locally
-python app/server.py
+# Run locally (Linux/macOS)
+python -m uvicorn app.server:app --host 0.0.0.0 --port 8000
+
+# Run locally (Windows — use deployment .venv directly to avoid uv conflicts)
+.venv\Scripts\uvicorn.exe app.server:app --host 0.0.0.0 --port 8000
 
 # Or use Docker
 docker-compose up --build
 
-# Or use LangGraph Studio UI for visual development (recommended)
+# Or use LangGraph Studio UI for visual development
 cd deployment
 .\start_studio.ps1
 # Access at: https://smith.langchain.com/studio/?baseUrl=http://127.0.0.1:2024
 ```
+
+> **Windows tip**: If `uv run uvicorn` fails with `VIRTUAL_ENV` conflicts or `Access denied`
+> errors, use `.venv\Scripts\uvicorn.exe` directly. See [docs/SETUP.md](docs/SETUP.md#windows-startup-issues) for details.
 
 ### 🎨 LangGraph Studio UI
 

@@ -699,7 +699,7 @@ class DocRagInfoResponse(BaseModel):
 class ConversationStartRequest(BaseModel):
     """Request to start a new conversation."""
 
-    agent_type: Literal["it_helpdesk", "servicenow"]
+    agent_type: Literal["it_helpdesk", "servicenow", "document_intelligence", "employee_experience"]
     user_id: str | None = None
     metadata: dict | None = None
 
