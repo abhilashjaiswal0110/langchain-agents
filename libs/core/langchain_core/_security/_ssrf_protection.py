@@ -123,22 +123,37 @@ def is_safe_url(
 
 
 def _validate_url_ssrf_strict(v: Any) -> Any:
-    """Validate URL for SSRF protection (strict mode)."""
-    if isinstance(v, str):
-        validate_safe_url(v, allow_private=False, allow_http=True)
+    """Validate URL for SSRF protection (strict mode).
+
+    Accepts both plain strings and `AnyHttpUrl` objects so that Pydantic's
+    two-pass coercion (where the first pass may yield an `AnyHttpUrl`) does
+    not silently bypass validation.
+    """
+    if isinstance(v, (str, AnyHttpUrl)):
+        validate_safe_url(str(v), allow_private=False, allow_http=True)
+    elif v is not None:
+        msg = f"Expected a URL string, got {type(v).__name__}"
+        raise ValueError(msg)
     return v
 
 
 def _validate_url_ssrf_https_only(v: Any) -> Any:
-    if isinstance(v, str):
-        validate_safe_url(v, allow_private=False, allow_http=False)
+    """Validate URL for SSRF protection (HTTPS-only mode)."""
+    if isinstance(v, (str, AnyHttpUrl)):
+        validate_safe_url(str(v), allow_private=False, allow_http=False)
+    elif v is not None:
+        msg = f"Expected a URL string, got {type(v).__name__}"
+        raise ValueError(msg)
     return v
 
 
 def _validate_url_ssrf_relaxed(v: Any) -> Any:
-    """Validate URL for SSRF protection (relaxed mode - allows private IPs)."""
-    if isinstance(v, str):
-        validate_safe_url(v, allow_private=True, allow_http=True)
+    """Validate URL for SSRF protection (relaxed mode — allows private IPs)."""
+    if isinstance(v, (str, AnyHttpUrl)):
+        validate_safe_url(str(v), allow_private=True, allow_http=True)
+    elif v is not None:
+        msg = f"Expected a URL string, got {type(v).__name__}"
+        raise ValueError(msg)
     return v
 
 

@@ -24,7 +24,7 @@
 LangChain is a framework for building agents and LLM-powered applications. It helps you chain together interoperable components and third-party integrations to simplify AI application development — all while future-proofing decisions as the underlying technology evolves.
 
 > [!TIP]
-> Just getting started? Check out **[Deep Agents](http://docs.langchain.com/oss/python/deepagents/)** — a higher-level package built on LangChain for agents that have built-in capabilites for common usage patterns such as planning, subagents, file system usage, and more.
+> Just getting started? Check out **[Deep Agents](http://docs.langchain.com/oss/python/deepagents/)** — a higher-level package built on LangChain for agents that have built-in capabilities for common usage patterns such as planning, subagents, file system usage, and more.
 
 ## Quickstart
 
@@ -37,7 +37,7 @@ uv add langchain
 ```python
 from langchain.chat_models import init_chat_model
 
-model = init_chat_model("openai:gpt-5.4")
+model = init_chat_model("openai:gpt-4o")
 result = model.invoke("Hello, world!")
 ```
 
@@ -78,34 +78,6 @@ LangChain helps developers build applications powered by LLMs through a standard
 - [Chat LangChain](https://chat.langchain.com/) – Chat with the LangChain documentation and get answers to your questions
 
 **Discussions**: Visit the [LangChain Forum](https://forum.langchain.com) to connect with the community and share all of your technical questions, ideas, and feedback.
-
-> [!NOTE]
-> Looking for the JS/TS library? Check out [LangChain.js](https://github.com/langchain-ai/langchainjs).
-
-## Why use LangChain?
-
-LangChain helps developers build applications powered by LLMs through a standard interface for models, embeddings, vector stores, and more.
-
-Use LangChain for:
-
-- **Real-time data augmentation**. Easily connect LLMs to diverse data sources and external/internal systems, drawing from LangChain's vast library of integrations with model providers, tools, vector stores, retrievers, and more.
-- **Model interoperability**. Swap models in and out as your engineering team experiments to find the best choice for your application's needs. As the industry frontier evolves, adapt quickly – LangChain's abstractions keep you moving without losing momentum.
-- **Rapid prototyping**. Quickly build and iterate on LLM applications with LangChain's modular, component-based architecture. Test different approaches and workflows without rebuilding from scratch, accelerating your development cycle.
-- **Production-ready features**. Deploy reliable applications with built-in support for monitoring, evaluation, and debugging through integrations like LangSmith. Scale with confidence using battle-tested patterns and best practices.
-- **Vibrant community and ecosystem**. Leverage a rich ecosystem of integrations, templates, and community-contributed components. Benefit from continuous improvements and stay up-to-date with the latest AI developments through an active open-source community.
-- **Flexible abstraction layers**. Work at the level of abstraction that suits your needs - from high-level chains for quick starts to low-level components for fine-grained control. LangChain grows with your application's complexity.
-
-## LangChain ecosystem
-
-While the LangChain framework can be used standalone, it also integrates seamlessly with any LangChain product, giving developers a full suite of tools when building LLM applications.
-
-To improve your LLM application development, pair LangChain with:
-
-- [Deep Agents](https://github.com/langchain-ai/deepagents) *(new!)* – Build agents that can plan, use subagents, and leverage file systems for complex tasks
-- [LangGraph](https://docs.langchain.com/oss/python/langgraph/overview) – Build agents that can reliably handle complex tasks with LangGraph, our low-level agent orchestration framework. LangGraph offers customizable architecture, long-term memory, and human-in-the-loop workflows – and is trusted in production by companies like LinkedIn, Uber, Klarna, and GitLab.
-- [Integrations](https://docs.langchain.com/oss/python/integrations/providers/overview) – List of LangChain integrations, including chat & embedding models, tools & toolkits, and more
-- [LangSmith](https://www.langchain.com/langsmith) – Helpful for agent evals and observability. Debug poor-performing LLM app runs, evaluate agent trajectories, gain visibility in production, and improve performance over time.
-- [LangSmith Deployment](https://docs.langchain.com/langsmith/deployments) – Deploy and scale agents effortlessly with a purpose-built deployment platform for long-running, stateful workflows. Discover, reuse, configure, and share agents across teams – and iterate quickly with visual prototyping in [LangSmith Studio](https://docs.langchain.com/langsmith/studio).
 
 ## Enterprise Agents Deployment
 
@@ -159,7 +131,7 @@ cd deployment
 ```
 
 > **Windows tip**: If `uv run uvicorn` fails with `VIRTUAL_ENV` conflicts or `Access denied`
-> errors, use `.venv\Scripts\uvicorn.exe` directly. See [docs/SETUP.md](docs/SETUP.md#windows-startup-issues) for details.
+> errors, use `.venv\Scripts\uvicorn.exe` directly. See [deployment/docs/SETUP.md](deployment/docs/SETUP.md#windows-startup-issues) for details.
 
 ### 🎨 LangGraph Studio UI
 
@@ -292,7 +264,7 @@ pytest tests/test_recruitment_agent.py -v
 
 See [deployment/KNOWLEDGE.md](deployment/KNOWLEDGE.md#recruitment-deep-agent) for complete documentation.
 
-### � Software Development Deep Agent - AI-Powered SDLC Automation
+### 🛠️ Software Development Deep Agent - AI-Powered SDLC Automation
 
 **Comprehensive end-to-end Software Development Lifecycle automation** with intelligent orchestration:
 
@@ -553,7 +525,7 @@ pytest tests/test_bash_execution_tools.py -v
 # - Test framework integration (7 tests)
 ```
 
-**Real-World Use Cases:**
+**Bash Execution Use Cases:**
 - 🚀 **Automated Formatting**: Run black, prettier, gofmt on generated code
 - 🔍 **Lint Enforcement**: Execute ruff, eslint, clippy to catch issues early
 - ✅ **Continuous Testing**: Run pytest, npm test, cargo test after code changes
@@ -562,7 +534,7 @@ pytest tests/test_bash_execution_tools.py -v
 - 🔄 **Git Operations**: Automate git commands (status, commit, push)
 - ☁️ **Cloud Deployment**: Deploy to Azure via ACI, Functions, AKS, App Service
 
-**Real-World Use Cases:**
+**Business Use Cases:**
 - 🚀 **Rapid Prototyping**: Generate MVP in hours instead of weeks
 - 🏢 **Enterprise Development**: Maintain consistency across large teams
 - 🔄 **Legacy Modernization**: Refactor and upgrade legacy systems
@@ -573,7 +545,7 @@ pytest tests/test_bash_execution_tools.py -v
 
 See [deployment/KNOWLEDGE.md](deployment/KNOWLEDGE.md#software-development-deep-agent) for complete documentation.
 
-### �🔗 Integration Examples
+### 🔗 Integration Examples
 
 **Copilot Studio Webhook:**
 ```

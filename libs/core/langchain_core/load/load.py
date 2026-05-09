@@ -473,6 +473,17 @@ class Reviver:
                 return self.secrets_map[key]
             if self.secrets_from_env and key in os.environ and os.environ[key]:
                 return os.environ[key]
+            import warnings
+
+            warnings.warn(
+                f"Secret '{key}' referenced in the serialized payload was not "
+                "found in secrets_map and could not be resolved from the "
+                "environment. The field will be set to None, which will likely "
+                f"cause an error at first use. Provide it via "
+                f"secrets_map={{'{key}': <value>}}.",
+                UserWarning,
+                stacklevel=2,
+            )
             return None
 
         if (
@@ -481,6 +492,15 @@ class Reviver:
             and value.get("id") is not None
         ):
             if self.ignore_unserializable_fields:
+                import warnings
+
+                warnings.warn(
+                    f"Field {value.get('id')} could not be deserialized and "
+                    "was set to None. The serialized payload may be from a "
+                    "newer version of LangChain.",
+                    UserWarning,
+                    stacklevel=2,
+                )
                 return None
             msg = (
                 "Trying to load an object that doesn't implement "

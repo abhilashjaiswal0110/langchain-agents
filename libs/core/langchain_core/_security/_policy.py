@@ -225,10 +225,19 @@ def validate_hostname(hostname: str, policy: SSRFPolicy) -> None:
         raise SSRFBlockedError("Kubernetes internal DNS")
 
 
+_LOCAL_ENV_VALUES: frozenset[str] = frozenset(
+    {"local", "local_test", "development", "dev", "test"}
+)
+
+
 def _effective_allowed_hosts(policy: SSRFPolicy) -> frozenset[str]:
-    """Return allowed_hosts, augmented for local environments."""
+    """Return allowed_hosts, augmented for local/test environments.
+
+    Uses an exact-match allowlist to avoid unintentionally matching
+    environment names that merely *begin* with "local" (e.g. "local_prod").
+    """
     extra: set[str] = set()
-    if os.environ.get("LANGCHAIN_ENV", "").startswith("local"):
+    if os.environ.get("LANGCHAIN_ENV", "") in _LOCAL_ENV_VALUES:
         extra.update({"localhost", "testserver"})
     if extra:
         return policy.allowed_hosts | frozenset(extra)
@@ -264,6 +273,10 @@ async def validate_url(url: str, policy: SSRFPolicy = SSRFPolicy()) -> None:
         msg = "DNS resolution failed"
         raise SSRFBlockedError(msg) from exc
 
+    if not addrinfo:
+        msg = "DNS resolution returned no results"
+        raise SSRFBlockedError(msg)
+
     for _family, _type, _proto, _canonname, sockaddr in addrinfo:
         validate_resolved_ip(str(sockaddr[0]), policy)
 
@@ -294,13 +307,13 @@ def validate_url_sync(url: str, policy: SSRFPolicy = SSRFPolicy()) -> None:
         return
 
     try:
-        ipaddress.ip_address(hostname)
-        validate_resolved_ip(hostname, policy)
-    except SSRFBlockedError:
-        raise
+        addr = ipaddress.ip_address(hostname)
     except ValueError:
+        # Not a bare IP literal — fall through to hostname validation.
         pass
     else:
+        # It IS a bare IP: validate it and stop; let SSRFBlockedError propagate.
+        validate_resolved_ip(str(addr), policy)
         return
 
     validate_hostname(hostname, policy)

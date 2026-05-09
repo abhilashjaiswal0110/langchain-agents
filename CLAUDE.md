@@ -288,5 +288,11 @@ This repository require actions to be pinned to a full-length commit SHA. Attemp
 
 ## Additional resources
 
-- **Documentation:** https://docs.langchain.com/oss/python/langchain/overview and source at https://github.com/langchain-ai/docs or `../docs/`. Prefer the local install and use file search tools for best results. If needed, use the docs MCP server as defined in `.mcp.json` for programmatic access.
+- **LangChain Documentation:** https://docs.langchain.com/oss/python/langchain/overview and source at https://github.com/langchain-ai/docs or `../docs/`. Prefer the local install and use file search tools for best results. If needed, use the docs MCP server as defined in `.mcp.json` for programmatic access.
 - **Contributing Guide:** [Contributing Guide](https://docs.langchain.com/oss/python/contributing/overview)
+- **Enterprise Agents Platform:**
+  - [Deployment Guide](deployment/README.md) – Quick start and feature overview
+  - [Knowledge Base](deployment/KNOWLEDGE.md) – Comprehensive technical documentation
+  - [Architecture Blueprint](deployment/docs/Project_Architecture_Blueprint.md) – System design and patterns
+  - [API Reference](deployment/docs/api/README.md) – Complete endpoint documentation
+  - [LangGraph Setup](deployment/LANGGRAPH_SETUP.md) – Visual development with LangGraph Studio

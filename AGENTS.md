@@ -53,7 +53,7 @@ langchain/
 └── README.md                # Information about LangChain
 ```
 
-- **Deployment layer** (`deployment/`): Production-ready enterprise agents platform with 10 specialized agents, REST APIs, Web UI, and comprehensive documentation. See [deployment/README.md](deployment/README.md) for details.
+- **Deployment layer** (`deployment/`): Production-ready enterprise agents platform with 12 production agents, REST APIs, Web UI, and comprehensive documentation. See [deployment/README.md](deployment/README.md) for details.
 - **Core layer** (`langchain-core`): Base abstractions, interfaces, and protocols. Users should not need to know about this layer directly.
 - **Implementation layer** (`langchain`): Concrete implementations and high-level public utilities
 - **Integration layer** (`partners/`): Third-party service integrations. Note that this monorepo is not exhaustive of all LangChain integrations; some are maintained in separate repos, such as `langchain-ai/langchain-google` and `langchain-ai/langchain-aws`. Usually these repos are cloned at the same level as this monorepo, so if needed, you can refer to their code directly by navigating to `../langchain-google/` from this monorepo.
@@ -75,7 +75,7 @@ The `deployment/` folder contains a production-ready enterprise agents platform 
 - **Observability**: LangSmith tracing and evaluation framework
 - **Docker Deployment**: Production-ready containerization
 
-### Verified Agent Inventory (2026-02-20)
+### Verified Agent Inventory (2026-05-09)
 
 All agents below confirmed loaded and live-tested against Azure OpenAI (`o4-mini`):
 
@@ -317,6 +317,16 @@ def send_email(to: str, msg: str, *, priority: str = "normal") -> bool:
 - Ensure American English spelling (e.g., "behavior", not "behaviour")
 - Do NOT use Sphinx-style double backtick formatting (` ``code`` `). Use single backticks (`` `code` ``) for inline code references in docstrings and comments.
 
+#### Model references in docs and examples
+
+Always use the latest generally available (GA) models when referencing LLMs in docstrings and illustrative code snippets. Avoid preview or beta identifiers unless the model has no GA equivalent. Outdated model names signal stale code and confuse users.
+
+Before writing or updating model references, verify current model IDs against the provider's official docs. Do not rely on memorized or cached model names — they go stale quickly.
+
+Changing **shipped default parameter values** in code (e.g., a `model=` kwarg default in a class constructor) may constitute a breaking change — see "Maintain stable public interfaces" above. This guidance applies to documentation and examples, not code defaults.
+
+For model *profile data* (capability flags, context windows), use the `langchain-profiles` CLI described below.
+
 ## Software Development Deep Agent - Bash Execution & Azure Integration
 
 ### Overview
@@ -332,8 +342,7 @@ The Software Development Deep Agent now includes secure bash execution capabilit
 - **Security validation**: Blocks dangerous commands (rm -rf /, fork bombs, dd to devices)
 - **Warning system**: Flags risky operations (sudo, recursive deletes, curl | bash)
 - **Cross-platform detection**: Automatic shell selection based on OS
-- **Timeout protection**: Configurable execution timeout (default 30s)
-- **Command history**: Tracks executed commands for auditing
+- **Timeout protection**: Per-tool configurable timeout (30 s for command/code execution, 120 s for test runs, 300 s for dependency installs)
 
 **Available Tools** (4 total):
 | Tool | Purpose |
@@ -450,16 +459,6 @@ Comprehensive test suite available at `deployment/tests/test_bash_execution_tool
 4. Review security warnings before proceeding with risky commands
 5. Use Azure Key Vault for production credentials
 6. Monitor execution logs via LangSmith tracing
-
-#### Model references in docs and examples
-
-Always use the latest generally available (GA) models when referencing LLMs in docstrings and illustrative code snippets. Avoid preview or beta identifiers unless the model has no GA equivalent. Outdated model names signal stale code and confuse users.
-
-Before writing or updating model references, verify current model IDs against the provider's official docs. Do not rely on memorized or cached model names — they go stale quickly.
-
-Changing **shipped default parameter values** in code (e.g., a `model=` kwarg default in a class constructor) may constitute a breaking change — see "Maintain stable public interfaces" above. This guidance applies to documentation and examples, not code defaults.
-
-For model *profile data* (capability flags, context windows), use the `langchain-profiles` CLI described below.
 
 ## Model profiles
 
