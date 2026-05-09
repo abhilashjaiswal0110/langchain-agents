@@ -57,7 +57,7 @@ def all_package_dirs() -> Set[str]:
     return {
         "/".join(path.split("/")[:-1]).lstrip("./")
         for path in glob.glob("./libs/**/pyproject.toml", recursive=True)
-        if "libs/standard-tests" not in path
+        if "libs/standard-tests" not in path and "template" not in path
     }
 
 
