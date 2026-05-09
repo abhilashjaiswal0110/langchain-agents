@@ -46,6 +46,7 @@ on:
         # non-partner allowlist in `EFFECTIVE_WORKING_DIR` if it isn't a partner
         # package (partners are the default branch).
         options:
+          - cli
           - core
           - langchain
           - langchain_v1
@@ -103,7 +104,7 @@ env:
     ${{
       inputs.working-directory-override
       || (startsWith(inputs.working-directory, 'libs/') && inputs.working-directory)
-      || (contains(fromJSON('["core","langchain","langchain_v1","text-splitters","standard-tests","model-profiles"]'), inputs.working-directory) && format('libs/{0}', inputs.working-directory))
+      || (contains(fromJSON('["cli","core","langchain","langchain_v1","text-splitters","standard-tests","model-profiles"]'), inputs.working-directory) && format('libs/{0}', inputs.working-directory))
       || format('libs/partners/{0}', inputs.working-directory)
     }}
 
