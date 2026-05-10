@@ -17,7 +17,7 @@ from typing import Literal
 from dotenv import load_dotenv
 from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse, Response, StreamingResponse
 from fastapi.security import APIKeyHeader
 from fastapi.staticfiles import StaticFiles
 from langserve import add_routes
@@ -1272,6 +1272,57 @@ async def conversation_end(session_id: str) -> dict:
         raise HTTPException(status_code=503, detail="IT Support agents not available.")
 
     return conversation_manager.end_conversation(session_id)
+
+
+@app.get("/api/conversation/{session_id}/export")
+async def export_conversation(session_id: str, format: str = "json") -> Response:
+    """Export a conversation session as JSON, plain text, or PDF.
+
+    Args:
+        session_id: The session ID to export.
+        format: Output format — one of ``json``, ``text``, or ``pdf``.
+
+    Returns:
+        The exported conversation in the requested format.
+
+    Raises:
+        HTTPException: 404 if the session is not found, 422 if the format
+            is not supported, or 503 if IT Support agents are unavailable.
+    """
+    if not it_support_loaded or conversation_manager is None:
+        raise HTTPException(status_code=503, detail="IT Support agents not available.")
+
+    session = conversation_manager.session_store.get_session(session_id)
+    if session is None:
+        raise HTTPException(status_code=404, detail="Session not found.")
+
+    supported_formats = {"json", "text", "pdf"}
+    if format not in supported_formats:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Unsupported format '{format}'. Choose one of: {', '.join(sorted(supported_formats))}.",
+        )
+
+    from app.agents.export import ConversationExporter
+
+    exporter = ConversationExporter()
+
+    if format == "text":
+        return PlainTextResponse(exporter.to_text(session))
+    elif format == "pdf":
+        try:
+            content = exporter.to_pdf(session)
+        except ImportError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+        return Response(
+            content=content,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f"attachment; filename=conversation-{session_id}.pdf"
+            },
+        )
+    # Default: JSON
+    return JSONResponse(json.loads(exporter.to_json(session)))
 
 
 @app.get("/api/agents")
