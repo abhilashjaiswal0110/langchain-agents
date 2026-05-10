@@ -55,6 +55,9 @@ class AgentConfig:
         conversation_summarization: Whether to enable conversation summarization
         tracing_enabled: Whether to enable LangSmith tracing
         project_name: LangSmith project name for tracing
+        max_history: Maximum number of messages to retain per session (0 = unlimited).
+            Defaults to the value of the ``MAX_HISTORY_MESSAGES`` environment variable,
+            falling back to 0 (unlimited) when the variable is unset.
     """
 
     model_provider: Literal["azure_openai", "openai", "anthropic", "auto"] = "auto"
@@ -67,6 +70,9 @@ class AgentConfig:
     conversation_summarization: bool = False
     tracing_enabled: bool = True
     project_name: str = "enterprise-it-agents"
+    max_history: int = field(
+        default_factory=lambda: int(os.getenv("MAX_HISTORY_MESSAGES", "0"))
+    )
 
 
 class BaseAgentState(BaseModel):

@@ -5,6 +5,7 @@ Data is lost when the application restarts.
 """
 
 import logging
+import os
 from datetime import datetime, timedelta
 from threading import Lock
 from typing import Any
@@ -15,6 +16,10 @@ from app.memory.base import (
     Session,
     SessionMetadata,
 )
+
+# Maximum number of messages to keep per session (0 = unlimited).
+# Set MAX_HISTORY_MESSAGES environment variable to override.
+MAX_HISTORY_MESSAGES: int = int(os.getenv("MAX_HISTORY_MESSAGES", "0"))
 
 logger = logging.getLogger(__name__)
 
@@ -134,6 +139,10 @@ class InMemorySessionStore(BaseSessionStore):
                 assistant_message,
                 assistant_metadata=metadata,
             )
+
+            # Trim history if a limit is configured.
+            if MAX_HISTORY_MESSAGES > 0:
+                session.messages = session.messages[-MAX_HISTORY_MESSAGES:]
 
             return True
 

@@ -25,6 +25,12 @@ from app.memory.base import BaseSessionStore
 # Default session TTL in hours (configurable via environment)
 DEFAULT_SESSION_TTL_HOURS = int(os.getenv("SESSION_TTL_HOURS", "24"))
 
+# Maximum history messages to display via /history command (0 = unlimited).
+# When MAX_HISTORY_MESSAGES is set, the display limit matches the store limit.
+_MAX_HISTORY_MESSAGES: int = int(os.getenv("MAX_HISTORY_MESSAGES", "0"))
+# Fall back to 10 messages for display when no limit is configured.
+_HISTORY_DISPLAY_LIMIT: int | None = _MAX_HISTORY_MESSAGES if _MAX_HISTORY_MESSAGES > 0 else 10
+
 
 # =============================================================================
 # Conversation Manager
@@ -291,7 +297,7 @@ What would you like to do?""",
         session = self.session_store.get_session(session_id)
 
         if cmd == "/history":
-            history = self.session_store.get_history(session_id, limit=10)
+            history = self.session_store.get_history(session_id, limit=_HISTORY_DISPLAY_LIMIT)
             if not history:
                 return {
                     "session_id": session_id,
@@ -299,7 +305,7 @@ What would you like to do?""",
                     "is_command": True,
                 }
             formatted = []
-            for msg in history:  # Already limited to last 10
+            for msg in history:  # Already limited to _HISTORY_DISPLAY_LIMIT
                 role = "You" if msg.role == "user" else "Agent"
                 content_preview = msg.content[:100] if len(msg.content) > 100 else msg.content
                 formatted.append(f"**{role}:** {content_preview}...")

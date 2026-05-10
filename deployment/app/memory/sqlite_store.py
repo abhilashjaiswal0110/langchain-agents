@@ -6,11 +6,16 @@ Suitable for single-instance deployments requiring persistence.
 
 import json
 import logging
+import os
 import sqlite3
 from contextlib import contextmanager
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Generator
+
+# Maximum number of messages to keep per session (0 = unlimited).
+# Set MAX_HISTORY_MESSAGES environment variable to override.
+MAX_HISTORY_MESSAGES: int = int(os.getenv("MAX_HISTORY_MESSAGES", "0"))
 
 from app.memory.base import (
     BaseSessionStore,
@@ -282,6 +287,23 @@ class SQLiteSessionStore(BaseSessionStore):
                 )
 
                 conn.commit()
+
+                # Trim oldest messages when a history limit is configured.
+                if MAX_HISTORY_MESSAGES > 0:
+                    conn.execute(
+                        """
+                        DELETE FROM messages
+                        WHERE session_id = ? AND id NOT IN (
+                            SELECT id FROM messages
+                            WHERE session_id = ?
+                            ORDER BY timestamp DESC
+                            LIMIT ?
+                        )
+                        """,
+                        (session_id, session_id, MAX_HISTORY_MESSAGES),
+                    )
+                    conn.commit()
+
                 return True
 
             except Exception as e:
