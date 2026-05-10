@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Literal
 
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Path as FastAPIPath, Request, UploadFile
+from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, Header, HTTPException, Path as FastAPIPath, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse, Response, StreamingResponse
 from fastapi.security import APIKeyHeader
@@ -37,6 +37,7 @@ from langchain_core.messages import AIMessage
 # Response cache (opt-in via CACHE_ENABLED=true; default off for backward compat)
 from app.cache.response_cache import CACHE_TTL_SECONDS, MAX_CACHE_SIZE, get_cache, is_cache_enabled
 from app.governance.cost_estimator import get_cost_estimator
+from app.agents.evals.eval_middleware import submit_for_evaluation
 
 
 # ============================================================================
@@ -1803,7 +1804,7 @@ async def estimate_agent_cost(
 
 
 @app.post("/api/enterprise/research/invoke", response_model=EnterpriseAgentResponse, tags=["Enterprise Agents"])
-async def research_agent_invoke(request: ResearchAgentRequest) -> EnterpriseAgentResponse:
+async def research_agent_invoke(request: ResearchAgentRequest, background_tasks: BackgroundTasks) -> EnterpriseAgentResponse:
     """Invoke the Research Agent for web search and information synthesis.
 
     Responses are served from the in-memory cache when ``CACHE_ENABLED=true``
@@ -1845,6 +1846,8 @@ async def research_agent_invoke(request: ResearchAgentRequest) -> EnterpriseAgen
 
         # Persist result in cache for future identical queries
         _agent_cache.set("research", request.query, response_text)
+
+        submit_for_evaluation(background_tasks, "research", request.query, response_text)
 
         return EnterpriseAgentResponse(
             success=True,

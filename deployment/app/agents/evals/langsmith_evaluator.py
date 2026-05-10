@@ -367,6 +367,44 @@ class LangSmithEvaluator:
         import random
         return random.random() < self.config.sampling_rate
 
+    async def evaluate_async(
+        self,
+        agent_type: str,
+        input_msg: str,
+        output: str,
+        run_id: str | None = None,
+    ) -> None:
+        """Submit an agent response for lightweight online evaluation.
+
+        Sends correctness and helpfulness feedback to LangSmith as background
+        metadata. Silently skips if no API key is configured.
+
+        Args:
+            agent_type: The agent type that produced the output.
+            input_msg: The user input that was sent to the agent.
+            output: The agent's response string.
+            run_id: Optional LangSmith run ID to attach feedback to.
+        """
+        if not self.config.api_key and not os.getenv("LANGCHAIN_API_KEY") and not os.getenv("LANGSMITH_API_KEY"):
+            logger.debug("LangSmith API key not configured; skipping evaluation")
+            return
+
+        try:
+            feedback_run_id = run_id or str(uuid4())
+            # Simple heuristic quality signals (replace with real evaluators in production)
+            has_output = bool(output and output.strip())
+            score = 1.0 if has_output else 0.0
+
+            self.client.create_feedback(
+                run_id=feedback_run_id,
+                key="online_eval",
+                score=score,
+                comment=f"agent={agent_type}, input_len={len(input_msg)}, output_len={len(output)}",
+            )
+            logger.debug("Evaluation feedback submitted for run %s", feedback_run_id)
+        except Exception as exc:
+            logger.debug("Evaluation feedback failed (non-critical): %s", exc)
+
     def get_run_metrics(
         self,
         project_name: str | None = None,
