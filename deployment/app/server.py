@@ -6,6 +6,7 @@ as REST API endpoints using LangServe with LangSmith tracing enabled.
 
 import json
 import os
+import re
 import secrets
 import time
 from contextlib import asynccontextmanager
@@ -15,7 +16,7 @@ from pathlib import Path
 from typing import Literal
 
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi import Depends, FastAPI, File, Form, HTTPException, Path as FastAPIPath, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse, Response, StreamingResponse
 from fastapi.security import APIKeyHeader
@@ -1275,12 +1276,15 @@ async def conversation_end(session_id: str) -> dict:
 
 
 @app.get("/api/conversation/{session_id}/export")
-async def export_conversation(session_id: str, format: str = "json") -> Response:
+async def export_conversation(
+    session_id: str = FastAPIPath(..., pattern=r'^[0-9a-f\-]{36}$'),
+    export_format: str = "json",
+) -> Response:
     """Export a conversation session as JSON, plain text, or PDF.
 
     Args:
-        session_id: The session ID to export.
-        format: Output format — one of ``json``, ``text``, or ``pdf``.
+        session_id: The session ID to export (UUID format).
+        export_format: Output format — one of ``json``, ``text``, or ``pdf``.
 
     Returns:
         The exported conversation in the requested format.
@@ -1297,28 +1301,29 @@ async def export_conversation(session_id: str, format: str = "json") -> Response
         raise HTTPException(status_code=404, detail="Session not found.")
 
     supported_formats = {"json", "text", "pdf"}
-    if format not in supported_formats:
+    if export_format not in supported_formats:
         raise HTTPException(
             status_code=422,
-            detail=f"Unsupported format '{format}'. Choose one of: {', '.join(sorted(supported_formats))}.",
+            detail="Unsupported format. Choose one of: json, text, pdf",
         )
 
     from app.agents.export import ConversationExporter
 
     exporter = ConversationExporter()
 
-    if format == "text":
+    if export_format == "text":
         return PlainTextResponse(exporter.to_text(session))
-    elif format == "pdf":
+    elif export_format == "pdf":
         try:
             content = exporter.to_pdf(session)
         except ImportError as exc:
             raise HTTPException(status_code=503, detail=str(exc)) from exc
+        safe_id = re.sub(r'[^\w\-]', '_', session_id)
         return Response(
             content=content,
             media_type="application/pdf",
             headers={
-                "Content-Disposition": f"attachment; filename=conversation-{session_id}.pdf"
+                "Content-Disposition": f'attachment; filename="conversation-{safe_id}.pdf"'
             },
         )
     # Default: JSON

@@ -173,7 +173,7 @@ class TestConversationExporterToPdf:
 @pytest.fixture()
 def mock_session() -> Session:
     """A pre-built session used across endpoint tests."""
-    return _make_session("endpoint-session-001")
+    return _make_session("a1b2c3d4-e5f6-7890-abcd-ef1234567890")
 
 
 @pytest.fixture()
@@ -195,15 +195,15 @@ def client_with_session(mock_session: Session) -> TestClient:
 
 class TestExportEndpoint:
     def test_export_json_status_200(self, client_with_session: TestClient, mock_session: Session) -> None:
-        r = client_with_session.get(f"/api/conversation/{mock_session.id}/export?format=json")
+        r = client_with_session.get(f"/api/conversation/{mock_session.id}/export?export_format=json")
         assert r.status_code == 200
 
     def test_export_json_content_type(self, client_with_session: TestClient, mock_session: Session) -> None:
-        r = client_with_session.get(f"/api/conversation/{mock_session.id}/export?format=json")
+        r = client_with_session.get(f"/api/conversation/{mock_session.id}/export?export_format=json")
         assert r.headers["content-type"].startswith("application/json")
 
     def test_export_json_body(self, client_with_session: TestClient, mock_session: Session) -> None:
-        r = client_with_session.get(f"/api/conversation/{mock_session.id}/export?format=json")
+        r = client_with_session.get(f"/api/conversation/{mock_session.id}/export?export_format=json")
         data = r.json()
         assert data["session_id"] == mock_session.id
         assert "messages" in data
@@ -216,42 +216,42 @@ class TestExportEndpoint:
         assert r.headers["content-type"].startswith("application/json")
 
     def test_export_text_status_200(self, client_with_session: TestClient, mock_session: Session) -> None:
-        r = client_with_session.get(f"/api/conversation/{mock_session.id}/export?format=text")
+        r = client_with_session.get(f"/api/conversation/{mock_session.id}/export?export_format=text")
         assert r.status_code == 200
 
     def test_export_text_content_type(self, client_with_session: TestClient, mock_session: Session) -> None:
-        r = client_with_session.get(f"/api/conversation/{mock_session.id}/export?format=text")
+        r = client_with_session.get(f"/api/conversation/{mock_session.id}/export?export_format=text")
         assert "text/plain" in r.headers["content-type"]
 
     def test_export_text_body(self, client_with_session: TestClient, mock_session: Session) -> None:
-        r = client_with_session.get(f"/api/conversation/{mock_session.id}/export?format=text")
+        r = client_with_session.get(f"/api/conversation/{mock_session.id}/export?export_format=text")
         assert mock_session.id in r.text
         assert "[USER]" in r.text
 
     def test_export_pdf_status_200(self, client_with_session: TestClient, mock_session: Session) -> None:
-        r = client_with_session.get(f"/api/conversation/{mock_session.id}/export?format=pdf")
+        r = client_with_session.get(f"/api/conversation/{mock_session.id}/export?export_format=pdf")
         assert r.status_code == 200
 
     def test_export_pdf_content_type(self, client_with_session: TestClient, mock_session: Session) -> None:
-        r = client_with_session.get(f"/api/conversation/{mock_session.id}/export?format=pdf")
+        r = client_with_session.get(f"/api/conversation/{mock_session.id}/export?export_format=pdf")
         assert r.headers["content-type"] == "application/pdf"
 
     def test_export_pdf_magic_bytes(self, client_with_session: TestClient, mock_session: Session) -> None:
-        r = client_with_session.get(f"/api/conversation/{mock_session.id}/export?format=pdf")
+        r = client_with_session.get(f"/api/conversation/{mock_session.id}/export?export_format=pdf")
         assert r.content[:4] == b"%PDF", "Response body does not start with PDF magic bytes"
 
     def test_export_pdf_content_disposition(self, client_with_session: TestClient, mock_session: Session) -> None:
-        r = client_with_session.get(f"/api/conversation/{mock_session.id}/export?format=pdf")
+        r = client_with_session.get(f"/api/conversation/{mock_session.id}/export?export_format=pdf")
         disposition = r.headers.get("content-disposition", "")
         assert mock_session.id in disposition
         assert "attachment" in disposition
 
     def test_export_nonexistent_session_404(self, client_with_session: TestClient) -> None:
-        r = client_with_session.get("/api/conversation/nonexistent-id/export?format=json")
+        r = client_with_session.get("/api/conversation/00000000-0000-0000-0000-000000000000/export?export_format=json")
         assert r.status_code == 404
 
     def test_export_invalid_format_422(self, client_with_session: TestClient, mock_session: Session) -> None:
-        r = client_with_session.get(f"/api/conversation/{mock_session.id}/export?format=xml")
+        r = client_with_session.get(f"/api/conversation/{mock_session.id}/export?export_format=xml")
         assert r.status_code == 422
 
     def test_export_agents_unavailable_503(self, mock_session: Session) -> None:
@@ -262,5 +262,5 @@ class TestExportEndpoint:
             patch("app.server.conversation_manager", None),
         ):
             client = TestClient(app)
-            r = client.get(f"/api/conversation/{mock_session.id}/export?format=json")
+            r = client.get(f"/api/conversation/{mock_session.id}/export?export_format=json")
         assert r.status_code == 503
