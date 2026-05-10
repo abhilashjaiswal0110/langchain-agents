@@ -479,6 +479,201 @@ class PIIMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
 
+class InjectionMiddleware(BaseHTTPMiddleware):
+    """Middleware for prompt injection and jailbreak detection.
+
+    Inspects incoming JSON request bodies for fields named ``message``,
+    ``input``, or ``query`` and applies :class:`InjectionDetector` to each
+    value found.
+
+    Behaviour by score:
+    - score >= 0.9 → block with HTTP 400
+    - score >= 0.85 → log a warning and pass through
+    - score < 0.85 → pass through silently
+
+    Only endpoints that accept user message input are scanned (conversation,
+    enterprise agents, deep agents, sales/recruitment agents, software-dev
+    agent).  Health, docs, analytics, and other non-input endpoints are
+    excluded.
+    """
+
+    # Paths that are NOT checked (non-input endpoints)
+    _DEFAULT_EXCLUDE: list[str] = [
+        "/health",
+        "/ready",
+        "/docs",
+        "/openapi.json",
+        "/redoc",
+        "/metrics",
+        "/analytics",
+        "/audit",
+        "/favicon.ico",
+    ]
+
+    # JSON body fields that carry user-supplied free text
+    _INPUT_FIELDS: tuple[str, ...] = ("message", "input", "query")
+
+    # Only scan paths that match one of these prefixes
+    _SCAN_PREFIXES: tuple[str, ...] = (
+        "/api/conversation",
+        "/api/enterprise",
+        "/api/deepagent",
+        "/api/sales-agent",
+        "/api/recruitment-agent",
+        "/api/software-dev-agent",
+        "/chat",
+        "/rag",
+        "/agent",
+    )
+
+    def __init__(
+        self,
+        app: ASGIApp,
+        exclude_paths: list[str] | None = None,
+        block_score: float = 0.9,
+        warn_score: float = 0.85,
+    ) -> None:
+        """Initialize injection middleware.
+
+        Args:
+            app: ASGI application.
+            exclude_paths: Paths to skip entirely (in addition to the built-in
+                list).
+            block_score: Minimum score at which requests are blocked (default
+                0.9).
+            warn_score: Minimum score at which a warning is logged but the
+                request is allowed through (default 0.85).
+        """
+        super().__init__(app)
+        self.exclude_paths: list[str] = list(self._DEFAULT_EXCLUDE) + (
+            exclude_paths or []
+        )
+        self.block_score = block_score
+        self.warn_score = warn_score
+
+    def _should_scan(self, path: str) -> bool:
+        """Determine whether a request path should be scanned.
+
+        Args:
+            path: URL path of the request.
+
+        Returns:
+            ``True`` when the path should be scanned for injections.
+        """
+        if path in self.exclude_paths:
+            return False
+        return any(path.startswith(prefix) for prefix in self._SCAN_PREFIXES)
+
+    async def dispatch(
+        self,
+        request: Request,
+        call_next: Callable,
+    ) -> Response:
+        """Process request with injection detection.
+
+        Args:
+            request: Incoming request.
+            call_next: Next middleware/handler.
+
+        Returns:
+            HTTP 400 response when a high-confidence injection is detected,
+            otherwise the normal downstream response.
+        """
+        import logging as _logging
+
+        _logger = _logging.getLogger(__name__)
+
+        if not self._should_scan(request.url.path):
+            return await call_next(request)
+
+        # Only scan POST/PUT/PATCH requests that may carry a body
+        if request.method not in {"POST", "PUT", "PATCH"}:
+            return await call_next(request)
+
+        try:
+            from app.governance.injection_detector import get_injection_detector
+
+            body_bytes = await request.body()
+            # Reset the body so downstream handlers can read it again
+            request._body = body_bytes  # type: ignore[attr-defined]
+
+            if body_bytes:
+                import json as _json
+
+                try:
+                    body_json = _json.loads(body_bytes.decode("utf-8", errors="ignore"))
+                except (_json.JSONDecodeError, ValueError):
+                    body_json = {}
+
+                if isinstance(body_json, dict):
+                    detector = get_injection_detector()
+                    gov_context = get_governance_context(request)
+                    user_id = (
+                        gov_context.user_context.user_id
+                        if gov_context
+                        else "anonymous"
+                    )
+
+                    for field in self._INPUT_FIELDS:
+                        value = body_json.get(field)
+                        if not isinstance(value, str) or not value:
+                            continue
+
+                        result = detector.analyze(value)
+
+                        if result.detected:
+                            if result.score >= self.block_score:
+                                # Log and block
+                                audit_logger = get_audit_logger()
+                                await audit_logger.log_async(
+                                    action=AuditAction.AGENT_ERROR,
+                                    user_id=user_id,
+                                    level=AuditLevel.WARNING,
+                                    status="failure",
+                                    metadata={
+                                        "path": request.url.path,
+                                        "field": field,
+                                        "pattern": result.matched_pattern,
+                                        "score": result.score,
+                                        "reason": "Prompt injection detected",
+                                    },
+                                )
+                                _logger.warning(
+                                    "Prompt injection blocked: user=%s path=%s "
+                                    "field=%s score=%.2f pattern=%r",
+                                    user_id,
+                                    request.url.path,
+                                    field,
+                                    result.score,
+                                    result.matched_pattern,
+                                )
+                                return JSONResponse(
+                                    status_code=400,
+                                    content={
+                                        "detail": "Request blocked: potential prompt injection detected"
+                                    },
+                                )
+                            elif result.score >= self.warn_score:
+                                _logger.warning(
+                                    "Possible prompt injection (warn only): "
+                                    "user=%s path=%s field=%s score=%.2f pattern=%r",
+                                    user_id,
+                                    request.url.path,
+                                    field,
+                                    result.score,
+                                    result.matched_pattern,
+                                )
+
+        except Exception as exc:
+            import logging as _logging2
+
+            _logging2.getLogger(__name__).warning(
+                "InjectionMiddleware error (non-blocking): %s", exc
+            )
+
+        return await call_next(request)
+
+
 class AnomalyMiddleware(BaseHTTPMiddleware):
     """Middleware for anomaly detection."""
 
@@ -707,6 +902,7 @@ def setup_governance_middleware(
     enable_audit: bool = True,
     enable_pii: bool = False,
     enable_anomaly: bool = False,
+    enable_injection: bool = True,
     api_key_header: str = "X-API-Key",
     exclude_paths: list[str] | None = None,
     block_on_pii: bool = False,
@@ -721,6 +917,7 @@ def setup_governance_middleware(
         enable_audit: Whether to enable audit logging.
         enable_pii: Whether to enable PII detection.
         enable_anomaly: Whether to enable anomaly detection.
+        enable_injection: Whether to enable prompt injection detection.
         api_key_header: Header name for API key.
         exclude_paths: Paths to exclude from governance.
         block_on_pii: Whether to block requests with critical PII.
@@ -728,7 +925,8 @@ def setup_governance_middleware(
 
     Note:
         Middleware is applied in reverse order of addition.
-        Order will be: Exception -> Anomaly -> PII -> Audit -> RateLimit -> RBAC
+        Order will be:
+        Exception -> Anomaly -> Injection -> PII -> Audit -> RateLimit -> RBAC
     """
     default_exclude = ["/health", "/ready", "/docs", "/openapi.json", "/redoc"]
     exclude = exclude_paths or default_exclude
@@ -742,6 +940,13 @@ def setup_governance_middleware(
             AnomalyMiddleware,
             exclude_paths=exclude,
             block_on_critical=block_on_anomaly,
+        )
+
+    # Add injection detection (after anomaly, before PII)
+    if enable_injection:
+        app.add_middleware(
+            InjectionMiddleware,
+            exclude_paths=exclude,
         )
 
     # Add PII detection

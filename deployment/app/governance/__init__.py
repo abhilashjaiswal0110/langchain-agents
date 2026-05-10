@@ -8,6 +8,7 @@ This module provides a comprehensive governance layer including:
 - PII detection and masking
 - Token usage cost tracking
 - Anomaly detection
+- Prompt injection / jailbreak detection
 - FastAPI middleware integration
 
 Usage:
@@ -31,6 +32,10 @@ Usage:
         # PII detection
         PIIDetector, PIIType, PIIMatch, PIIConfig,
         get_pii_detector, detect_pii, mask_pii,
+
+        # Injection detection
+        InjectionDetector, InjectionResult,
+        get_injection_detector, detect_injection,
 
         # Cost tracking
         CostTracker, TokenUsage, CostConfig,
@@ -121,6 +126,7 @@ from app.governance.middleware import (
     AuditMiddleware,
     GovernanceContext,
     GovernanceExceptionMiddleware,
+    InjectionMiddleware,
     PIIMiddleware,
     RateLimitMiddleware,
     RBACMiddleware,
@@ -150,6 +156,15 @@ from app.governance.pii_detector import (
     get_pii_detector,
     mask_pii,
     reset_pii_detector,
+)
+
+# Injection detection exports
+from app.governance.injection_detector import (
+    InjectionDetector,
+    InjectionResult,
+    detect_injection,
+    get_injection_detector,
+    reset_injection_detector,
 )
 
 # Cost tracking exports
@@ -240,6 +255,7 @@ __all__ = [
     "RateLimitMiddleware",
     "AuditMiddleware",
     "PIIMiddleware",
+    "InjectionMiddleware",
     "AnomalyMiddleware",
     "GovernanceExceptionMiddleware",
     "setup_governance_middleware",
@@ -265,6 +281,12 @@ __all__ = [
     "detect_pii",
     "mask_pii",
     "check_for_pii",
+    # Injection detection
+    "InjectionDetector",
+    "InjectionResult",
+    "get_injection_detector",
+    "reset_injection_detector",
+    "detect_injection",
     # Cost tracking
     "ModelProvider",
     "ModelPricing",
