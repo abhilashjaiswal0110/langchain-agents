@@ -4,11 +4,15 @@ Covers:
 - Cache disabled by default (CACHE_ENABLED not set → get/set are no-ops)
 - Cache hit returns stored response when enabled
 - Whitespace normalisation produces identical keys
+- TTL expiry: stale entries are treated as misses
+- Size-cap eviction: oldest entry removed when at MAX_CACHE_SIZE
 - Cache stats and clear endpoints
 """
 
 import importlib
 import os
+import time
+from unittest.mock import patch
 
 import pytest
 from fastapi.testclient import TestClient
@@ -108,6 +112,55 @@ def test_get_cache_singleton():
     c1 = get_cache()
     c2 = get_cache()
     assert c1 is c2
+
+
+def test_cache_entry_expires_after_ttl(monkeypatch):
+    """An entry whose TTL has elapsed is treated as a cache miss and removed."""
+    monkeypatch.setenv("CACHE_ENABLED", "true")
+    import app.cache.response_cache as rc
+
+    cache = rc.AgentResponseCache()
+
+    # Patch time.time so the entry was stored 2 seconds ago and TTL is 1 second.
+    base_time = 1_000_000.0
+    with patch("app.cache.response_cache.time") as mock_time:
+        # At store time the clock reads base_time.
+        mock_time.time.return_value = base_time
+        cache.set("research", "expiry test", "some response")
+        assert cache.size() == 1
+
+        # Advance clock past TTL (TTL is read from module constant, default 3600 s,
+        # but we set the expiry directly via the mocked clock).
+        mock_time.time.return_value = base_time + rc.CACHE_TTL_SECONDS + 1
+        result = cache.get("research", "expiry test")
+
+    assert result is None, "Expired entry should return None"
+    assert cache.size() == 0, "Expired entry should be removed from the store"
+
+
+def test_cache_evicts_oldest_when_full(monkeypatch):
+    """When the store is at MAX_CACHE_SIZE the oldest entry is evicted (FIFO)."""
+    monkeypatch.setenv("CACHE_ENABLED", "true")
+    import app.cache.response_cache as rc
+
+    # Override MAX_CACHE_SIZE to 2 for this test.
+    original_max = rc.MAX_CACHE_SIZE
+    rc.MAX_CACHE_SIZE = 2
+    try:
+        cache = rc.AgentResponseCache()
+        cache.set("research", "query one", "response one")
+        cache.set("research", "query two", "response two")
+        assert cache.size() == 2
+
+        # Adding a third entry should evict "query one" (the oldest).
+        cache.set("research", "query three", "response three")
+
+        assert cache.size() == 2, "Size must not exceed MAX_CACHE_SIZE"
+        assert cache.get("research", "query one") is None, "Oldest entry should be evicted"
+        assert cache.get("research", "query two") == "response two"
+        assert cache.get("research", "query three") == "response three"
+    finally:
+        rc.MAX_CACHE_SIZE = original_max
 
 
 # ---------------------------------------------------------------------------

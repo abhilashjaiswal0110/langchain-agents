@@ -4,11 +4,15 @@ Caching is opt-in via the ``CACHE_ENABLED`` environment variable (default
 ``false``) so that all existing behaviour is preserved when the flag is not
 set.  Only identical or near-identical queries (after whitespace normalisation)
 are served from cache; everything else passes through to the LLM unchanged.
+
+Entries expire after ``CACHE_TTL_SECONDS`` seconds (default 3600).  When the
+store reaches ``MAX_CACHE_SIZE`` entries the oldest entry is evicted (FIFO)
+before the new one is added.
 """
 
 import hashlib
 import os
-from typing import Any
+import time
 
 # ---------------------------------------------------------------------------
 # Module-level configuration (read once at import time so that test monkeypatching
@@ -19,9 +23,10 @@ from typing import Any
 # ---------------------------------------------------------------------------
 
 CACHE_TTL_SECONDS = int(os.getenv("CACHE_TTL_SECONDS", "3600"))
+MAX_CACHE_SIZE = int(os.getenv("MAX_CACHE_SIZE", "1000"))
 
 
-def _is_cache_enabled() -> bool:
+def is_cache_enabled() -> bool:
     """Return True if response caching is enabled via environment variable.
 
     Re-evaluated on every call so that environment changes (e.g. in tests)
@@ -40,6 +45,11 @@ class AgentResponseCache:
     Cache lookups and writes are no-ops when ``CACHE_ENABLED`` is not ``true``,
     ensuring zero impact on existing behaviour in the default configuration.
 
+    Entries carry an expiry timestamp derived from ``CACHE_TTL_SECONDS``.  A
+    stale entry is treated as a miss and removed on the next ``get`` call.
+    When the store reaches ``MAX_CACHE_SIZE`` the oldest entry (by insertion
+    order) is evicted before the new one is added.
+
     Example:
         >>> cache = AgentResponseCache()
         >>> cache.set("research", "AI trends", "Here are the trends…")
@@ -49,7 +59,9 @@ class AgentResponseCache:
 
     def __init__(self) -> None:
         """Initialise an empty in-memory store."""
-        self._store: dict[str, str] = {}
+        # Stored as key -> (response, expiry_time).  Insertion order is
+        # preserved by dict (Python 3.7+) which enables cheap FIFO eviction.
+        self._store: dict[str, tuple[str, float]] = {}
 
     def _key(self, agent_type: str, message: str) -> str:
         """Derive a deterministic cache key from agent type and query text.
@@ -72,31 +84,50 @@ class AgentResponseCache:
     def get(self, agent_type: str, message: str) -> str | None:
         """Return a cached response, or ``None`` when not found or cache is off.
 
+        Expired entries are removed on access so that the store does not
+        accumulate stale data indefinitely.
+
         Args:
             agent_type: Identifier for the agent.
             message: The user query used as part of the cache key.
 
         Returns:
             The previously stored response string, or ``None`` if the cache is
-            disabled, the entry does not exist, or the entry has been evicted.
+            disabled, the entry does not exist, or the entry has expired.
         """
-        if not _is_cache_enabled():
+        if not is_cache_enabled():
             return None
-        return self._store.get(self._key(agent_type, message))
+        key = self._key(agent_type, message)
+        entry = self._store.get(key)
+        if entry is None:
+            return None
+        response, expiry = entry
+        if time.time() > expiry:
+            del self._store[key]
+            return None
+        return response
 
     def set(self, agent_type: str, message: str, response: str) -> None:
         """Store a response in the cache.
 
-        This is a no-op when ``CACHE_ENABLED`` is not ``true``.
+        This is a no-op when ``CACHE_ENABLED`` is not ``true``.  When the
+        store is at capacity (``MAX_CACHE_SIZE``), the oldest entry is evicted
+        before the new one is inserted.
 
         Args:
             agent_type: Identifier for the agent.
             message: The user query used as part of the cache key.
             response: The response text to store.
         """
-        if not _is_cache_enabled():
+        if not is_cache_enabled():
             return
-        self._store[self._key(agent_type, message)] = response
+        key = self._key(agent_type, message)
+        expiry = time.time() + CACHE_TTL_SECONDS
+        # Enforce size limit: evict oldest entry (FIFO) when at capacity.
+        if len(self._store) >= MAX_CACHE_SIZE:
+            oldest_key = next(iter(self._store))
+            del self._store[oldest_key]
+        self._store[key] = (response, expiry)
 
     def clear(self) -> None:
         """Remove all entries from the cache."""

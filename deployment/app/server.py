@@ -35,7 +35,7 @@ print(f"[Startup] .env file exists: {_ENV_FILE.exists()}, loaded: {_env_loaded}"
 from langchain_core.messages import AIMessage
 
 # Response cache (opt-in via CACHE_ENABLED=true; default off for backward compat)
-from app.cache.response_cache import get_cache, _is_cache_enabled
+from app.cache.response_cache import CACHE_TTL_SECONDS, MAX_CACHE_SIZE, get_cache, is_cache_enabled
 
 
 # ============================================================================
@@ -572,8 +572,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     # Initialise response cache singleton (no-op when CACHE_ENABLED=false)
     _agent_cache = get_cache()
-    if _is_cache_enabled():
-        print(f"[OK] Response cache enabled (TTL env hint: CACHE_TTL_SECONDS)")
+    if is_cache_enabled():
+        print(f"[OK] Response cache enabled (TTL={CACHE_TTL_SECONDS}s, max_size={MAX_CACHE_SIZE})")
     else:
         print("[--] Response cache disabled (set CACHE_ENABLED=true to enable)")
 
@@ -1679,6 +1679,8 @@ async def research_agent_invoke(request: ResearchAgentRequest) -> EnterpriseAgen
             detail="Research Agent not available. Set OPENAI_API_KEY or ANTHROPIC_API_KEY.",
         )
 
+    # Cache key is message-only (not session-scoped): research responses are stateless
+    # with respect to session context — the same query always yields the same answer.
     # Check cache before invoking the LLM (no-op when CACHE_ENABLED=false)
     _agent_cache = get_cache()
     cached_response = _agent_cache.get("research", request.query)
@@ -2687,7 +2689,7 @@ async def cache_stats() -> dict:
     Returns:
         Dictionary with ``enabled`` (bool) and ``size`` (int) fields.
     """
-    return {"enabled": _is_cache_enabled(), "size": get_cache().size()}
+    return {"enabled": is_cache_enabled(), "size": get_cache().size()}
 
 
 @app.delete("/api/cache/clear", tags=["Cache"])
