@@ -1467,6 +1467,50 @@ async def list_agents() -> dict:
 
 
 # ============================================================================
+# Master Orchestrator — unified single-entry-point endpoint
+# ============================================================================
+
+_orchestrator_instance = None
+
+
+def _get_orchestrator():
+    global _orchestrator_instance
+    if _orchestrator_instance is None:
+        from app.agents.supervisors.master_orchestrator import MasterOrchestrator
+
+        _orchestrator_instance = MasterOrchestrator(
+            conversation_manager=conversation_manager,
+        )
+    return _orchestrator_instance
+
+
+@app.post("/api/orchestrate", tags=["Orchestration"])
+async def orchestrate(body: dict) -> dict:
+    """Route a message to the most appropriate agent automatically.
+
+    Classifies the request and forwards it to one of:
+    IT Support, Domain Agent, Deep Agent, or Research Agent.
+
+    Args:
+        body: JSON with ``message`` (required), ``session_id`` (optional),
+              and ``user_context`` dict (optional).
+
+    Returns:
+        Dict with ``cluster``, ``agent_type``, ``session_id``, and ``response``.
+    """
+    message = body.get("message", "")
+    if not message:
+        raise HTTPException(status_code=422, detail="'message' field is required")
+
+    result = await _get_orchestrator().route(
+        message=message,
+        session_id=body.get("session_id"),
+        user_context=body.get("user_context", {}),
+    )
+    return result
+
+
+# ============================================================================
 # Integration Endpoints (for external platforms: Copilot Studio, Azure AI, etc.)
 # ============================================================================
 
