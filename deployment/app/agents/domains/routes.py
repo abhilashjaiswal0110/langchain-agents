@@ -22,6 +22,7 @@ from app.agents.domains import (
     DataAIAgent,
     DatacenterAgent,
     DomainAgent,
+    FinanceAgent,
     HRAgent,
     LnDAgent,
     MarComAgent,
@@ -41,6 +42,7 @@ DOMAIN_AGENT_REGISTRY: dict[str, type[DomainAgent]] = {
     "cloud": CloudAgent,
     "cybersecurity": CybersecurityAgent,
     "data_ai": DataAIAgent,
+    "finance": FinanceAgent,
 }
 
 # Lazy-loaded agent instances (singleton per domain)

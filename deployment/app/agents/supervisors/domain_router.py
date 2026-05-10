@@ -35,6 +35,7 @@ class DomainIntent(str, Enum):
     CLOUD = "cloud"
     CYBERSECURITY = "cybersecurity"
     DATA_AI = "data_ai"
+    FINANCE = "finance"
     GENERAL = "general"
     UNKNOWN = "unknown"
 
@@ -123,6 +124,12 @@ DOMAIN_KEYWORDS: dict[DomainIntent, list[str]] = {
         "machine learning", "model", "dataset", "pipeline", "etl",
         "bi", "business intelligence", "dashboard", "report",
         "visualization", "prediction", "llm", "nlp", "chatbot",
+    ],
+    DomainIntent.FINANCE: [
+        "finance", "budget", "invoice", "expense", "accounts payable",
+        "accounts receivable", "gl", "general ledger", "cost centre",
+        "fiscal", "reimbursement", "purchase order", "po",
+        "financial report", "variance", "actuals", "forecast",
     ],
     DomainIntent.GENERAL: [
         "password", "reset", "account", "login", "access", "vpn",

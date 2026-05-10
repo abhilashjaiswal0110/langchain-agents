@@ -38,6 +38,7 @@ class DomainType(str, Enum):
     CLOUD = "cloud"
     CYBERSECURITY = "cybersecurity"
     DATA_AI = "data_ai"
+    FINANCE = "finance"
     GENERAL = "general"
 
 
@@ -328,6 +329,7 @@ def create_domain_agent(
     from app.agents.domains.cloud_agent import CloudAgent
     from app.agents.domains.cybersecurity_agent import CybersecurityAgent
     from app.agents.domains.data_ai_agent import DataAIAgent
+    from app.agents.domains.finance_agent import FinanceAgent
 
     agents = {
         DomainType.MARCOM: MarComAgent,
@@ -338,6 +340,7 @@ def create_domain_agent(
         DomainType.CLOUD: CloudAgent,
         DomainType.CYBERSECURITY: CybersecurityAgent,
         DomainType.DATA_AI: DataAIAgent,
+        DomainType.FINANCE: FinanceAgent,
     }
 
     agent_class = agents.get(domain)
