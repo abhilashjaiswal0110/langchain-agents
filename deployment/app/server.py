@@ -626,6 +626,14 @@ try:
 except ImportError as e:
     print(f"[--] Software Development Deep Agent routes not loaded: {e}")
 
+# Include Domain Agent routes (8 specialised domain agents)
+try:
+    from app.agents.domains.routes import router as domain_router
+    app.include_router(domain_router)
+    print("[OK] Domain Agent routes loaded (marcom, hr, lnd, presales, datacenter, cloud, cybersecurity, data_ai)")
+except ImportError as e:
+    print(f"[--] Domain Agent routes not loaded: {e}")
+
 
 # ============================================================================
 # Response Models
