@@ -42,15 +42,6 @@ class ConversationManager:
         "servicenow": "ServiceNow Agent - Ticket management, change requests, CMDB",
         "document_intelligence": "Document Intelligence Agent - Multi-format document analysis, RAG, translation",
         "employee_experience": "Employee Experience Agent - HR support, career development, wellbeing, benefits",
-        # Domain specialists
-        "marcom": "MarCom Agent - Marketing & Communications support",
-        "hr": "HR Agent - Human Resources policies, benefits, and onboarding",
-        "lnd": "L&D Agent - Learning & Development, training, and certifications",
-        "presales": "Presales Agent - Sales support, proposals, and customer demos",
-        "datacenter": "Datacenter Agent - Physical datacenter and server operations",
-        "cloud": "Cloud Agent - Azure, AWS, GCP, VMs, and container infrastructure",
-        "cybersecurity": "Cybersecurity Agent - Security incidents, vulnerabilities, and compliance",
-        "data_ai": "Data & AI Agent - Analytics, machine learning, and data pipelines",
     }
 
     def __init__(self, session_store: BaseSessionStore | None = None) -> None:
@@ -111,26 +102,6 @@ class ConversationManager:
         except Exception as e:
             print(f"Failed to load Employee Experience Agent: {e}")
 
-        # Load domain specialist agents
-        _domain_agent_classes = {
-            "marcom": ("app.agents.domains.marcom_agent", "MarComAgent"),
-            "hr": ("app.agents.domains.hr_agent", "HRAgent"),
-            "lnd": ("app.agents.domains.lnd_agent", "LnDAgent"),
-            "presales": ("app.agents.domains.presales_agent", "PresalesAgent"),
-            "datacenter": ("app.agents.domains.datacenter_agent", "DatacenterAgent"),
-            "cloud": ("app.agents.domains.cloud_agent", "CloudAgent"),
-            "cybersecurity": ("app.agents.domains.cybersecurity_agent", "CybersecurityAgent"),
-            "data_ai": ("app.agents.domains.data_ai_agent", "DataAIAgent"),
-        }
-        for domain_key, (module_path, class_name) in _domain_agent_classes.items():
-            try:
-                import importlib
-                module = importlib.import_module(module_path)
-                agent_class = getattr(module, class_name)
-                self._agents[domain_key] = agent_class()
-            except Exception as e:
-                print(f"Failed to load {class_name}: {e}")
-
     def get_available_agents(self) -> dict[str, str]:
         """Get list of available agents."""
         return {k: v for k, v in self.AVAILABLE_AGENTS.items() if k in self._agents}
@@ -143,14 +114,6 @@ class ConversationManager:
             "servicenow",
             "document_intelligence",
             "employee_experience",
-            "marcom",
-            "hr",
-            "lnd",
-            "presales",
-            "datacenter",
-            "cloud",
-            "cybersecurity",
-            "data_ai",
         ],
         user_id: str | None = None,
         metadata: dict | None = None,

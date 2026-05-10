@@ -157,14 +157,14 @@ def list_domain_agents() -> AgentListResponse:
     Returns:
         JSON with a list of agent descriptors (type, name, description).
     """
-    entries = [
-        AgentEntry(
+    entries = []
+    for key in DOMAIN_AGENT_REGISTRY:
+        agent = _get_agent(key)
+        entries.append(AgentEntry(
             type=key,
-            name=cls().name,
-            description=cls().description,
-        )
-        for key, cls in DOMAIN_AGENT_REGISTRY.items()
-    ]
+            name=agent.name,
+            description=agent.description or "",
+        ))
     return AgentListResponse(agents=entries)
 
 
@@ -217,28 +217,33 @@ async def chat_via_router(body: DomainChatRequest) -> dict[str, Any]:
     """
     domain_router = _get_domain_router()
 
-    # Classify the intent
-    routing = await domain_router.aclassify(body.message)
-    target_domain = routing.intent.value
+    try:
+        # Classify the intent
+        routing = await domain_router.aclassify(body.message)
+        target_domain = routing.intent.value
 
-    # If classified to a known domain, invoke it
-    if target_domain in DOMAIN_AGENT_REGISTRY:
-        agent = _get_agent(target_domain)
-        messages = [HumanMessage(content=body.message)]
-        result = await agent.ainvoke(
-            messages=messages,
-            user_context=body.user_context or {},
-            thread_id=body.session_id,
-        )
+        # If classified to a known domain, invoke it
+        if target_domain in DOMAIN_AGENT_REGISTRY:
+            agent = _get_agent(target_domain)
+            messages = [HumanMessage(content=body.message)]
+            result = await agent.ainvoke(
+                messages=messages,
+                user_context=body.user_context or {},
+                thread_id=body.session_id,
+            )
+            return {
+                "response": result.get("response", ""),
+                "domain": target_domain,
+                "routing": routing.to_dict(),
+            }
+
+        # Fallback: unknown or general intent without a dedicated domain agent
         return {
-            "response": result.get("response", ""),
+            "response": "I'm not sure which specialist can best help with this request. Please provide more details or contact IT support.",
             "domain": target_domain,
             "routing": routing.to_dict(),
         }
-
-    # Fallback: unknown or general intent without a dedicated domain agent
-    return {
-        "response": "I'm not sure which specialist can best help with this request. Please provide more details or contact IT support.",
-        "domain": target_domain,
-        "routing": routing.to_dict(),
-    }
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Router error: {str(e)}")
