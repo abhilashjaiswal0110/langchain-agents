@@ -1604,6 +1604,55 @@ async def research_agent_invoke(request: ResearchAgentRequest) -> EnterpriseAgen
         )
 
 
+@app.post("/api/enterprise/research/stream", tags=["Enterprise Agents"])
+async def research_agent_stream(request: ResearchAgentRequest):
+    """Stream responses from the Research Agent using Server-Sent Events.
+
+    Streams incremental tokens, tool events, and a final ``complete`` event.
+
+    Args:
+        request: Research query and optional session ID.
+
+    Returns:
+        SSE stream of events.
+    """
+    import json
+    import traceback
+
+    def _serialize(event: dict) -> str:
+        def _default(obj: object) -> object:
+            if hasattr(obj, "isoformat"):
+                return obj.isoformat()
+            if hasattr(obj, "model_dump"):
+                return obj.model_dump()
+            return str(obj)
+        return json.dumps(event, default=_default)
+
+    if not enterprise_agents_loaded or research_agent is None:
+        async def _unavailable():
+            yield f"data: {_serialize({'type': 'error', 'data': {'error': 'Research Agent not available. Set OPENAI_API_KEY or ANTHROPIC_API_KEY.'}})}\n\n"
+        return StreamingResponse(_unavailable(), media_type="text/event-stream")
+
+    async def _event_generator():
+        try:
+            async for event in research_agent.astream(
+                message=request.query,
+                session_id=request.session_id,
+            ):
+                yield f"data: {_serialize(event)}\n\n"
+        except GeneratorExit:
+            pass
+        except Exception as exc:
+            traceback.print_exc()
+            yield f"data: {_serialize({'type': 'error', 'data': {'error': str(exc)}})}\n\n"
+
+    return StreamingResponse(
+        _event_generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
+    )
+
+
 @app.post("/api/enterprise/content/invoke", response_model=EnterpriseAgentResponse, tags=["Enterprise Agents"])
 async def content_agent_invoke(request: ContentAgentRequest) -> EnterpriseAgentResponse:
     """Invoke the Content Generation Agent.
@@ -1650,6 +1699,55 @@ async def content_agent_invoke(request: ContentAgentRequest) -> EnterpriseAgentR
         )
 
 
+@app.post("/api/enterprise/content/stream", tags=["Enterprise Agents"])
+async def content_agent_stream(request: ContentAgentRequest):
+    """Stream responses from the Content Generation Agent using Server-Sent Events.
+
+    Args:
+        request: Content topic, platform, tone, and audience.
+
+    Returns:
+        SSE stream of events.
+    """
+    import json
+    import traceback
+
+    def _serialize(event: dict) -> str:
+        def _default(obj: object) -> object:
+            if hasattr(obj, "isoformat"):
+                return obj.isoformat()
+            if hasattr(obj, "model_dump"):
+                return obj.model_dump()
+            return str(obj)
+        return json.dumps(event, default=_default)
+
+    if not enterprise_agents_loaded or content_agent is None:
+        async def _unavailable():
+            yield f"data: {_serialize({'type': 'error', 'data': {'error': 'Content Agent not available. Set OPENAI_API_KEY or ANTHROPIC_API_KEY.'}})}\n\n"
+        return StreamingResponse(_unavailable(), media_type="text/event-stream")
+
+    message = f"Create {request.tone} content for {request.platform} about: {request.topic}. Target audience: {request.audience}."
+
+    async def _event_generator():
+        try:
+            async for event in content_agent.astream(
+                message=message,
+                session_id=request.session_id,
+            ):
+                yield f"data: {_serialize(event)}\n\n"
+        except GeneratorExit:
+            pass
+        except Exception as exc:
+            traceback.print_exc()
+            yield f"data: {_serialize({'type': 'error', 'data': {'error': str(exc)}})}\n\n"
+
+    return StreamingResponse(
+        _event_generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
+    )
+
+
 @app.post("/api/enterprise/data-analyst/invoke", response_model=EnterpriseAgentResponse, tags=["Enterprise Agents"])
 async def data_analyst_invoke(request: DataAnalystRequest) -> EnterpriseAgentResponse:
     """Invoke the Data Analyst Agent.
@@ -1690,6 +1788,55 @@ async def data_analyst_invoke(request: DataAnalystRequest) -> EnterpriseAgentRes
             error=str(e),
             agent_type="data_analyst",
         )
+
+
+@app.post("/api/enterprise/data-analyst/stream", tags=["Enterprise Agents"])
+async def data_analyst_stream(request: DataAnalystRequest):
+    """Stream responses from the Data Analyst Agent using Server-Sent Events.
+
+    Args:
+        request: Analysis message and optional session ID.
+
+    Returns:
+        SSE stream of events.
+    """
+    import json
+    import traceback
+
+    def _serialize(event: dict) -> str:
+        def _default(obj: object) -> object:
+            if hasattr(obj, "isoformat"):
+                return obj.isoformat()
+            if hasattr(obj, "model_dump"):
+                return obj.model_dump()
+            return str(obj)
+        return json.dumps(event, default=_default)
+
+    if not enterprise_agents_loaded or data_analyst_agent is None:
+        async def _unavailable():
+            yield f"data: {_serialize({'type': 'error', 'data': {'error': 'Data Analyst Agent not available. Set OPENAI_API_KEY or ANTHROPIC_API_KEY.'}})}\n\n"
+        return StreamingResponse(_unavailable(), media_type="text/event-stream")
+
+    effective_session_id = request.session_id or "default_session"
+
+    async def _event_generator():
+        try:
+            async for event in data_analyst_agent.astream(
+                message=request.message,
+                session_id=effective_session_id,
+            ):
+                yield f"data: {_serialize(event)}\n\n"
+        except GeneratorExit:
+            pass
+        except Exception as exc:
+            traceback.print_exc()
+            yield f"data: {_serialize({'type': 'error', 'data': {'error': str(exc)}})}\n\n"
+
+    return StreamingResponse(
+        _event_generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
+    )
 
 
 @app.post("/api/enterprise/data-analyst/upload", tags=["Enterprise Agents"])
@@ -1858,6 +2005,56 @@ async def document_agent_invoke(request: DocumentAgentRequest) -> EnterpriseAgen
         )
 
 
+@app.post("/api/enterprise/documents/stream", tags=["Enterprise Agents"])
+async def document_agent_stream(request: DocumentAgentRequest):
+    """Stream responses from the IT Document Generator Agent using Server-Sent Events.
+
+    Args:
+        request: Document type, title, description, and sections.
+
+    Returns:
+        SSE stream of events.
+    """
+    import json
+    import traceback
+
+    def _serialize(event: dict) -> str:
+        def _default(obj: object) -> object:
+            if hasattr(obj, "isoformat"):
+                return obj.isoformat()
+            if hasattr(obj, "model_dump"):
+                return obj.model_dump()
+            return str(obj)
+        return json.dumps(event, default=_default)
+
+    if not enterprise_agents_loaded or document_agent is None:
+        async def _unavailable():
+            yield f"data: {_serialize({'type': 'error', 'data': {'error': 'Document Agent not available. Set OPENAI_API_KEY or ANTHROPIC_API_KEY.'}})}\n\n"
+        return StreamingResponse(_unavailable(), media_type="text/event-stream")
+
+    sections_str = str(request.sections or [])
+    message = f"Create a {request.doc_type} document titled '{request.title}'. Purpose: {request.description}. Sections: {sections_str}."
+
+    async def _event_generator():
+        try:
+            async for event in document_agent.astream(
+                message=message,
+                session_id=request.session_id,
+            ):
+                yield f"data: {_serialize(event)}\n\n"
+        except GeneratorExit:
+            pass
+        except Exception as exc:
+            traceback.print_exc()
+            yield f"data: {_serialize({'type': 'error', 'data': {'error': str(exc)}})}\n\n"
+
+    return StreamingResponse(
+        _event_generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
+    )
+
+
 @app.post("/api/enterprise/rag/invoke", response_model=EnterpriseAgentResponse, tags=["Enterprise Agents"])
 async def rag_agent_invoke(request: RAGAgentRequest) -> EnterpriseAgentResponse:
     """Invoke the Multilingual RAG Agent.
@@ -1897,6 +2094,56 @@ async def rag_agent_invoke(request: RAGAgentRequest) -> EnterpriseAgentResponse:
             error=str(e),
             agent_type="multilingual_rag",
         )
+
+
+@app.post("/api/enterprise/rag/stream", tags=["Enterprise Agents"])
+async def rag_agent_stream(request: RAGAgentRequest):
+    """Stream responses from the Multilingual RAG Agent using Server-Sent Events.
+
+    Args:
+        request: Query, optional language, and session ID.
+
+    Returns:
+        SSE stream of events.
+    """
+    import json
+    import traceback
+
+    def _serialize(event: dict) -> str:
+        def _default(obj: object) -> object:
+            if hasattr(obj, "isoformat"):
+                return obj.isoformat()
+            if hasattr(obj, "model_dump"):
+                return obj.model_dump()
+            return str(obj)
+        return json.dumps(event, default=_default)
+
+    if not enterprise_agents_loaded or multilingual_rag_agent is None:
+        async def _unavailable():
+            yield f"data: {_serialize({'type': 'error', 'data': {'error': 'RAG Agent not available. Set OPENAI_API_KEY or ANTHROPIC_API_KEY.'}})}\n\n"
+        return StreamingResponse(_unavailable(), media_type="text/event-stream")
+
+    language_hint = f" Answer in {request.language}." if request.language and request.language != "auto" else ""
+    message = f"{request.query}{language_hint}"
+
+    async def _event_generator():
+        try:
+            async for event in multilingual_rag_agent.astream(
+                message=message,
+                session_id=request.session_id,
+            ):
+                yield f"data: {_serialize(event)}\n\n"
+        except GeneratorExit:
+            pass
+        except Exception as exc:
+            traceback.print_exc()
+            yield f"data: {_serialize({'type': 'error', 'data': {'error': str(exc)}})}\n\n"
+
+    return StreamingResponse(
+        _event_generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
+    )
 
 
 @app.post("/api/enterprise/rag/upload", tags=["Enterprise Agents"])
@@ -2023,6 +2270,54 @@ async def hitl_support_invoke(request: HITLSupportRequest) -> EnterpriseAgentRes
         )
 
 
+@app.post("/api/enterprise/support/stream", tags=["Enterprise Agents"])
+async def hitl_support_stream(request: HITLSupportRequest):
+    """Stream responses from the HITL IT Support Agent using Server-Sent Events.
+
+    Args:
+        request: Support message, session ID, and user ID.
+
+    Returns:
+        SSE stream of events.
+    """
+    import json
+    import traceback
+
+    def _serialize(event: dict) -> str:
+        def _default(obj: object) -> object:
+            if hasattr(obj, "isoformat"):
+                return obj.isoformat()
+            if hasattr(obj, "model_dump"):
+                return obj.model_dump()
+            return str(obj)
+        return json.dumps(event, default=_default)
+
+    if not enterprise_agents_loaded or hitl_support_agent is None:
+        async def _unavailable():
+            yield f"data: {_serialize({'type': 'error', 'data': {'error': 'HITL Support Agent not available. Set OPENAI_API_KEY or ANTHROPIC_API_KEY.'}})}\n\n"
+        return StreamingResponse(_unavailable(), media_type="text/event-stream")
+
+    async def _event_generator():
+        try:
+            async for event in hitl_support_agent.astream(
+                message=request.message,
+                session_id=request.session_id,
+                user_id=request.user_id,
+            ):
+                yield f"data: {_serialize(event)}\n\n"
+        except GeneratorExit:
+            pass
+        except Exception as exc:
+            traceback.print_exc()
+            yield f"data: {_serialize({'type': 'error', 'data': {'error': str(exc)}})}\n\n"
+
+    return StreamingResponse(
+        _event_generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
+    )
+
+
 @app.post("/api/enterprise/support/approve", tags=["Enterprise Agents"])
 async def hitl_approve_action(request: HITLApprovalRequest) -> dict:
     """Approve or reject a pending action in HITL Support.
@@ -2101,6 +2396,68 @@ async def code_assistant_invoke(request: CodeAssistantRequest) -> EnterpriseAgen
         )
 
 
+@app.post("/api/enterprise/code/stream", tags=["Enterprise Agents"])
+async def code_assistant_stream(request: CodeAssistantRequest):
+    """Stream responses from the Code Assistant Agent using Server-Sent Events.
+
+    Args:
+        request: Code, language, action type, and security flag.
+
+    Returns:
+        SSE stream of events.
+    """
+    import json
+    import traceback
+
+    def _serialize(event: dict) -> str:
+        def _default(obj: object) -> object:
+            if hasattr(obj, "isoformat"):
+                return obj.isoformat()
+            if hasattr(obj, "model_dump"):
+                return obj.model_dump()
+            return str(obj)
+        return json.dumps(event, default=_default)
+
+    if not enterprise_agents_loaded or code_assistant_agent is None:
+        async def _unavailable():
+            yield f"data: {_serialize({'type': 'error', 'data': {'error': 'Code Assistant Agent not available. Set OPENAI_API_KEY or ANTHROPIC_API_KEY.'}})}\n\n"
+        return StreamingResponse(_unavailable(), media_type="text/event-stream")
+
+    if request.action == "analyze":
+        security_line = "3. Security vulnerabilities\n" if request.include_security else ""
+        message = (
+            f"Please analyze this {request.language} code:\n\n"
+            f"```{request.language}\n{request.code}\n```\n\n"
+            f"Provide:\n1. Code structure analysis\n2. Legacy patterns found\n"
+            f"{security_line}4. Modernization suggestions\n5. Example improvements"
+        )
+    else:
+        message = (
+            f"Please help modernize this {request.language} code:\n\n"
+            f"```{request.language}\n{request.code}\n```\n\n"
+            f"Provide step-by-step modernization recommendations."
+        )
+
+    async def _event_generator():
+        try:
+            async for event in code_assistant_agent.astream(
+                message=message,
+                session_id=request.session_id,
+            ):
+                yield f"data: {_serialize(event)}\n\n"
+        except GeneratorExit:
+            pass
+        except Exception as exc:
+            traceback.print_exc()
+            yield f"data: {_serialize({'type': 'error', 'data': {'error': str(exc)}})}\n\n"
+
+    return StreamingResponse(
+        _event_generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
+    )
+
+
 # ============================================================================
 # Document Intelligence Agent Endpoints
 # ============================================================================
@@ -2142,6 +2499,56 @@ async def document_intelligence_invoke(request: DocumentIntelligenceRequest) -> 
             error=str(e),
             agent_type="document_intelligence",
         )
+
+
+@app.post("/api/enterprise/document-intelligence/stream", tags=["Enterprise Agents"])
+async def document_intelligence_stream(request: DocumentIntelligenceRequest):
+    """Stream responses from the Document Intelligence Agent using Server-Sent Events.
+
+    Args:
+        request: Message, optional session ID, and target language.
+
+    Returns:
+        SSE stream of events.
+    """
+    import json
+    import traceback
+
+    def _serialize(event: dict) -> str:
+        def _default(obj: object) -> object:
+            if hasattr(obj, "isoformat"):
+                return obj.isoformat()
+            if hasattr(obj, "model_dump"):
+                return obj.model_dump()
+            return str(obj)
+        return json.dumps(event, default=_default)
+
+    if not enterprise_agents_loaded or document_intelligence_agent is None:
+        async def _unavailable():
+            yield f"data: {_serialize({'type': 'error', 'data': {'error': 'Document Intelligence Agent not available. Set OPENAI_API_KEY or ANTHROPIC_API_KEY.'}})}\n\n"
+        return StreamingResponse(_unavailable(), media_type="text/event-stream")
+
+    language_hint = f" Respond in {request.target_language}." if request.target_language else ""
+    message = f"{request.message}{language_hint}"
+
+    async def _event_generator():
+        try:
+            async for event in document_intelligence_agent.astream(
+                message=message,
+                session_id=request.session_id,
+            ):
+                yield f"data: {_serialize(event)}\n\n"
+        except GeneratorExit:
+            pass
+        except Exception as exc:
+            traceback.print_exc()
+            yield f"data: {_serialize({'type': 'error', 'data': {'error': str(exc)}})}\n\n"
+
+    return StreamingResponse(
+        _event_generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
+    )
 
 
 @app.post("/api/enterprise/document-intelligence/upload", response_model=DocumentIntelligenceUploadResponse, tags=["Enterprise Agents"])
