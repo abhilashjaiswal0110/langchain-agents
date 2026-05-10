@@ -11,9 +11,10 @@ Following Enterprise Development Standards:
 """
 
 import os
+import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Annotated, Any, Literal, TypeVar
+from typing import Annotated, Any, AsyncGenerator, Literal, TypeVar
 
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
@@ -269,7 +270,7 @@ class BaseAgent(ABC):
         session_id: str | None = None,
         user_id: str | None = None,
         **kwargs: Any,
-    ):
+    ) -> AsyncGenerator[dict[str, Any], None]:
         """Stream agent responses as typed SSE events.
 
         Yields structured events compatible with Server-Sent Events (SSE):
@@ -277,6 +278,7 @@ class BaseAgent(ABC):
         - ``tool_start``: Tool invocation begins
         - ``tool_end``: Tool invocation completes
         - ``complete``: Final response when the graph finishes
+        - ``error``: Emitted if the agent fails to initialize or errors during execution
 
         Mirrors the DeepAgent.astream_chat() pattern so enterprise agents
         and deep agents share the same client-side event contract.
@@ -290,8 +292,12 @@ class BaseAgent(ABC):
         Yields:
             dict with ``type`` and ``data`` keys for each SSE event.
         """
-        if self._compiled_graph is None:
-            self.compile()
+        try:
+            if self._compiled_graph is None:
+                self.compile()
+        except Exception:
+            yield {"type": "error", "data": {"error": "Agent unavailable — failed to initialize"}}
+            return
 
         input_state = {
             "messages": [HumanMessage(content=message)],
@@ -300,30 +306,33 @@ class BaseAgent(ABC):
             **kwargs,
         }
 
-        config = {"configurable": {"thread_id": session_id or "default"}}
+        config = {"configurable": {"thread_id": session_id or str(uuid.uuid4())}}
 
-        async for event in self._compiled_graph.astream_events(
-            input_state, config=config, version="v2"
-        ):
-            kind = event["event"]
-            if kind == "on_chat_model_stream":
-                chunk_content = event["data"]["chunk"].content
-                if chunk_content:
-                    yield {"type": "token", "data": chunk_content}
-            elif kind == "on_tool_start":
-                yield {"type": "tool_start", "data": {"name": event.get("name", "")}}
-            elif kind == "on_tool_end":
-                yield {"type": "tool_end", "data": {"name": event.get("name", "")}}
-            elif kind == "on_chain_end" and event.get("name") == "LangGraph":
-                output = event["data"].get("output", {})
-                # Extract the final AI message text from graph output
-                final_messages = output.get("messages", []) if isinstance(output, dict) else []
-                response_text = ""
-                for msg in reversed(final_messages):
-                    if isinstance(msg, AIMessage):
-                        response_text = msg.content if isinstance(msg.content, str) else str(msg.content)
-                        break
-                yield {"type": "complete", "data": {"response": response_text}}
+        try:
+            async for event in self._compiled_graph.astream_events(
+                input_state, config=config, version="v2"
+            ):
+                kind = event["event"]
+                if kind == "on_chat_model_stream":
+                    chunk_content = event["data"]["chunk"].content
+                    if chunk_content:
+                        yield {"type": "token", "data": chunk_content}
+                elif kind == "on_tool_start":
+                    yield {"type": "tool_start", "data": {"name": event.get("name", "")}}
+                elif kind == "on_tool_end":
+                    yield {"type": "tool_end", "data": {"name": event.get("name", "")}}
+                elif kind == "on_chain_end" and event.get("name") == "LangGraph":
+                    output = event["data"].get("output", {})
+                    # Extract the final AI message text from graph output
+                    final_messages = output.get("messages", []) if isinstance(output, dict) else []
+                    response_text = ""
+                    for msg in reversed(final_messages):
+                        if isinstance(msg, AIMessage):
+                            response_text = msg.content if isinstance(msg.content, str) else str(msg.content)
+                            break
+                    yield {"type": "complete", "data": {"response": response_text}}
+        except Exception:
+            yield {"type": "error", "data": {"error": "Agent encountered an error during execution"}}
 
     def get_last_response(self, result: dict[str, Any]) -> str:
         """Extract the last AI response from result.
