@@ -10,12 +10,12 @@ Supports multiple storage backends via the memory module:
 """
 
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Literal
 from langsmith import traceable
 
 from app.memory import get_session_store
-from app.memory.base import BaseSessionStore
+from app.memory.base import BaseSessionStore, Message
 
 
 # =============================================================================
@@ -478,3 +478,70 @@ Just type your question to chat with the current agent.""",
         # self.session_store.delete_session(session_id)
 
         return summary
+
+    async def switch_agent(
+        self,
+        session_id: str,
+        new_agent_type: str,
+        *,
+        preserve_context: bool = True,
+        handoff_context: dict[str, Any] | None = None,
+        tenant_id: str = "default",
+    ) -> None:
+        """Switch the active agent for an existing session.
+
+        Loads the session, validates the requested agent type, updates the
+        session metadata, and optionally injects a system note about the
+        handoff so the new agent is aware of the transfer.
+
+        Args:
+            session_id: Session to update.
+            new_agent_type: Agent type to switch to.
+            preserve_context: If True, existing messages are kept.
+            handoff_context: Optional dict with handoff metadata (from_agent,
+                reason, conversation_summary, key_entities) injected as a
+                system note for the new agent.
+            tenant_id: Tenant scope for the session store.
+
+        Raises:
+            ValueError: If *new_agent_type* is not in AVAILABLE_AGENTS.
+            KeyError: If *session_id* does not exist.
+        """
+        if new_agent_type not in self.AVAILABLE_AGENTS:
+            msg = (
+                f"Unknown agent type '{new_agent_type}'. "
+                f"Available: {list(self.AVAILABLE_AGENTS)}"
+            )
+            raise ValueError(msg)
+
+        session = self.session_store.get_session(session_id, tenant_id=tenant_id)
+        if session is None:
+            raise KeyError(f"Session '{session_id}' not found")
+
+        # Update agent type in metadata
+        session.metadata.agent_type = new_agent_type
+
+        if not preserve_context:
+            session.messages.clear()
+
+        if handoff_context:
+            note_lines = [
+                f"[HANDOFF] Transferred from {handoff_context.get('from_agent', 'unknown')}.",
+                f"Reason: {handoff_context.get('reason', '')}",
+            ]
+            if handoff_context.get("conversation_summary"):
+                note_lines.append(
+                    f"Summary: {handoff_context['conversation_summary']}"
+                )
+            if handoff_context.get("key_entities"):
+                note_lines.append(
+                    f"Key context: {handoff_context['key_entities']}"
+                )
+            note = Message(
+                role="system",
+                content="\n".join(note_lines),
+                timestamp=datetime.now(tz=timezone.utc),
+            )
+            session.messages.append(note)
+
+        self.session_store.update_session(session, tenant_id=tenant_id)

@@ -1404,6 +1404,55 @@ async def export_conversation(
     return JSONResponse(json.loads(exporter.to_json(session)))
 
 
+@app.post("/api/conversation/{session_id}/handoff", tags=["IT Support"])
+async def handoff_conversation(
+    session_id: str = FastAPIPath(..., pattern=r'^[0-9a-f\-]{36}$'),
+    body: dict = None,
+    x_tenant_id: str = Header(default="default"),
+) -> dict:
+    """Transfer a conversation to a different agent, preserving context.
+
+    Args:
+        session_id: The session to transfer.
+        body: JSON body with ``to_agent``, ``reason``, and optional
+              ``conversation_summary`` / ``key_entities``.
+        x_tenant_id: Tenant scope.
+
+    Returns:
+        Handoff result with ``success``, ``new_agent``, and optional ``error``.
+    """
+    if not it_support_loaded or conversation_manager is None:
+        raise HTTPException(status_code=503, detail="IT Support agents not available")
+    if body is None:
+        body = {}
+
+    from app.agents.handoff.handoff_manager import HandoffManager
+    from app.agents.handoff.handoff_protocol import HandoffRequest
+
+    try:
+        session = conversation_manager.session_store.get_session(
+            session_id, tenant_id=x_tenant_id
+        )
+    except Exception:
+        session = None
+    if session is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    req = HandoffRequest(
+        from_agent=session.metadata.agent_type,
+        to_agent=body.get("to_agent", ""),
+        reason=body.get("reason", "User requested transfer"),
+        session_id=session_id,
+        conversation_summary=body.get("conversation_summary", ""),
+        key_entities=body.get("key_entities", {}),
+    )
+
+    result = await HandoffManager().execute_handoff(req, conversation_manager)
+    if not result.success:
+        raise HTTPException(status_code=400, detail=result.error)
+    return result.model_dump()
+
+
 @app.get("/api/agents")
 async def list_agents() -> dict:
     """Get list of available IT Support agents."""
