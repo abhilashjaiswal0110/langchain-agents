@@ -10,6 +10,7 @@ Provides:
 - Error handling for governance exceptions
 """
 
+import logging
 import time
 from dataclasses import dataclass, field
 from typing import Any, Callable
@@ -36,6 +37,8 @@ from app.governance.rbac import (
     UserContext,
     get_rbac_manager,
 )
+
+_inj_logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -579,10 +582,6 @@ class InjectionMiddleware(BaseHTTPMiddleware):
             HTTP 400 response when a high-confidence injection is detected,
             otherwise the normal downstream response.
         """
-        import logging as _logging
-
-        _logger = _logging.getLogger(__name__)
-
         if not self._should_scan(request.url.path):
             return await call_next(request)
 
@@ -626,7 +625,7 @@ class InjectionMiddleware(BaseHTTPMiddleware):
                                 # Log and block
                                 audit_logger = get_audit_logger()
                                 await audit_logger.log_async(
-                                    action=AuditAction.AGENT_ERROR,
+                                    action=AuditAction.PERMISSION_DENIED,
                                     user_id=user_id,
                                     level=AuditLevel.WARNING,
                                     status="failure",
@@ -636,9 +635,10 @@ class InjectionMiddleware(BaseHTTPMiddleware):
                                         "pattern": result.matched_pattern,
                                         "score": result.score,
                                         "reason": "Prompt injection detected",
+                                        "request_id": gov_context.request_id if gov_context else None,
                                     },
                                 )
-                                _logger.warning(
+                                _inj_logger.warning(
                                     "Prompt injection blocked: user=%s path=%s "
                                     "field=%s score=%.2f pattern=%r",
                                     user_id,
@@ -654,7 +654,7 @@ class InjectionMiddleware(BaseHTTPMiddleware):
                                     },
                                 )
                             elif result.score >= self.warn_score:
-                                _logger.warning(
+                                _inj_logger.warning(
                                     "Possible prompt injection (warn only): "
                                     "user=%s path=%s field=%s score=%.2f pattern=%r",
                                     user_id,
@@ -665,9 +665,7 @@ class InjectionMiddleware(BaseHTTPMiddleware):
                                 )
 
         except Exception as exc:
-            import logging as _logging2
-
-            _logging2.getLogger(__name__).warning(
+            _inj_logger.warning(
                 "InjectionMiddleware error (non-blocking): %s", exc
             )
 

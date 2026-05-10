@@ -40,14 +40,14 @@ logger = logging.getLogger(__name__)
 INJECTION_PATTERNS: list[tuple[str, float]] = [
     # Direct instruction override — very high confidence
     (r"ignore (all )?(previous|prior|above) instructions?", 0.9),
-    # Persona hijacking with article — high confidence
-    (r"you are now (a|an|my)", 0.85),
+    # Persona hijacking with explicit role-change — high confidence
+    (r"you are now (a|an) (different|new|evil|unrestricted|free|jailbroken|ai without|bot without)", 0.85),
     # Act-as framing — moderate-high confidence
     (r"act as (a|an|if)", 0.8),
     # Known jailbreak tokens — very high confidence
-    (r"\bDAN\b|jailbreak", 0.95),
+    (r"\bdan\b|jailbreak", 0.95),
     # Explicit guideline/training disregard — very high confidence
-    (r"disregard (your|all) (training|guidelines|rules)", 0.9),
+    (r"disregard (your|all) (training|guidelines|rules|policies|constraints|restrictions)", 0.9),
     # Chat-template token injection — very high confidence
     (r"<\|system\|>|<\|user\|>|<\|assistant\|>", 0.95),
     # Markdown code-block system-prompt injection — high confidence
@@ -102,7 +102,7 @@ class InjectionDetector:
         text_lower = text.lower()
         for pattern, score in INJECTION_PATTERNS:
             try:
-                if re.search(pattern, text_lower, re.IGNORECASE):
+                if re.search(pattern, text_lower):
                     logger.debug(
                         "Injection pattern matched: pattern=%r score=%.2f",
                         pattern,
