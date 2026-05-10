@@ -18,6 +18,7 @@ from app.integrations.slack_webhook import (
     process_slack_webhook,
     verify_slack_signature,
 )
+from app.integrations.retry_handler import get_retry_handler
 
 logger = logging.getLogger(__name__)
 
@@ -330,6 +331,28 @@ async def integrations_health() -> dict[str, Any]:
             "slack": "available",
         },
     }
+
+
+@router.get("/dlq", tags=["integrations"])
+async def get_dlq() -> dict:
+    """Return all entries currently in the webhook Dead Letter Queue.
+
+    Returns:
+        Dict with ``count`` and ``entries`` list.
+    """
+    entries = get_retry_handler().get_dlq()
+    return {"count": len(entries), "entries": entries}
+
+
+@router.delete("/dlq", tags=["integrations"])
+async def clear_dlq() -> dict:
+    """Clear all entries from the webhook Dead Letter Queue.
+
+    Returns:
+        Dict with ``cleared`` count.
+    """
+    cleared = get_retry_handler().clear_dlq()
+    return {"cleared": cleared}
 
 
 def setup_integration_routes(app: Any) -> None:
