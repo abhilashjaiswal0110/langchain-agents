@@ -6,8 +6,13 @@ Suitable for production deployments with multiple instances.
 
 import json
 import logging
+import os
 from datetime import datetime, timedelta
 from typing import Any
+
+# Maximum number of messages to keep per session (0 = unlimited).
+# Set MAX_HISTORY_MESSAGES environment variable to override.
+MAX_HISTORY_MESSAGES: int = int(os.getenv("MAX_HISTORY_MESSAGES", "0"))
 
 from app.memory.base import (
     BaseSessionStore,
@@ -187,6 +192,10 @@ class RedisSessionStore(BaseSessionStore):
             assistant_message,
             assistant_metadata=metadata,
         )
+
+        # Trim to the configured history limit before persisting.
+        if MAX_HISTORY_MESSAGES > 0:
+            session.messages = session.messages[-MAX_HISTORY_MESSAGES:]
 
         # Get remaining TTL
         key = self._key(session_id)

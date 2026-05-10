@@ -286,9 +286,10 @@ class SQLiteSessionStore(BaseSessionStore):
                     (now.isoformat(), session_id),
                 )
 
-                conn.commit()
-
                 # Trim oldest messages when a history limit is configured.
+                # Uses ORDER BY id DESC (AUTOINCREMENT) rather than timestamp
+                # to guarantee deterministic ordering when multiple messages
+                # share the same timestamp within a single update_session call.
                 if MAX_HISTORY_MESSAGES > 0:
                     conn.execute(
                         """
@@ -296,13 +297,14 @@ class SQLiteSessionStore(BaseSessionStore):
                         WHERE session_id = ? AND id NOT IN (
                             SELECT id FROM messages
                             WHERE session_id = ?
-                            ORDER BY timestamp DESC
+                            ORDER BY id DESC
                             LIMIT ?
                         )
                         """,
                         (session_id, session_id, MAX_HISTORY_MESSAGES),
                     )
-                    conn.commit()
+
+                conn.commit()
 
                 return True
 
