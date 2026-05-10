@@ -67,9 +67,20 @@ class SQLiteSessionStore(BaseSessionStore):
                     context TEXT,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL,
-                    expires_at TEXT
+                    expires_at TEXT,
+                    tenant_id TEXT NOT NULL DEFAULT 'default'
                 )
             """)
+
+            # Add tenant_id column to existing databases that predate this feature.
+            # The ALTER TABLE is a no-op if the column already exists; the exception
+            # is silently swallowed so existing deployments are unaffected.
+            try:
+                conn.execute(
+                    "ALTER TABLE sessions ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'default'"
+                )
+            except Exception:
+                pass  # Column already exists — safe to ignore
 
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS messages (
@@ -97,6 +108,10 @@ class SQLiteSessionStore(BaseSessionStore):
                 ON sessions(expires_at)
             """)
             conn.execute("""
+                CREATE INDEX IF NOT EXISTS idx_sessions_tenant_id
+                ON sessions(tenant_id)
+            """)
+            conn.execute("""
                 CREATE INDEX IF NOT EXISTS idx_messages_session_id
                 ON messages(session_id)
             """)
@@ -121,6 +136,7 @@ class SQLiteSessionStore(BaseSessionStore):
         user_id: str = "",
         metadata: dict | None = None,
         ttl_hours: int | None = None,
+        tenant_id: str = "default",
     ) -> str:
         """Create a new session.
 
@@ -129,6 +145,7 @@ class SQLiteSessionStore(BaseSessionStore):
             user_id: User identifier.
             metadata: Additional metadata.
             ttl_hours: Session TTL in hours (None for default).
+            tenant_id: Tenant identifier for session isolation.
 
         Returns:
             Session ID.
@@ -137,6 +154,7 @@ class SQLiteSessionStore(BaseSessionStore):
             user_id=user_id,
             agent_type=agent_type,
             custom=metadata or {},
+            tenant_id=tenant_id,
         )
 
         ttl = ttl_hours or self._default_ttl_hours
@@ -150,8 +168,8 @@ class SQLiteSessionStore(BaseSessionStore):
         with self._get_connection() as conn:
             conn.execute(
                 """
-                INSERT INTO sessions (id, user_id, agent_type, metadata, context, created_at, updated_at, expires_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO sessions (id, user_id, agent_type, metadata, context, created_at, updated_at, expires_at, tenant_id)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     session.id,
@@ -162,27 +180,29 @@ class SQLiteSessionStore(BaseSessionStore):
                     session.created_at.isoformat(),
                     session.updated_at.isoformat(),
                     session.expires_at.isoformat() if session.expires_at else None,
+                    tenant_id,
                 ),
             )
             conn.commit()
 
-        logger.debug(f"Created SQLite session {session.id} for agent {agent_type}")
+        logger.debug(f"Created SQLite session {session.id} for agent {agent_type} (tenant={tenant_id})")
         return session.id
 
-    def get_session(self, session_id: str) -> Session | None:
+    def get_session(self, session_id: str, tenant_id: str = "default") -> Session | None:
         """Get a session by ID.
 
         Args:
             session_id: Session identifier.
+            tenant_id: Tenant identifier for session isolation.
 
         Returns:
             Session or None if not found.
         """
         with self._get_connection() as conn:
-            # Get session
+            # Get session, scoped to tenant
             row = conn.execute(
-                "SELECT * FROM sessions WHERE id = ?",
-                (session_id,),
+                "SELECT * FROM sessions WHERE id = ? AND tenant_id = ?",
+                (session_id, tenant_id),
             ).fetchone()
 
             if not row:
@@ -193,7 +213,7 @@ class SQLiteSessionStore(BaseSessionStore):
             if expires_at:
                 expires_at = datetime.fromisoformat(expires_at)
                 if datetime.now() > expires_at:
-                    self.delete_session(session_id)
+                    self.delete_session(session_id, tenant_id=tenant_id)
                     return None
 
             # Get messages
@@ -231,6 +251,7 @@ class SQLiteSessionStore(BaseSessionStore):
         user_message: str,
         assistant_message: str,
         metadata: dict | None = None,
+        tenant_id: str = "default",
     ) -> bool:
         """Update session with new messages.
 
@@ -241,11 +262,12 @@ class SQLiteSessionStore(BaseSessionStore):
             user_message: User's message.
             assistant_message: Assistant's response.
             metadata: Optional additional metadata.
+            tenant_id: Tenant identifier for session isolation.
 
         Returns:
             True if updated successfully.
         """
-        session = self.get_session(session_id)
+        session = self.get_session(session_id, tenant_id=tenant_id)
         if not session:
             return False
 
@@ -313,11 +335,12 @@ class SQLiteSessionStore(BaseSessionStore):
                 logger.error(f"Failed to update session {session_id}: {e}")
                 return False
 
-    def delete_session(self, session_id: str) -> bool:
+    def delete_session(self, session_id: str, tenant_id: str = "default") -> bool:
         """Delete a session.
 
         Args:
             session_id: Session identifier.
+            tenant_id: Tenant identifier for session isolation.
 
         Returns:
             True if deleted successfully.
@@ -329,16 +352,16 @@ class SQLiteSessionStore(BaseSessionStore):
                 (session_id,),
             )
 
-            # Delete session
+            # Delete session scoped to tenant
             cursor = conn.execute(
-                "DELETE FROM sessions WHERE id = ?",
-                (session_id,),
+                "DELETE FROM sessions WHERE id = ? AND tenant_id = ?",
+                (session_id, tenant_id),
             )
             conn.commit()
 
             deleted = cursor.rowcount > 0
             if deleted:
-                logger.debug(f"Deleted SQLite session {session_id}")
+                logger.debug(f"Deleted SQLite session {session_id} (tenant={tenant_id})")
             return deleted
 
     def list_sessions(
@@ -347,6 +370,7 @@ class SQLiteSessionStore(BaseSessionStore):
         agent_type: str | None = None,
         limit: int = 100,
         offset: int = 0,
+        tenant_id: str | None = None,
     ) -> list[Session]:
         """List sessions with optional filters.
 
@@ -355,12 +379,18 @@ class SQLiteSessionStore(BaseSessionStore):
             agent_type: Filter by agent type.
             limit: Maximum number of sessions.
             offset: Offset for pagination.
+            tenant_id: Filter by tenant. When provided, only sessions for that
+                tenant are returned.
 
         Returns:
             List of sessions.
         """
         conditions = ["(expires_at IS NULL OR expires_at > ?)"]
         params: list[Any] = [datetime.now().isoformat()]
+
+        if tenant_id:
+            conditions.append("tenant_id = ?")
+            params.append(tenant_id)
 
         if user_id:
             conditions.append("user_id = ?")
@@ -371,6 +401,8 @@ class SQLiteSessionStore(BaseSessionStore):
             params.append(agent_type)
 
         where_clause = " AND ".join(conditions)
+
+        effective_tenant = tenant_id or "default"
 
         with self._get_connection() as conn:
             rows = conn.execute(
@@ -385,7 +417,7 @@ class SQLiteSessionStore(BaseSessionStore):
 
         sessions = []
         for row in rows:
-            session = self.get_session(row["id"])
+            session = self.get_session(row["id"], tenant_id=effective_tenant)
             if session:
                 sessions.append(session)
 
@@ -395,12 +427,14 @@ class SQLiteSessionStore(BaseSessionStore):
         self,
         session_id: str,
         limit: int | None = None,
+        tenant_id: str = "default",
     ) -> list[Message]:
         """Get conversation history for a session.
 
         Args:
             session_id: Session identifier.
             limit: Maximum number of messages.
+            tenant_id: Tenant identifier for session isolation.
 
         Returns:
             List of messages.
@@ -434,11 +468,12 @@ class SQLiteSessionStore(BaseSessionStore):
 
             return messages
 
-    def clear_session(self, session_id: str) -> bool:
+    def clear_session(self, session_id: str, tenant_id: str = "default") -> bool:
         """Clear messages from a session.
 
         Args:
             session_id: Session identifier.
+            tenant_id: Tenant identifier for session isolation.
 
         Returns:
             True if cleared successfully.
@@ -449,10 +484,10 @@ class SQLiteSessionStore(BaseSessionStore):
                 (session_id,),
             )
 
-            # Update session timestamp
+            # Update session timestamp, scoped to tenant
             conn.execute(
-                "UPDATE sessions SET updated_at = ? WHERE id = ?",
-                (datetime.now().isoformat(), session_id),
+                "UPDATE sessions SET updated_at = ? WHERE id = ? AND tenant_id = ?",
+                (datetime.now().isoformat(), session_id, tenant_id),
             )
 
             conn.commit()
@@ -462,6 +497,7 @@ class SQLiteSessionStore(BaseSessionStore):
         self,
         session_id: str,
         context: dict[str, Any],
+        tenant_id: str = "default",
     ) -> bool:
         """Set session context.
 
@@ -470,12 +506,13 @@ class SQLiteSessionStore(BaseSessionStore):
         Args:
             session_id: Session identifier.
             context: Context data to set.
+            tenant_id: Tenant identifier for session isolation.
 
         Returns:
             True if set successfully.
         """
         # Get existing context
-        session = self.get_session(session_id)
+        session = self.get_session(session_id, tenant_id=tenant_id)
         if not session:
             return False
 
@@ -488,12 +525,13 @@ class SQLiteSessionStore(BaseSessionStore):
                     """
                     UPDATE sessions
                     SET context = ?, updated_at = ?
-                    WHERE id = ?
+                    WHERE id = ? AND tenant_id = ?
                     """,
                     (
                         json.dumps(session.context),
                         datetime.now().isoformat(),
                         session_id,
+                        tenant_id,
                     ),
                 )
                 conn.commit()
@@ -503,19 +541,20 @@ class SQLiteSessionStore(BaseSessionStore):
                 logger.error(f"Failed to set context for session {session_id}: {e}")
                 return False
 
-    def get_context(self, session_id: str) -> dict[str, Any]:
+    def get_context(self, session_id: str, tenant_id: str = "default") -> dict[str, Any]:
         """Get session context.
 
         Args:
             session_id: Session identifier.
+            tenant_id: Tenant identifier for session isolation.
 
         Returns:
             Context data.
         """
         with self._get_connection() as conn:
             row = conn.execute(
-                "SELECT context FROM sessions WHERE id = ?",
-                (session_id,),
+                "SELECT context FROM sessions WHERE id = ? AND tenant_id = ?",
+                (session_id, tenant_id),
             ).fetchone()
 
             if not row:

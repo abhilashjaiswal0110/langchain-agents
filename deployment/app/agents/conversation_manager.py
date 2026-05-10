@@ -123,6 +123,7 @@ class ConversationManager:
         ],
         user_id: str | None = None,
         metadata: dict | None = None,
+        tenant_id: str = "default",
     ) -> dict[str, Any]:
         """Start a new conversation with an agent.
 
@@ -130,6 +131,7 @@ class ConversationManager:
             agent_type: Type of agent to use.
             user_id: Optional user identifier.
             metadata: Optional metadata for the session.
+            tenant_id: Tenant identifier for session isolation.
 
         Returns:
             Session information including ID and welcome message.
@@ -145,6 +147,7 @@ class ConversationManager:
             user_id=user_id or "",
             metadata=metadata,
             ttl_hours=DEFAULT_SESSION_TTL_HOURS,
+            tenant_id=tenant_id,
         )
 
         # Welcome messages
@@ -190,17 +193,19 @@ What would you like to do?""",
         self,
         session_id: str,
         message: str,
+        tenant_id: str = "default",
     ) -> dict[str, Any]:
         """Send a message in an existing conversation.
 
         Args:
             session_id: The session ID.
             message: User's message.
+            tenant_id: Tenant identifier for session isolation.
 
         Returns:
             Agent's response and metadata.
         """
-        session = self.session_store.get_session(session_id)
+        session = self.session_store.get_session(session_id, tenant_id=tenant_id)
         if not session:
             return {
                 "error": "Session not found. Please start a new conversation.",
@@ -218,7 +223,7 @@ What would you like to do?""",
 
         # Handle special commands
         if message.startswith("/"):
-            return self._handle_command(session_id, message)
+            return self._handle_command(session_id, message, tenant_id=tenant_id)
 
         # Chat with agent
         try:
@@ -229,6 +234,7 @@ What would you like to do?""",
                 session_id=session_id,
                 user_message=message,
                 assistant_message=result["response"],
+                tenant_id=tenant_id,
             )
 
             return {
@@ -248,9 +254,19 @@ What would you like to do?""",
         self,
         session_id: str,
         message: str,
+        tenant_id: str = "default",
     ) -> dict[str, Any]:
-        """Async version of chat."""
-        session = self.session_store.get_session(session_id)
+        """Async version of chat.
+
+        Args:
+            session_id: The session ID.
+            message: User's message.
+            tenant_id: Tenant identifier for session isolation.
+
+        Returns:
+            Agent's response and metadata.
+        """
+        session = self.session_store.get_session(session_id, tenant_id=tenant_id)
         if not session:
             return {
                 "error": "Session not found.",
@@ -267,7 +283,7 @@ What would you like to do?""",
             }
 
         if message.startswith("/"):
-            return self._handle_command(session_id, message)
+            return self._handle_command(session_id, message, tenant_id=tenant_id)
 
         try:
             result = await agent.achat(message, thread_id=session_id)
@@ -276,6 +292,7 @@ What would you like to do?""",
                 session_id=session_id,
                 user_message=message,
                 assistant_message=result["response"],
+                tenant_id=tenant_id,
             )
 
             return {
@@ -291,13 +308,31 @@ What would you like to do?""",
                 "session_id": session_id,
             }
 
-    def _handle_command(self, session_id: str, command: str) -> dict[str, Any]:
-        """Handle special commands."""
+    def _handle_command(
+        self,
+        session_id: str,
+        command: str,
+        tenant_id: str = "default",
+    ) -> dict[str, Any]:
+        """Handle special commands.
+
+        Args:
+            session_id: The session ID.
+            command: The slash command string.
+            tenant_id: Tenant identifier for session isolation.
+
+        Returns:
+            Command response dict.
+        """
         cmd = command.lower().strip()
-        session = self.session_store.get_session(session_id)
+        session = self.session_store.get_session(session_id, tenant_id=tenant_id)
 
         if cmd == "/history":
-            history = self.session_store.get_history(session_id, limit=_HISTORY_DISPLAY_LIMIT)
+            history = self.session_store.get_history(
+                session_id,
+                limit=_HISTORY_DISPLAY_LIMIT,
+                tenant_id=tenant_id,
+            )
             if not history:
                 return {
                     "session_id": session_id,
@@ -317,7 +352,7 @@ What would you like to do?""",
 
         elif cmd == "/clear":
             if session:
-                self.session_store.clear_session(session_id)
+                self.session_store.clear_session(session_id, tenant_id=tenant_id)
             return {
                 "session_id": session_id,
                 "response": "Conversation cleared. How can I help you?",
@@ -357,6 +392,7 @@ What would you like to do?""",
                     self.session_store.set_context(
                         session_id,
                         {"agent_type_override": new_agent},
+                        tenant_id=tenant_id,
                     )
                 return {
                     "session_id": session_id,

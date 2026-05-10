@@ -62,12 +62,14 @@ class SessionMetadata:
         agent_type: Type of agent.
         tags: Optional tags for categorization.
         custom: Custom metadata fields.
+        tenant_id: Tenant identifier for multi-tenancy isolation.
     """
 
     user_id: str = ""
     agent_type: str = ""
     tags: list[str] = field(default_factory=list)
     custom: dict[str, Any] = field(default_factory=dict)
+    tenant_id: str = "default"
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
@@ -76,6 +78,7 @@ class SessionMetadata:
             "agent_type": self.agent_type,
             "tags": self.tags,
             "custom": self.custom,
+            "tenant_id": self.tenant_id,
         }
 
     @classmethod
@@ -86,6 +89,7 @@ class SessionMetadata:
             agent_type=data.get("agent_type", ""),
             tags=data.get("tags", []),
             custom=data.get("custom", {}),
+            tenant_id=data.get("tenant_id", "default"),
         )
 
 
@@ -237,6 +241,7 @@ class Session:
                 agent_type=self.metadata.agent_type,
                 tags=copy.deepcopy(self.metadata.tags),
                 custom=copy.deepcopy(self.metadata.custom),
+                tenant_id=self.metadata.tenant_id,
             ),
             messages=[
                 Message(
@@ -268,6 +273,7 @@ class BaseSessionStore(ABC):
         user_id: str = "",
         metadata: dict | None = None,
         ttl_hours: int | None = None,
+        tenant_id: str = "default",
     ) -> str:
         """Create a new session.
 
@@ -276,6 +282,7 @@ class BaseSessionStore(ABC):
             user_id: User identifier.
             metadata: Additional metadata.
             ttl_hours: Session TTL in hours (None for no expiry).
+            tenant_id: Tenant identifier for session isolation.
 
         Returns:
             Session ID.
@@ -283,11 +290,12 @@ class BaseSessionStore(ABC):
         pass
 
     @abstractmethod
-    def get_session(self, session_id: str) -> Session | None:
+    def get_session(self, session_id: str, tenant_id: str = "default") -> Session | None:
         """Get a session by ID.
 
         Args:
             session_id: Session identifier.
+            tenant_id: Tenant identifier for session isolation.
 
         Returns:
             Session or None if not found.
@@ -301,6 +309,7 @@ class BaseSessionStore(ABC):
         user_message: str,
         assistant_message: str,
         metadata: dict | None = None,
+        tenant_id: str = "default",
     ) -> bool:
         """Update session with new messages.
 
@@ -309,6 +318,7 @@ class BaseSessionStore(ABC):
             user_message: User's message.
             assistant_message: Assistant's response.
             metadata: Optional additional metadata.
+            tenant_id: Tenant identifier for session isolation.
 
         Returns:
             True if updated successfully.
@@ -316,11 +326,12 @@ class BaseSessionStore(ABC):
         pass
 
     @abstractmethod
-    def delete_session(self, session_id: str) -> bool:
+    def delete_session(self, session_id: str, tenant_id: str = "default") -> bool:
         """Delete a session.
 
         Args:
             session_id: Session identifier.
+            tenant_id: Tenant identifier for session isolation.
 
         Returns:
             True if deleted successfully.
@@ -353,12 +364,14 @@ class BaseSessionStore(ABC):
         self,
         session_id: str,
         limit: int | None = None,
+        tenant_id: str = "default",
     ) -> list[Message]:
         """Get conversation history for a session.
 
         Args:
             session_id: Session identifier.
             limit: Maximum number of messages.
+            tenant_id: Tenant identifier for session isolation.
 
         Returns:
             List of messages.
@@ -366,11 +379,12 @@ class BaseSessionStore(ABC):
         pass
 
     @abstractmethod
-    def clear_session(self, session_id: str) -> bool:
+    def clear_session(self, session_id: str, tenant_id: str = "default") -> bool:
         """Clear messages from a session.
 
         Args:
             session_id: Session identifier.
+            tenant_id: Tenant identifier for session isolation.
 
         Returns:
             True if cleared successfully.
@@ -382,12 +396,14 @@ class BaseSessionStore(ABC):
         self,
         session_id: str,
         context: dict[str, Any],
+        tenant_id: str = "default",
     ) -> bool:
         """Set session context.
 
         Args:
             session_id: Session identifier.
             context: Context data to set.
+            tenant_id: Tenant identifier for session isolation.
 
         Returns:
             True if set successfully.
@@ -395,27 +411,29 @@ class BaseSessionStore(ABC):
         pass
 
     @abstractmethod
-    def get_context(self, session_id: str) -> dict[str, Any]:
+    def get_context(self, session_id: str, tenant_id: str = "default") -> dict[str, Any]:
         """Get session context.
 
         Args:
             session_id: Session identifier.
+            tenant_id: Tenant identifier for session isolation.
 
         Returns:
             Context data.
         """
         pass
 
-    def session_exists(self, session_id: str) -> bool:
+    def session_exists(self, session_id: str, tenant_id: str = "default") -> bool:
         """Check if session exists.
 
         Args:
             session_id: Session identifier.
+            tenant_id: Tenant identifier for session isolation.
 
         Returns:
             True if session exists.
         """
-        return self.get_session(session_id) is not None
+        return self.get_session(session_id, tenant_id=tenant_id) is not None
 
     def cleanup_expired(self) -> int:
         """Clean up expired sessions.

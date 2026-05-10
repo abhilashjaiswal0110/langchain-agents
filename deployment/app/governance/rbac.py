@@ -59,6 +59,7 @@ class UserContext:
         permissions: Explicit permissions (in addition to role)
         api_key_id: API key identifier used for auth
         metadata: Additional user metadata
+        tenant_id: Tenant identifier for multi-tenancy isolation
     """
 
     user_id: str
@@ -66,6 +67,7 @@ class UserContext:
     permissions: set[Permission] = field(default_factory=set)
     api_key_id: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
+    tenant_id: str = "default"
 
     def has_permission(self, permission: Permission) -> bool:
         """Check if user has a specific permission.

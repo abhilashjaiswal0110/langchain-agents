@@ -16,7 +16,7 @@ from pathlib import Path
 from typing import Literal
 
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, File, Form, HTTPException, Path as FastAPIPath, Request, UploadFile
+from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Path as FastAPIPath, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, RedirectResponse, Response, StreamingResponse
 from fastapi.security import APIKeyHeader
@@ -1202,11 +1202,19 @@ async def doc_rag_clear() -> dict:
 # ============================================================================
 
 @app.post("/api/conversation/start", response_model=ConversationStartResponse)
-async def conversation_start(request: ConversationStartRequest) -> ConversationStartResponse:
+async def conversation_start(
+    request: ConversationStartRequest,
+    x_tenant_id: str = Header(default="default"),
+) -> ConversationStartResponse:
     """Start a new conversation with an IT Support agent.
+
+    The optional `X-Tenant-ID` request header scopes the session to a specific
+    tenant. When the header is absent the session is created in the `"default"`
+    tenant, preserving full backward compatibility.
 
     Args:
         request: The conversation start request with agent type.
+        x_tenant_id: Tenant identifier extracted from the `X-Tenant-ID` header.
 
     Returns:
         Session ID, welcome message, and available commands.
@@ -1221,17 +1229,25 @@ async def conversation_start(request: ConversationStartRequest) -> ConversationS
         agent_type=request.agent_type,
         user_id=request.user_id,
         metadata=request.metadata,
+        tenant_id=x_tenant_id,
     )
 
     return ConversationStartResponse(**result)
 
 
 @app.post("/api/conversation/chat", response_model=ConversationChatResponse)
-async def conversation_chat(request: ConversationChatRequest) -> ConversationChatResponse:
+async def conversation_chat(
+    request: ConversationChatRequest,
+    x_tenant_id: str = Header(default="default"),
+) -> ConversationChatResponse:
     """Send a message in an existing conversation.
+
+    The optional `X-Tenant-ID` request header must match the tenant used when
+    the session was created. Omitting the header uses the `"default"` tenant.
 
     Args:
         request: The chat request with session ID and message.
+        x_tenant_id: Tenant identifier extracted from the `X-Tenant-ID` header.
 
     Returns:
         Agent's response and metadata.
@@ -1245,6 +1261,7 @@ async def conversation_chat(request: ConversationChatRequest) -> ConversationCha
     result = await conversation_manager.achat(
         session_id=request.session_id,
         message=request.message,
+        tenant_id=x_tenant_id,
     )
 
     return ConversationChatResponse(**result)
