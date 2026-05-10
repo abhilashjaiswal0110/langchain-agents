@@ -34,6 +34,9 @@ print(f"[Startup] .env file exists: {_ENV_FILE.exists()}, loaded: {_env_loaded}"
 # Import AIMessage for response extraction
 from langchain_core.messages import AIMessage
 
+# Response cache (opt-in via CACHE_ENABLED=true; default off for backward compat)
+from app.cache.response_cache import get_cache, _is_cache_enabled
+
 
 # ============================================================================
 # Agent Response Helper
@@ -567,6 +570,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     else:
         print("[--] Deep Agent not loaded (no API keys set)")
 
+    # Initialise response cache singleton (no-op when CACHE_ENABLED=false)
+    _agent_cache = get_cache()
+    if _is_cache_enabled():
+        print(f"[OK] Response cache enabled (TTL env hint: CACHE_TTL_SECONDS)")
+    else:
+        print("[--] Response cache disabled (set CACHE_ENABLED=true to enable)")
+
     print("=" * 60)
     print("Platform ready!")
     print("  - Chat UI:  http://localhost:8000/chat")
@@ -857,6 +867,7 @@ class EnterpriseAgentResponse(BaseModel):
     agent_type: str | None = None
     tool_calls: list | None = None
     error: str | None = None
+    cached: bool = False
 
 
 class ResearchAgentRequest(BaseModel):
@@ -1652,6 +1663,10 @@ async def list_enterprise_agents() -> dict:
 async def research_agent_invoke(request: ResearchAgentRequest) -> EnterpriseAgentResponse:
     """Invoke the Research Agent for web search and information synthesis.
 
+    Responses are served from the in-memory cache when ``CACHE_ENABLED=true``
+    and an identical (whitespace-normalised) query has been answered before.
+    Cache hits are indicated by ``cached: true`` in the response.
+
     Args:
         request: Research query and optional session ID.
 
@@ -1664,6 +1679,17 @@ async def research_agent_invoke(request: ResearchAgentRequest) -> EnterpriseAgen
             detail="Research Agent not available. Set OPENAI_API_KEY or ANTHROPIC_API_KEY.",
         )
 
+    # Check cache before invoking the LLM (no-op when CACHE_ENABLED=false)
+    _agent_cache = get_cache()
+    cached_response = _agent_cache.get("research", request.query)
+    if cached_response is not None:
+        return EnterpriseAgentResponse(
+            success=True,
+            response=cached_response,
+            agent_type="research",
+            cached=True,
+        )
+
     try:
         result = research_agent.research(
             query=request.query,
@@ -1671,11 +1697,16 @@ async def research_agent_invoke(request: ResearchAgentRequest) -> EnterpriseAgen
         )
         # Extract response from LangGraph state messages
         response_text = extract_agent_response(result)
+
+        # Persist result in cache for future identical queries
+        _agent_cache.set("research", request.query, response_text)
+
         return EnterpriseAgentResponse(
             success=True,
             response=response_text,
             session_id=result.get("session_id") if isinstance(result, dict) else getattr(result, "session_id", None),
             agent_type="research",
+            cached=False,
         )
     except Exception as e:
         return EnterpriseAgentResponse(
@@ -2639,6 +2670,35 @@ async def document_intelligence_clear_documents(
         "session_id": session_id,
         "cleared_count": count,
     }
+
+
+# ============================================================================
+# Cache Management Endpoints
+# ============================================================================
+
+
+@app.get("/api/cache/stats", tags=["Cache"])
+async def cache_stats() -> dict:
+    """Return current response-cache statistics.
+
+    The cache is opt-in via ``CACHE_ENABLED=true``.  When disabled the size
+    will always be zero because all cache writes are suppressed.
+
+    Returns:
+        Dictionary with ``enabled`` (bool) and ``size`` (int) fields.
+    """
+    return {"enabled": _is_cache_enabled(), "size": get_cache().size()}
+
+
+@app.delete("/api/cache/clear", tags=["Cache"])
+async def cache_clear() -> dict:
+    """Clear all entries from the in-memory response cache.
+
+    Returns:
+        Confirmation dictionary with ``cleared: true``.
+    """
+    get_cache().clear()
+    return {"cleared": True}
 
 
 # ============================================================================
