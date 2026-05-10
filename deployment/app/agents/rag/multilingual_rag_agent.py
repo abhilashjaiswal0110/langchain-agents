@@ -125,19 +125,21 @@ def search_documents(query: str, top_k: int = 5) -> str:
     Returns:
         Relevant document chunks
     """
+    import os
+
     if not _document_store:
         return "No documents uploaded. Please upload documents first."
 
-    # Simple keyword search (use vector similarity in production)
+    # Keyword overlap retrieval — gather extra candidates for reranking
     query_words = set(query.lower().split())
-    results = []
+    candidates = []
 
     for doc_id, doc in _document_store.items():
         for i, chunk in enumerate(doc["chunks"]):
             chunk_words = set(chunk.lower().split())
             overlap = len(query_words & chunk_words)
             if overlap > 0:
-                results.append({
+                candidates.append({
                     "doc_id": doc_id,
                     "filename": doc["filename"],
                     "chunk_idx": i,
@@ -145,15 +147,22 @@ def search_documents(query: str, top_k: int = 5) -> str:
                     "relevance": overlap,
                 })
 
-    # Sort by relevance
-    results.sort(key=lambda x: x["relevance"], reverse=True)
-    results = results[:top_k]
+    candidates.sort(key=lambda x: x["relevance"], reverse=True)
 
-    if not results:
+    # Apply cross-encoder reranking when enabled
+    reranker_enabled = os.getenv("RERANKER_ENABLED", "true").lower() == "true"
+    if reranker_enabled and candidates:
+        from app.agents.rag.reranker import get_reranker
+
+        candidates = get_reranker().rerank(query, candidates, top_k=top_k)
+    else:
+        candidates = candidates[:top_k]
+
+    if not candidates:
         return "No relevant content found for your query."
 
-    output = f"Found {len(results)} relevant chunks:\n\n"
-    for i, r in enumerate(results, 1):
+    output = f"Found {len(candidates)} relevant chunks:\n\n"
+    for i, r in enumerate(candidates, 1):
         output += (
             f"**Result {i}** (from {r['filename']}):\n"
             f"{r['content']}...\n\n"
