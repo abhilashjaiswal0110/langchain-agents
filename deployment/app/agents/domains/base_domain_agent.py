@@ -181,7 +181,7 @@ Instructions:
         return create_react_agent(
             model=llm,
             tools=tools,
-            state_modifier=system_prompt,
+            prompt=system_prompt,
             checkpointer=self._checkpointer,
         )
 
