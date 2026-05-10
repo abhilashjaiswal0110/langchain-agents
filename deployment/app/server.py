@@ -1201,6 +1201,30 @@ async def doc_rag_clear() -> dict:
 # Conversation API Endpoints (IT Support Agents)
 # ============================================================================
 
+_TENANT_ID_RE = re.compile(r'^[a-zA-Z0-9_\-]{1,64}$')
+
+
+def _validate_tenant_id(tenant_id: str) -> str:
+    """Validate and return the tenant ID.
+
+    Args:
+        tenant_id: Raw tenant identifier from the request header.
+
+    Returns:
+        The validated tenant identifier, unchanged.
+
+    Raises:
+        HTTPException: 400 if the value contains disallowed characters or
+            exceeds the maximum length.
+    """
+    if not _TENANT_ID_RE.fullmatch(tenant_id):
+        raise HTTPException(
+            status_code=400,
+            detail="X-Tenant-ID must be 1-64 alphanumeric, dash, or underscore characters.",
+        )
+    return tenant_id
+
+
 @app.post("/api/conversation/start", response_model=ConversationStartResponse)
 async def conversation_start(
     request: ConversationStartRequest,
@@ -1219,6 +1243,8 @@ async def conversation_start(
     Returns:
         Session ID, welcome message, and available commands.
     """
+    tenant_id = _validate_tenant_id(x_tenant_id)
+
     if not it_support_loaded or conversation_manager is None:
         raise HTTPException(
             status_code=503,
@@ -1229,7 +1255,7 @@ async def conversation_start(
         agent_type=request.agent_type,
         user_id=request.user_id,
         metadata=request.metadata,
-        tenant_id=x_tenant_id,
+        tenant_id=tenant_id,
     )
 
     return ConversationStartResponse(**result)
@@ -1252,6 +1278,8 @@ async def conversation_chat(
     Returns:
         Agent's response and metadata.
     """
+    tenant_id = _validate_tenant_id(x_tenant_id)
+
     if not it_support_loaded or conversation_manager is None:
         raise HTTPException(
             status_code=503,
@@ -1261,26 +1289,32 @@ async def conversation_chat(
     result = await conversation_manager.achat(
         session_id=request.session_id,
         message=request.message,
-        tenant_id=x_tenant_id,
+        tenant_id=tenant_id,
     )
 
     return ConversationChatResponse(**result)
 
 
 @app.get("/api/conversation/{session_id}")
-async def conversation_info(session_id: str) -> dict:
+async def conversation_info(
+    session_id: str,
+    x_tenant_id: str = Header(default="default"),
+) -> dict:
     """Get information about a conversation session.
 
     Args:
         session_id: The session ID to query.
+        x_tenant_id: Tenant identifier extracted from the `X-Tenant-ID` header.
 
     Returns:
         Session information.
     """
+    tenant_id = _validate_tenant_id(x_tenant_id)
+
     if not it_support_loaded or conversation_manager is None:
         raise HTTPException(status_code=503, detail="IT Support agents not available.")
 
-    info = conversation_manager.get_session_info(session_id)
+    info = conversation_manager.get_session_info(session_id, tenant_id=tenant_id)
     if not info:
         raise HTTPException(status_code=404, detail="Session not found.")
 
@@ -1288,43 +1322,54 @@ async def conversation_info(session_id: str) -> dict:
 
 
 @app.delete("/api/conversation/{session_id}")
-async def conversation_end(session_id: str) -> dict:
+async def conversation_end(
+    session_id: str,
+    x_tenant_id: str = Header(default="default"),
+) -> dict:
     """End a conversation session.
 
     Args:
         session_id: The session ID to end.
+        x_tenant_id: Tenant identifier extracted from the `X-Tenant-ID` header.
 
     Returns:
         Session summary.
     """
+    tenant_id = _validate_tenant_id(x_tenant_id)
+
     if not it_support_loaded or conversation_manager is None:
         raise HTTPException(status_code=503, detail="IT Support agents not available.")
 
-    return conversation_manager.end_conversation(session_id)
+    return conversation_manager.end_conversation(session_id, tenant_id=tenant_id)
 
 
 @app.get("/api/conversation/{session_id}/export")
 async def export_conversation(
     session_id: str = FastAPIPath(..., pattern=r'^[0-9a-f\-]{36}$'),
     export_format: str = "json",
+    x_tenant_id: str = Header(default="default"),
 ) -> Response:
     """Export a conversation session as JSON, plain text, or PDF.
 
     Args:
         session_id: The session ID to export (UUID format).
         export_format: Output format — one of ``json``, ``text``, or ``pdf``.
+        x_tenant_id: Tenant identifier extracted from the `X-Tenant-ID` header.
 
     Returns:
         The exported conversation in the requested format.
 
     Raises:
-        HTTPException: 404 if the session is not found, 422 if the format
-            is not supported, or 503 if IT Support agents are unavailable.
+        HTTPException: 400 if the tenant ID is invalid, 404 if the session is
+            not found, 422 if the format is not supported, or 503 if IT Support
+            agents are unavailable.
     """
+    tenant_id = _validate_tenant_id(x_tenant_id)
+
     if not it_support_loaded or conversation_manager is None:
         raise HTTPException(status_code=503, detail="IT Support agents not available.")
 
-    session = conversation_manager.session_store.get_session(session_id)
+    session = conversation_manager.session_store.get_session(session_id, tenant_id=tenant_id)
     if session is None:
         raise HTTPException(status_code=404, detail="Session not found.")
 

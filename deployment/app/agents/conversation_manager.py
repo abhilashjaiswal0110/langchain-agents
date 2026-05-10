@@ -429,9 +429,17 @@ Just type your question to chat with the current agent.""",
             "is_command": True,
         }
 
-    def get_session_info(self, session_id: str) -> dict | None:
-        """Get session information."""
-        session = self.session_store.get_session(session_id)
+    def get_session_info(self, session_id: str, tenant_id: str = "default") -> dict | None:
+        """Get session information.
+
+        Args:
+            session_id: Session identifier.
+            tenant_id: Tenant identifier for session isolation.
+
+        Returns:
+            Session info dict, or None if not found.
+        """
+        session = self.session_store.get_session(session_id, tenant_id=tenant_id)
         if not session:
             return None
 
@@ -444,9 +452,17 @@ Just type your question to chat with the current agent.""",
             "message_count": len(session.messages),
         }
 
-    def end_conversation(self, session_id: str) -> dict[str, Any]:
-        """End a conversation and get summary."""
-        session = self.session_store.get_session(session_id)
+    def end_conversation(self, session_id: str, tenant_id: str = "default") -> dict[str, Any]:
+        """End a conversation and get summary.
+
+        Args:
+            session_id: Session identifier.
+            tenant_id: Tenant identifier for session isolation.
+
+        Returns:
+            Session summary dict.
+        """
+        session = self.session_store.get_session(session_id, tenant_id=tenant_id)
         if not session:
             return {"error": "Session not found"}
 

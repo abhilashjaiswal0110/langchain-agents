@@ -79,8 +79,9 @@ class SQLiteSessionStore(BaseSessionStore):
                 conn.execute(
                     "ALTER TABLE sessions ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'default'"
                 )
-            except Exception:
-                pass  # Column already exists — safe to ignore
+            except sqlite3.OperationalError as e:
+                if "duplicate column name" not in str(e).lower():
+                    raise
 
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS messages (

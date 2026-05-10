@@ -239,7 +239,7 @@ class TestConversationEndpointTenantHeader:
         # Ensure agents module is importable even without real API keys.
         # We patch conversation_manager at the app level.
         from fastapi.testclient import TestClient
-        from unittest.mock import MagicMock, patch
+        from unittest.mock import AsyncMock, MagicMock, patch
 
         # Build a minimal mock conversation_manager
         mock_manager = MagicMock()
@@ -249,7 +249,7 @@ class TestConversationEndpointTenantHeader:
             "welcome_message": "Hello!",
             "available_commands": [],
         }
-        mock_manager.achat = MagicMock(
+        mock_manager.achat = AsyncMock(
             return_value={
                 "session_id": "test-session-123",
                 "response": "pong",
@@ -302,3 +302,26 @@ class TestConversationEndpointTenantHeader:
         assert resp.status_code == 200
         data = resp.json()
         assert "session_id" in data
+
+    def test_chat_with_tenant_header_is_accepted(self, client) -> None:
+        """POST /api/conversation/chat with X-Tenant-ID header must not return 400."""
+        test_client, mock_manager = client
+        resp = test_client.post(
+            "/api/conversation/chat",
+            json={"session_id": "test-session-123", "message": "hello"},
+            headers={"X-Tenant-ID": "acme"},
+        )
+        # A 503 is acceptable when the mock is wired correctly; 400 is not.
+        assert resp.status_code != 400, (
+            f"Expected non-400 response with valid X-Tenant-ID header, got {resp.status_code}: {resp.text}"
+        )
+
+    def test_invalid_tenant_id_returns_400(self, client) -> None:
+        """X-Tenant-ID values with disallowed characters must return HTTP 400."""
+        test_client, _ = client
+        resp = test_client.post(
+            "/api/conversation/start",
+            json={"agent_type": "it_helpdesk"},
+            headers={"X-Tenant-ID": "bad tenant!@#"},
+        )
+        assert resp.status_code == 400
