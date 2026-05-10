@@ -36,6 +36,7 @@ from langchain_core.messages import AIMessage
 
 # Response cache (opt-in via CACHE_ENABLED=true; default off for backward compat)
 from app.cache.response_cache import CACHE_TTL_SECONDS, MAX_CACHE_SIZE, get_cache, is_cache_enabled
+from app.governance.cost_estimator import get_cost_estimator
 
 
 # ============================================================================
@@ -1719,6 +1720,37 @@ async def list_enterprise_agents() -> dict:
             },
         },
     }
+
+
+_VALID_AGENTS = {
+    "research", "content", "data-analyst", "documents",
+    "rag", "support", "code", "document-intelligence",
+}
+
+
+@app.get("/api/enterprise/{agent}/estimate", tags=["Enterprise Agents"])
+async def estimate_agent_cost(
+    agent: str,
+    message: str,
+) -> dict:
+    """Estimate token count and USD cost before invoking an enterprise agent.
+
+    This endpoint is free — it does **not** call the LLM.
+
+    Args:
+        agent: Agent type (research, content, data-analyst, …).
+        message: The message you intend to send.
+
+    Returns:
+        Dict with ``input_tokens``, ``estimated_output_tokens``,
+        ``estimated_cost_usd``, and ``model``.
+    """
+    if agent not in _VALID_AGENTS:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Unknown agent '{agent}'. Valid agents: {sorted(_VALID_AGENTS)}",
+        )
+    return get_cost_estimator().estimate(message, agent)
 
 
 @app.post("/api/enterprise/research/invoke", response_model=EnterpriseAgentResponse, tags=["Enterprise Agents"])
