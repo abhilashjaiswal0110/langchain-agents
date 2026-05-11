@@ -59,11 +59,14 @@ cp .env.example .env
 #   AZURE_OPENAI_API_KEY=...
 #   AZURE_OPENAI_ENDPOINT=https://<resource>.openai.azure.com/
 
-# 3. Start the server (using existing .venv)
-.venv/Scripts/python -m uvicorn app.server:app --host 0.0.0.0 --port 8000
+# 3. Start the server
+# Linux / macOS:
+python -m uvicorn app.server:app --host 0.0.0.0 --port 8000
+# or: .venv/bin/python -m uvicorn app.server:app --host 0.0.0.0 --port 8000
 
-# Or with uv pointing to Python 3.12 explicitly (Windows)
-uv run --python "C:/Python312/python.exe" uvicorn app.server:app --host 0.0.0.0 --port 8000
+# Windows (avoids uv/Python version conflicts):
+.venv\Scripts\python.exe -m uvicorn app.server:app --host 0.0.0.0 --port 8000
+# or: uv run --python "C:\Python312\python.exe" uvicorn app.server:app --host 0.0.0.0 --port 8000
 
 # Or with make
 make run-reload

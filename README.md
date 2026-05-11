@@ -103,17 +103,20 @@ This repository includes a production-ready **Enterprise Agents Platform** in th
 ```bash
 cd deployment
 
-# Configure environment (Azure OpenAI required)
+# Configure environment (at least one LLM provider is required; Azure OpenAI is recommended)
 cp .env.example .env
 # Edit .env:
 #   AZURE_OPENAI_API_KEY=...
 #   AZURE_OPENAI_ENDPOINT=https://<resource>.openai.azure.com/
+#   (or set OPENAI_API_KEY / ANTHROPIC_API_KEY as alternatives)
 
-# Start the server using the .venv directly (avoids uv/Python version conflicts on Windows)
+# Start the server — Linux / macOS
+python -m uvicorn app.server:app --host 0.0.0.0 --port 8000
+# or: .venv/bin/python -m uvicorn app.server:app --host 0.0.0.0 --port 8000
+
+# Windows (avoids uv/Python version conflicts)
 .venv\Scripts\python.exe -m uvicorn app.server:app --host 0.0.0.0 --port 8000
-
-# Or with uv (point to Python 3.12 explicitly on Windows)
-uv run --python "C:\Python312\python.exe" uvicorn app.server:app --host 0.0.0.0 --port 8000
+# or: uv run --python "C:\Python312\python.exe" uvicorn app.server:app --host 0.0.0.0 --port 8000
 
 # Or with Docker
 docker-compose up --build

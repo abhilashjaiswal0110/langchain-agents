@@ -117,9 +117,9 @@ def _suppress_langsmith_noise() -> None:
 
     When LangSmith tracing is enabled but the API key is invalid/expired the
     background trace-upload thread emits a noisy "Failed to send compressed
-    multipart ingest" warning every few seconds.  This helper configures the
-    relevant loggers to WARNING level (once) so the first failure is still
-    visible but repeated failures are silenced.
+    multipart ingest" error every few seconds.  This helper configures the
+    relevant loggers to ERROR level so only genuine new errors surface;
+    repeated failures from the same root cause are silenced.
     """
     import logging
 
@@ -140,9 +140,10 @@ def _verify_langsmith_key(api_key: str, endpoint: str, project: str) -> bool:
         True if the key is accepted (HTTP 200), False otherwise.
     """
     try:
+        import urllib.parse
         import urllib.request
 
-        url = f"{endpoint.rstrip('/')}/projects?name={project}"
+        url = f"{endpoint.rstrip('/')}/projects?name={urllib.parse.quote_plus(project)}"
         req = urllib.request.Request(url, headers={"x-api-key": api_key})
         with urllib.request.urlopen(req, timeout=5) as resp:  # noqa: S310
             return resp.status == 200
@@ -170,7 +171,7 @@ def setup_langsmith_tracing() -> bool:
         return False
 
     if not langsmith_api_key:
-        print("Warning: LANGCHAIN_TRACING_V2=true but LANGCHAIN_API_KEY not set")
+        print("Warning: LANGCHAIN_TRACING_V2=true but LANGCHAIN_API_KEY / LANGSMITH_API_KEY not set")
         print("  → Tracing disabled. Get your API key from https://smith.langchain.com")
         os.environ["LANGCHAIN_TRACING_V2"] = "false"
         return False
@@ -180,8 +181,8 @@ def setup_langsmith_tracing() -> bool:
     key_valid = _verify_langsmith_key(langsmith_api_key, endpoint, project)
 
     if not key_valid:
-        print("[LangSmith] ⚠  API key verification FAILED (403 Forbidden).")
-        print("  → The key may be expired or revoked.")
+        print("[LangSmith] ⚠  API key verification FAILED (invalid key, network error, or 403 Forbidden).")
+        print("  → The key may be expired, revoked, or the endpoint may be unreachable.")
         print(f"  → Visit https://smith.langchain.com to generate a new key.")
         print(f"  → Set LANGCHAIN_API_KEY in deployment/.env and restart.")
         print("  → Tracing is now DISABLED to prevent log flooding.")

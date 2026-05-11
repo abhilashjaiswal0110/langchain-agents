@@ -107,11 +107,13 @@ cp .env.example .env
 ### 2. Start the server
 
 ```bash
-# Recommended — uses the existing .venv if present
-.venv/Scripts/python -m uvicorn app.server:app --host 0.0.0.0 --port 8000
+# Linux / macOS
+python -m uvicorn app.server:app --host 0.0.0.0 --port 8000
+# or: .venv/bin/python -m uvicorn app.server:app --host 0.0.0.0 --port 8000
 
-# Or with uv (points explicitly to Python 3.12 to avoid Windows Store Python)
-uv run --python "C:/Python312/python.exe" uvicorn app.server:app --host 0.0.0.0 --port 8000
+# Windows (avoids uv/Python version conflicts)
+.venv\Scripts\python.exe -m uvicorn app.server:app --host 0.0.0.0 --port 8000
+# or: uv run --python "C:\Python312\python.exe" uvicorn app.server:app --host 0.0.0.0 --port 8000
 
 # Or with make
 make run-reload
@@ -216,10 +218,11 @@ curl -X POST http://localhost:8000/api/webhook/chat \
 | `AZURE_OPENAI_EMBEDDING_DEPLOYMENT` | No | `text-embedding-3-small` | Embedding deployment |
 | `OPENAI_API_KEY` | No | — | OpenAI fallback |
 | `ANTHROPIC_API_KEY` | No | — | Anthropic fallback |
-| `LANGCHAIN_TRACING_V2` | No | `true` | Enable LangSmith tracing |
+| `LANGCHAIN_TRACING_V2` | No | `false` | Enable LangSmith tracing |
 | `LANGCHAIN_API_KEY` | No | — | LangSmith API key (verified on startup) |
+| `LANGSMITH_API_KEY` | No | — | Alias for `LANGCHAIN_API_KEY`; either is accepted |
 | `LANGCHAIN_PROJECT` | No | `langchain-platform` | LangSmith project |
-| `API_KEY_ENABLED` | No | `false` | Enable API key auth (`X-API-Key` header) |
+| `API_KEY_ENABLED` | No | `true` | Enable API key auth (`X-API-Key` header) |
 | `API_KEY` | No | — | API key value when auth is enabled |
 | `CACHE_ENABLED` | No | `false` | Enable in-memory response cache |
 | `SERVICENOW_MODE` | No | `simulation` | `simulation` or `live` |

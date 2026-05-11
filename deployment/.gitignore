@@ -59,6 +59,8 @@ logs/
 .DS_Store
 Thumbs.db
 
-# Files
-PR26_*.md
+# Temporary / PR-specific local markdown artefacts (not part of versioned docs)
+# e.g., PR26_CHANGES_SUMMARY.md, Documentation_draft.local.md
+PR[0-9]*_*.md
+*.local.md
 Documentation_*.md
