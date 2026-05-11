@@ -4,67 +4,65 @@ This is the main Deep Agent for IT Managed Services (Atos-style).
 It coordinates specialized subagents to handle complex IT operations workflows.
 """
 
-import os
 import uuid
+from collections.abc import AsyncGenerator
 from datetime import datetime
-from typing import Any, AsyncGenerator, Literal
+from typing import Any, Literal
 
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.tools import tool
 from langgraph.checkpoint.memory import MemorySaver
-
-from app.agents.base.llm_factory import get_llm
-from langgraph.graph import StateGraph, START, END
+from langgraph.graph import END, START, StateGraph
 from langgraph.prebuilt import ToolNode
 from langsmith import traceable
 
+from app.agents.base.llm_factory import get_llm
+from app.deepagents.core.state import DeepAgentState
 from app.deepagents.core.types import (
     Todo,
     TodoStatus,
 )
-from app.deepagents.core.state import DeepAgentState
+from app.deepagents.storage.persistent_backend import PersistentStorage
 from app.deepagents.subagents.definitions import (
     get_all_subagents,
     get_subagent_tools,
 )
 from app.deepagents.tools import (
-    # All IT Operations tools
-    search_incidents,
-    get_incident_details,
-    create_incident,
-    update_incident,
-    escalate_incident,
-    search_changes,
-    get_change_details,
-    validate_change,
     assess_change_risk,
-    search_problems,
-    get_problem_details,
-    create_problem,
-    link_incidents_to_problem,
+    calculate_sla_breach_time,
+    clear_attachments,
+    create_incident,
+    create_kb_article,
     create_known_error,
-    search_cmdb,
+    create_problem,
+    escalate_incident,
+    get_affected_services,
+    get_attachment_summary,
+    get_change_details,
     get_ci_details,
     get_ci_relationships,
-    get_affected_services,
-    get_sla_status,
-    calculate_sla_breach_time,
-    get_sla_report,
-    predict_sla_breach,
-    search_knowledge_base,
+    get_document_context,
+    get_incident_details,
     get_kb_article,
-    create_kb_article,
-    suggest_kb_articles,
+    get_problem_details,
+    get_sla_report,
+    get_sla_status,
+    link_incidents_to_problem,
+    list_attachments,
+    predict_sla_breach,
     # Document tools for attachment handling
     search_attachments,
-    list_attachments,
-    get_attachment_summary,
-    clear_attachments,
-    get_document_context,
+    search_changes,
+    search_cmdb,
+    # All IT Operations tools
+    search_incidents,
+    search_knowledge_base,
+    search_problems,
     set_current_session,
+    suggest_kb_articles,
+    update_incident,
+    validate_change,
 )
-from app.deepagents.storage.persistent_backend import PersistentStorage
-
 
 IT_OPERATIONS_SYSTEM_PROMPT = """You are an IT Operations Deep Agent - an advanced AI coordinator for IT Managed Services.
 
@@ -488,12 +486,15 @@ class ITOperationsDeepAgent:
                         # Get final response with tool results
                         messages.append(response)
                         from langchain_core.messages import ToolMessage
+
                         for tc in response.tool_calls:
                             if tc["id"] in tool_results:
-                                messages.append(ToolMessage(
-                                    content=str(tool_results[tc["id"]]),
-                                    tool_call_id=tc["id"],
-                                ))
+                                messages.append(
+                                    ToolMessage(
+                                        content=str(tool_results[tc["id"]]),
+                                        tool_call_id=tc["id"],
+                                    )
+                                )
 
                         final_response = llm.invoke(messages)
                         return f"**[Subagent: {subagent_type}]**\n\n{final_response.content}"
@@ -721,10 +722,18 @@ class ITOperationsDeepAgent:
             if tool_name:
                 if tool_name in ("write_todos", "update_todo"):
                     return "planning"
-                elif tool_name in ("search_incidents", "search_changes", "search_cmdb",
-                                   "search_knowledge_base", "search_attachments",
-                                   "list_attachments", "get_attachment_summary",
-                                   "search_problems", "get_incident_details", "get_change_details"):
+                elif tool_name in (
+                    "search_incidents",
+                    "search_changes",
+                    "search_cmdb",
+                    "search_knowledge_base",
+                    "search_attachments",
+                    "list_attachments",
+                    "get_attachment_summary",
+                    "search_problems",
+                    "get_incident_details",
+                    "get_change_details",
+                ):
                     return "analyzing"
                 else:
                     return "executing"
@@ -744,7 +753,7 @@ class ITOperationsDeepAgent:
                 "executing": "Executing actions...",
                 "summarizing": "Preparing response...",
             }
-            return phase_messages.get(phase, f"Processing...")
+            return phase_messages.get(phase, "Processing...")
 
         try:
             async for event in self.graph.astream_events(
@@ -795,7 +804,9 @@ class ITOperationsDeepAgent:
                     if output and hasattr(output, "tool_calls") and output.tool_calls:
                         pending_tool_calls = output.tool_calls
                         # Emit thinking update about pending tool calls
-                        tool_names = [tc.get("name", tc.get("function", {}).get("name", "unknown")) for tc in pending_tool_calls]
+                        tool_names = [
+                            tc.get("name", tc.get("function", {}).get("name", "unknown")) for tc in pending_tool_calls
+                        ]
                         current_phase = "executing"
 
                         yield {
@@ -921,7 +932,11 @@ class ITOperationsDeepAgent:
                                 elif hasattr(v, "isoformat"):
                                     safe_input[k] = v.isoformat()
                                 else:
-                                    safe_input[k] = str(v) if not isinstance(v, (str, int, float, bool, list, dict, type(None))) else v
+                                    safe_input[k] = (
+                                        str(v)
+                                        if not isinstance(v, (str, int, float, bool, list, dict, type(None)))
+                                        else v
+                                    )
                             except Exception:
                                 safe_input[k] = str(v)
                     else:
@@ -1025,6 +1040,7 @@ class ITOperationsDeepAgent:
 
         except Exception as e:
             import traceback
+
             print(f"[ERROR] Stream error: {e}")
             traceback.print_exc()
             yield {
@@ -1039,7 +1055,7 @@ class ITOperationsDeepAgent:
         """Generate human-readable description for tool execution."""
         descriptions = {
             "write_todos": "Creating task plan...",
-            "update_todo": f"Updating task status...",
+            "update_todo": "Updating task status...",
             "write_file": f"Saving to {tool_input.get('path', 'file')}...",
             "read_file": f"Reading {tool_input.get('path', 'file')}...",
             "ls": "Listing workspace files...",
@@ -1087,7 +1103,7 @@ class ITOperationsDeepAgent:
 
         # Truncate if still too long
         if len(content) > max_length:
-            content = content[:max_length - 3] + "..."
+            content = content[: max_length - 3] + "..."
 
         return content
 

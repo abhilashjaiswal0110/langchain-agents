@@ -10,7 +10,6 @@ from langchain_core.tools import tool
 
 from app.agents.servicenow_agent import is_live_mode
 
-
 # SLA definitions (typical ITIL-based)
 SLA_DEFINITIONS = {
     "incident": {
@@ -61,14 +60,14 @@ def get_sla_status(
 
             return f"""**SLA Status: {ticket_number}** [{mode}]
 
-**Priority:** {sla_def['name']} (P{priority})
+**Priority:** {sla_def["name"]} (P{priority})
 
 **Response SLA:**
-- Target: {sla_def['response']} minutes
+- Target: {sla_def["response"]} minutes
 - Status: MET (Responded within target)
 
 **Resolution SLA:**
-- Target: {sla_def['resolution']} minutes ({sla_def['resolution'] // 60}h)
+- Target: {sla_def["resolution"]} minutes ({sla_def["resolution"] // 60}h)
 - Elapsed: {elapsed_mins} minutes
 - Remaining: {remaining_mins} minutes ({remaining_mins // 60}h {remaining_mins % 60}m)
 - Status: ON TRACK
@@ -134,16 +133,16 @@ def calculate_sla_breach_time(
 
     return f"""**SLA Breach Calculation** [{mode}]
 
-**Priority:** {sla_def['name']} (P{priority})
-**Created:** {start_time.strftime('%Y-%m-%d %H:%M')}
+**Priority:** {sla_def["name"]} (P{priority})
+**Created:** {start_time.strftime("%Y-%m-%d %H:%M")}
 
 **Response SLA:**
-- Target: {sla_def['response']} minutes
-- Breach Time: {response_breach.strftime('%Y-%m-%d %H:%M')}
+- Target: {sla_def["response"]} minutes
+- Breach Time: {response_breach.strftime("%Y-%m-%d %H:%M")}
 
 **Resolution SLA:**
-- Target: {sla_def['resolution']} minutes ({sla_def['resolution'] // 60}h)
-- Breach Time: {resolution_breach.strftime('%Y-%m-%d %H:%M')}
+- Target: {sla_def["resolution"]} minutes ({sla_def["resolution"] // 60}h)
+- Breach Time: {resolution_breach.strftime("%Y-%m-%d %H:%M")}
 
 **Note:** SLA calculations assume 24x7 coverage. Business hours
 SLAs may have different breach times."""
@@ -184,22 +183,22 @@ def get_sla_report(
 **Period:** Last {period}
 
 **Volume:**
-- Total Incidents: {metrics['total']}
+- Total Incidents: {metrics["total"]}
 - Currently Open: 23
 
 **Response SLA:**
-- Met: {metrics['response_met']}/{metrics['total']} ({metrics['response_rate']}%)
-- Average Response Time: {metrics['avg_response']} minutes
+- Met: {metrics["response_met"]}/{metrics["total"]} ({metrics["response_rate"]}%)
+- Average Response Time: {metrics["avg_response"]} minutes
 
 **Resolution SLA:**
-- Met: {metrics['resolution_met']}/{metrics['total']} ({metrics['resolution_rate']}%)
-- Average Resolution Time: {metrics['avg_resolution']} minutes ({metrics['avg_resolution'] // 60}h)
+- Met: {metrics["resolution_met"]}/{metrics["total"]} ({metrics["resolution_rate"]}%)
+- Average Resolution Time: {metrics["avg_resolution"]} minutes ({metrics["avg_resolution"] // 60}h)
 
 **Breaches by Priority:**
-- P1 (Critical): {metrics['breaches_by_priority']['P1']}
-- P2 (High): {metrics['breaches_by_priority']['P2']}
-- P3 (Moderate): {metrics['breaches_by_priority']['P3']}
-- P4 (Low): {metrics['breaches_by_priority']['P4']}
+- P1 (Critical): {metrics["breaches_by_priority"]["P1"]}
+- P2 (High): {metrics["breaches_by_priority"]["P2"]}
+- P3 (Moderate): {metrics["breaches_by_priority"]["P3"]}
+- P4 (Low): {metrics["breaches_by_priority"]["P4"]}
 
 **Trend:** Improvement from previous period (+2.1% resolution rate)"""
 
@@ -257,7 +256,7 @@ def predict_sla_breach(
 **Risk Level:** {risk_level}
 
 **Risk Factors:**
-{chr(10).join(factors) if factors else '- No significant risk factors identified'}
+{chr(10).join(factors) if factors else "- No significant risk factors identified"}
 
 **Time Analysis:**
 - Elapsed: 65% of resolution target
@@ -265,4 +264,4 @@ def predict_sla_breach(
 - Predicted completion: 85% of target time
 
 **Recommendations:**
-{chr(10).join(recommendations) if recommendations else '- Continue current approach'}"""
+{chr(10).join(recommendations) if recommendations else "- Continue current approach"}"""

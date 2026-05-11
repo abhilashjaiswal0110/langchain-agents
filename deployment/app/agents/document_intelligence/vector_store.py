@@ -11,9 +11,9 @@ Following Enterprise Development Standards:
 """
 
 import logging
+import uuid
 from datetime import datetime
 from typing import Any
-import uuid
 
 from langchain_core.documents import Document
 
@@ -171,8 +171,12 @@ class DocumentVectorStore:
         k: int = 5,
         document_ids: list[str] | None = None,
         scope: str = "all",
+        rerank: bool = True,
     ) -> list[dict[str, Any]]:
         """Search for relevant chunks in the session's documents.
+
+        Retrieves `k * 2` candidates from FAISS then applies cross-encoder
+        reranking when `rerank=True` (and `RERANKER_ENABLED` env var is set).
 
         Args:
             session_id: Session identifier
@@ -180,10 +184,13 @@ class DocumentVectorStore:
             k: Number of results to return
             document_ids: Optional filter to specific documents
             scope: Search scope - 'current' (most recent doc), 'recent' (last 3), or 'all'
+            rerank: Whether to apply cross-encoder reranking after retrieval.
 
         Returns:
             List of matching chunks with metadata and scores
         """
+        import os
+
         store = _vector_stores.get(session_id)
 
         if store is None:
@@ -202,27 +209,33 @@ class DocumentVectorStore:
                 effective_doc_ids = recent_ids
                 logger.debug(f"Scoped search to recent documents: {recent_ids}")
 
-        # Perform similarity search with scores
-        results = store.similarity_search_with_score(query, k=k * 2)  # Get extra for filtering
+        # Retrieve extra candidates so the reranker has material to work with
+        results = store.similarity_search_with_score(query, k=k * 2)
 
         # Format results
         formatted_results = []
         for doc, score in results:
-            # Filter by document IDs if specified
             if effective_doc_ids and doc.metadata.get("doc_id") not in effective_doc_ids:
                 continue
 
-            formatted_results.append({
-                "content": doc.page_content,
-                "doc_id": doc.metadata.get("doc_id"),
-                "filename": doc.metadata.get("source_file"),
-                "chunk_index": doc.metadata.get("chunk_index"),
-                "score": float(score),  # Lower is better for FAISS L2 distance
-                "metadata": doc.metadata,
-            })
+            formatted_results.append(
+                {
+                    "content": doc.page_content,
+                    "doc_id": doc.metadata.get("doc_id"),
+                    "filename": doc.metadata.get("source_file"),
+                    "chunk_index": doc.metadata.get("chunk_index"),
+                    "score": float(score),  # Lower is better for FAISS L2 distance
+                    "metadata": doc.metadata,
+                }
+            )
 
-            if len(formatted_results) >= k:
-                break
+        reranker_enabled = os.getenv("RERANKER_ENABLED", "true").lower() == "true"
+        if rerank and reranker_enabled and formatted_results:
+            from app.agents.rag.reranker import get_reranker
+
+            formatted_results = get_reranker().rerank(query, formatted_results, top_k=k)
+        else:
+            formatted_results = formatted_results[:k]
 
         return formatted_results
 
@@ -238,10 +251,7 @@ class DocumentVectorStore:
         if session_id not in _document_metadata:
             return []
 
-        return [
-            {"doc_id": doc_id, **metadata}
-            for doc_id, metadata in _document_metadata[session_id].items()
-        ]
+        return [{"doc_id": doc_id, **metadata} for doc_id, metadata in _document_metadata[session_id].items()]
 
     def get_document(self, session_id: str, doc_id: str) -> dict[str, Any] | None:
         """Get a specific document's metadata.

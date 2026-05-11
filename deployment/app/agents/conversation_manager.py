@@ -10,13 +10,13 @@ Supports multiple storage backends via the memory module:
 """
 
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Literal
+
 from langsmith import traceable
 
 from app.memory import get_session_store
-from app.memory.base import BaseSessionStore
-
+from app.memory.base import BaseSessionStore, Message
 
 # =============================================================================
 # Session TTL Configuration
@@ -25,10 +25,17 @@ from app.memory.base import BaseSessionStore
 # Default session TTL in hours (configurable via environment)
 DEFAULT_SESSION_TTL_HOURS = int(os.getenv("SESSION_TTL_HOURS", "24"))
 
+# Maximum history messages to display via /history command (0 = unlimited).
+# When MAX_HISTORY_MESSAGES is set, the display limit matches the store limit.
+_MAX_HISTORY_MESSAGES: int = int(os.getenv("MAX_HISTORY_MESSAGES", "0"))
+# Fall back to 10 messages for display when no limit is configured.
+_HISTORY_DISPLAY_LIMIT: int | None = _MAX_HISTORY_MESSAGES if _MAX_HISTORY_MESSAGES > 0 else 10
+
 
 # =============================================================================
 # Conversation Manager
 # =============================================================================
+
 
 class ConversationManager:
     """Unified conversation manager for all IT Support agents.
@@ -60,18 +67,21 @@ class ConversationManager:
         """Lazy load agents."""
         try:
             from app.agents.it_helpdesk import ITHelpdeskAgent
+
             self._agents["it_helpdesk"] = ITHelpdeskAgent(model_provider="auto")
         except Exception as e:
             print(f"Failed to load IT Helpdesk Agent: {e}")
 
         try:
             from app.agents.servicenow_agent import ServiceNowAgent
+
             self._agents["servicenow"] = ServiceNowAgent(model_provider="auto")
         except Exception as e:
             print(f"Failed to load ServiceNow Agent: {e}")
 
         try:
             from app.agents.document_intelligence import DocumentIntelligenceAgent
+
             self._agents["document_intelligence"] = DocumentIntelligenceAgent()
         except Exception as e:
             print(f"Failed to load Document Intelligence Agent: {e}")
@@ -109,9 +119,15 @@ class ConversationManager:
     @traceable(name="conversation_start", tags=["conversation", "session"])
     def start_conversation(
         self,
-        agent_type: Literal["it_helpdesk", "servicenow", "document_intelligence", "employee_experience"],
+        agent_type: Literal[
+            "it_helpdesk",
+            "servicenow",
+            "document_intelligence",
+            "employee_experience",
+        ],
         user_id: str | None = None,
         metadata: dict | None = None,
+        tenant_id: str = "default",
     ) -> dict[str, Any]:
         """Start a new conversation with an agent.
 
@@ -119,6 +135,7 @@ class ConversationManager:
             agent_type: Type of agent to use.
             user_id: Optional user identifier.
             metadata: Optional metadata for the session.
+            tenant_id: Tenant identifier for session isolation.
 
         Returns:
             Session information including ID and welcome message.
@@ -134,6 +151,7 @@ class ConversationManager:
             user_id=user_id or "",
             metadata=metadata,
             ttl_hours=DEFAULT_SESSION_TTL_HOURS,
+            tenant_id=tenant_id,
         )
 
         # Welcome messages
@@ -179,17 +197,19 @@ What would you like to do?""",
         self,
         session_id: str,
         message: str,
+        tenant_id: str = "default",
     ) -> dict[str, Any]:
         """Send a message in an existing conversation.
 
         Args:
             session_id: The session ID.
             message: User's message.
+            tenant_id: Tenant identifier for session isolation.
 
         Returns:
             Agent's response and metadata.
         """
-        session = self.session_store.get_session(session_id)
+        session = self.session_store.get_session(session_id, tenant_id=tenant_id)
         if not session:
             return {
                 "error": "Session not found. Please start a new conversation.",
@@ -207,7 +227,7 @@ What would you like to do?""",
 
         # Handle special commands
         if message.startswith("/"):
-            return self._handle_command(session_id, message)
+            return self._handle_command(session_id, message, tenant_id=tenant_id)
 
         # Chat with agent
         try:
@@ -218,6 +238,7 @@ What would you like to do?""",
                 session_id=session_id,
                 user_message=message,
                 assistant_message=result["response"],
+                tenant_id=tenant_id,
             )
 
             return {
@@ -237,9 +258,19 @@ What would you like to do?""",
         self,
         session_id: str,
         message: str,
+        tenant_id: str = "default",
     ) -> dict[str, Any]:
-        """Async version of chat."""
-        session = self.session_store.get_session(session_id)
+        """Async version of chat.
+
+        Args:
+            session_id: The session ID.
+            message: User's message.
+            tenant_id: Tenant identifier for session isolation.
+
+        Returns:
+            Agent's response and metadata.
+        """
+        session = self.session_store.get_session(session_id, tenant_id=tenant_id)
         if not session:
             return {
                 "error": "Session not found.",
@@ -256,7 +287,7 @@ What would you like to do?""",
             }
 
         if message.startswith("/"):
-            return self._handle_command(session_id, message)
+            return self._handle_command(session_id, message, tenant_id=tenant_id)
 
         try:
             result = await agent.achat(message, thread_id=session_id)
@@ -265,6 +296,7 @@ What would you like to do?""",
                 session_id=session_id,
                 user_message=message,
                 assistant_message=result["response"],
+                tenant_id=tenant_id,
             )
 
             return {
@@ -280,13 +312,31 @@ What would you like to do?""",
                 "session_id": session_id,
             }
 
-    def _handle_command(self, session_id: str, command: str) -> dict[str, Any]:
-        """Handle special commands."""
+    def _handle_command(
+        self,
+        session_id: str,
+        command: str,
+        tenant_id: str = "default",
+    ) -> dict[str, Any]:
+        """Handle special commands.
+
+        Args:
+            session_id: The session ID.
+            command: The slash command string.
+            tenant_id: Tenant identifier for session isolation.
+
+        Returns:
+            Command response dict.
+        """
         cmd = command.lower().strip()
-        session = self.session_store.get_session(session_id)
+        session = self.session_store.get_session(session_id, tenant_id=tenant_id)
 
         if cmd == "/history":
-            history = self.session_store.get_history(session_id, limit=10)
+            history = self.session_store.get_history(
+                session_id,
+                limit=_HISTORY_DISPLAY_LIMIT,
+                tenant_id=tenant_id,
+            )
             if not history:
                 return {
                     "session_id": session_id,
@@ -294,7 +344,7 @@ What would you like to do?""",
                     "is_command": True,
                 }
             formatted = []
-            for msg in history:  # Already limited to last 10
+            for msg in history:  # Already limited to _HISTORY_DISPLAY_LIMIT
                 role = "You" if msg.role == "user" else "Agent"
                 content_preview = msg.content[:100] if len(msg.content) > 100 else msg.content
                 formatted.append(f"**{role}:** {content_preview}...")
@@ -306,7 +356,7 @@ What would you like to do?""",
 
         elif cmd == "/clear":
             if session:
-                self.session_store.clear_session(session_id)
+                self.session_store.clear_session(session_id, tenant_id=tenant_id)
             return {
                 "session_id": session_id,
                 "response": "Conversation cleared. How can I help you?",
@@ -317,6 +367,7 @@ What would you like to do?""",
             # Import and call system status
             try:
                 from app.agents.it_helpdesk import check_system_status
+
                 status = check_system_status.invoke({})
                 return {
                     "session_id": session_id,
@@ -346,6 +397,7 @@ What would you like to do?""",
                     self.session_store.set_context(
                         session_id,
                         {"agent_type_override": new_agent},
+                        tenant_id=tenant_id,
                     )
                 return {
                     "session_id": session_id,
@@ -382,9 +434,17 @@ Just type your question to chat with the current agent.""",
             "is_command": True,
         }
 
-    def get_session_info(self, session_id: str) -> dict | None:
-        """Get session information."""
-        session = self.session_store.get_session(session_id)
+    def get_session_info(self, session_id: str, tenant_id: str = "default") -> dict | None:
+        """Get session information.
+
+        Args:
+            session_id: Session identifier.
+            tenant_id: Tenant identifier for session isolation.
+
+        Returns:
+            Session info dict, or None if not found.
+        """
+        session = self.session_store.get_session(session_id, tenant_id=tenant_id)
         if not session:
             return None
 
@@ -397,9 +457,17 @@ Just type your question to chat with the current agent.""",
             "message_count": len(session.messages),
         }
 
-    def end_conversation(self, session_id: str) -> dict[str, Any]:
-        """End a conversation and get summary."""
-        session = self.session_store.get_session(session_id)
+    def end_conversation(self, session_id: str, tenant_id: str = "default") -> dict[str, Any]:
+        """End a conversation and get summary.
+
+        Args:
+            session_id: Session identifier.
+            tenant_id: Tenant identifier for session isolation.
+
+        Returns:
+            Session summary dict.
+        """
+        session = self.session_store.get_session(session_id, tenant_id=tenant_id)
         if not session:
             return {"error": "Session not found"}
 
@@ -415,3 +483,63 @@ Just type your question to chat with the current agent.""",
         # self.session_store.delete_session(session_id)
 
         return summary
+
+    async def switch_agent(
+        self,
+        session_id: str,
+        new_agent_type: str,
+        *,
+        preserve_context: bool = True,
+        handoff_context: dict[str, Any] | None = None,
+        tenant_id: str = "default",
+    ) -> None:
+        """Switch the active agent for an existing session.
+
+        Loads the session, validates the requested agent type, updates the
+        session metadata, and optionally injects a system note about the
+        handoff so the new agent is aware of the transfer.
+
+        Args:
+            session_id: Session to update.
+            new_agent_type: Agent type to switch to.
+            preserve_context: If True, existing messages are kept.
+            handoff_context: Optional dict with handoff metadata (from_agent,
+                reason, conversation_summary, key_entities) injected as a
+                system note for the new agent.
+            tenant_id: Tenant scope for the session store.
+
+        Raises:
+            ValueError: If *new_agent_type* is not in AVAILABLE_AGENTS.
+            KeyError: If *session_id* does not exist.
+        """
+        if new_agent_type not in self.AVAILABLE_AGENTS:
+            msg = f"Unknown agent type '{new_agent_type}'. Available: {list(self.AVAILABLE_AGENTS)}"
+            raise ValueError(msg)
+
+        session = self.session_store.get_session(session_id, tenant_id=tenant_id)
+        if session is None:
+            raise KeyError(f"Session '{session_id}' not found")
+
+        # Update agent type in metadata
+        session.metadata.agent_type = new_agent_type
+
+        if not preserve_context:
+            session.messages.clear()
+
+        if handoff_context:
+            note_lines = [
+                f"[HANDOFF] Transferred from {handoff_context.get('from_agent', 'unknown')}.",
+                f"Reason: {handoff_context.get('reason', '')}",
+            ]
+            if handoff_context.get("conversation_summary"):
+                note_lines.append(f"Summary: {handoff_context['conversation_summary']}")
+            if handoff_context.get("key_entities"):
+                note_lines.append(f"Key context: {handoff_context['key_entities']}")
+            note = Message(
+                role="system",
+                content="\n".join(note_lines),
+                timestamp=datetime.now(tz=timezone.utc),
+            )
+            session.messages.append(note)
+
+        self.session_store.update_session(session, tenant_id=tenant_id)

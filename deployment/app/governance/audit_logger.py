@@ -426,7 +426,7 @@ class AuditLogger:
             return []
 
         entries = []
-        with open(log_path, "r") as f:
+        with open(log_path) as f:
             for line in f:
                 if not line.strip():
                     continue

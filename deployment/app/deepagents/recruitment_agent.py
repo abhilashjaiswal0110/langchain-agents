@@ -13,78 +13,74 @@ Following Enterprise Development Standards:
 
 import logging
 import uuid
+from collections.abc import AsyncGenerator
 from datetime import datetime
-from typing import Any, AsyncGenerator, Literal
+from typing import Any, Literal
 
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.tools import tool
 from langgraph.checkpoint.memory import MemorySaver
-from langgraph.graph import StateGraph, START, END
+from langgraph.graph import END, START, StateGraph
 from langgraph.prebuilt import ToolNode
 from langsmith import traceable
 
 from app.agents.base.llm_factory import get_llm
-from app.deepagents.core.types import Todo, TodoStatus
 from app.deepagents.core.state import DeepAgentState
+from app.deepagents.core.types import Todo, TodoStatus
 from app.deepagents.storage.persistent_backend import PersistentStorage
 
 logger = logging.getLogger(__name__)
 
 # Import all recruitment tools
-from app.deepagents.tools.sharepoint_tools import (
-    list_sharepoint_folder,
-    download_sharepoint_document,
-    upload_to_sharepoint,
-    search_sharepoint_documents,
-    get_cached_document,
-    create_sharepoint_folder,
-)
-
-from app.deepagents.tools.recruitment_tools import (
-    parse_resume,
-    parse_job_description,
-    screen_candidate,
-    batch_screen_resumes,
-    get_candidate_profile,
-    list_candidates,
-    list_job_descriptions,
-    get_shortlisted_candidates,
-    get_session_dashboard,
-    clear_session_data,
-)
-
-from app.deepagents.tools.interview_tools import (
-    generate_interview_questions,
-    export_question_set,
-    submit_candidate_answers,
-    evaluate_candidate_answers,
-    get_candidate_score,
-    list_question_sets,
-)
-
-from app.deepagents.tools.scoring_tools import (
-    generate_scoring_report,
-    export_scoring_excel,
-    get_ranking_summary,
-    get_passing_score_thresholds,
-    generate_shortlist_report,
-)
-
 from app.deepagents.subagents.recruitment_subagents import (
-    get_recruitment_subagents,
     get_recruitment_subagent_tools,
+    get_recruitment_subagents,
 )
 
 # Import document tools for attachment handling
 from app.deepagents.tools.document_tools import (
-    search_attachments,
-    list_attachments,
-    get_attachment_summary,
     clear_attachments,
+    get_attachment_summary,
     get_document_context,
+    list_attachments,
+    search_attachments,
     set_current_session,
 )
-
+from app.deepagents.tools.interview_tools import (
+    evaluate_candidate_answers,
+    export_question_set,
+    generate_interview_questions,
+    get_candidate_score,
+    list_question_sets,
+    submit_candidate_answers,
+)
+from app.deepagents.tools.recruitment_tools import (
+    batch_screen_resumes,
+    clear_session_data,
+    get_candidate_profile,
+    get_session_dashboard,
+    get_shortlisted_candidates,
+    list_candidates,
+    list_job_descriptions,
+    parse_job_description,
+    parse_resume,
+    screen_candidate,
+)
+from app.deepagents.tools.scoring_tools import (
+    export_scoring_excel,
+    generate_scoring_report,
+    generate_shortlist_report,
+    get_passing_score_thresholds,
+    get_ranking_summary,
+)
+from app.deepagents.tools.sharepoint_tools import (
+    create_sharepoint_folder,
+    download_sharepoint_document,
+    get_cached_document,
+    list_sharepoint_folder,
+    search_sharepoint_documents,
+    upload_to_sharepoint,
+)
 
 RECRUITMENT_SYSTEM_PROMPT = """You are a Recruitment Deep Agent - an advanced AI coordinator for end-to-end recruitment automation.
 
@@ -365,14 +361,14 @@ class RecruitmentDeepAgent:
         ]
 
         return (
-            planning_tools +
-            fs_tools +
-            task_tools +
-            sharepoint_tools +
-            recruitment_tools +
-            interview_tools +
-            scoring_tools +
-            doc_tools
+            planning_tools
+            + fs_tools
+            + task_tools
+            + sharepoint_tools
+            + recruitment_tools
+            + interview_tools
+            + scoring_tools
+            + doc_tools
         )
 
     def _create_write_todos_tool(self):
@@ -593,12 +589,15 @@ class RecruitmentDeepAgent:
                         # Get final response with tool results
                         messages.append(response)
                         from langchain_core.messages import ToolMessage
+
                         for tc in response.tool_calls:
                             if tc["id"] in tool_results:
-                                messages.append(ToolMessage(
-                                    content=str(tool_results[tc["id"]]),
-                                    tool_call_id=tc["id"],
-                                ))
+                                messages.append(
+                                    ToolMessage(
+                                        content=str(tool_results[tc["id"]]),
+                                        tool_call_id=tc["id"],
+                                    )
+                                )
 
                         final_response = llm.invoke(messages)
                         return f"**[Subagent: {subagent_type}]**\n\n{final_response.content}"
@@ -809,13 +808,22 @@ class RecruitmentDeepAgent:
             if tool_name:
                 if tool_name in ("write_todos", "update_todo"):
                     return "planning"
-                elif tool_name in ("list_sharepoint_folder", "download_sharepoint_document",
-                                   "search_sharepoint_documents", "parse_resume",
-                                   "parse_job_description", "list_candidates",
-                                   "list_job_descriptions"):
+                elif tool_name in (
+                    "list_sharepoint_folder",
+                    "download_sharepoint_document",
+                    "search_sharepoint_documents",
+                    "parse_resume",
+                    "parse_job_description",
+                    "list_candidates",
+                    "list_job_descriptions",
+                ):
                     return "analyzing"
-                elif tool_name in ("screen_candidate", "batch_screen_resumes",
-                                   "generate_interview_questions", "evaluate_candidate_answers"):
+                elif tool_name in (
+                    "screen_candidate",
+                    "batch_screen_resumes",
+                    "generate_interview_questions",
+                    "evaluate_candidate_answers",
+                ):
                     return "executing"
                 else:
                     return "executing"
@@ -937,6 +945,7 @@ class RecruitmentDeepAgent:
 
         except Exception as e:
             import traceback
+
             print(f"[ERROR] Stream error: {e}")
             traceback.print_exc()
             yield {

@@ -13,13 +13,11 @@ Following Enterprise Development Standards:
 - Software Engineer: Type-safe, well-documented
 """
 
-import os
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 from uuid import uuid4
 
-from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.output_parsers import JsonOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langsmith import traceable
@@ -109,10 +107,7 @@ class ResearchPlan:
 
         while remaining:
             # Find queries with all dependencies met
-            ready = [
-                sq for sq in remaining
-                if all(dep in executed for dep in sq.depends_on)
-            ]
+            ready = [sq for sq in remaining if all(dep in executed for dep in sq.depends_on)]
 
             if not ready:
                 # Avoid infinite loop - add remaining with unmet deps
@@ -154,6 +149,7 @@ class ResearchPlanner:
         """Get or create LLM instance."""
         if self._llm is None:
             from app.agents.base.llm_factory import get_llm
+
             self._llm = get_llm()
         return self._llm
 
@@ -195,10 +191,12 @@ Max sub-queries: {max_sub_queries}
 
 Respond with valid JSON only."""
 
-        return ChatPromptTemplate.from_messages([
-            ("system", system),
-            ("human", human),
-        ])
+        return ChatPromptTemplate.from_messages(
+            [
+                ("system", system),
+                ("human", human),
+            ]
+        )
 
     @traceable(name="decompose_query")
     def decompose(
@@ -233,11 +231,13 @@ Respond with valid JSON only."""
         chain = self._decomposition_prompt | llm | JsonOutputParser()
 
         try:
-            result = chain.invoke({
-                "query": query,
-                "depth": depth,
-                "max_sub_queries": actual_max,
-            })
+            result = chain.invoke(
+                {
+                    "query": query,
+                    "depth": depth,
+                    "max_sub_queries": actual_max,
+                }
+            )
 
             # Parse result into ResearchPlan
             return self._parse_plan(query, result, config["max_depth"])
@@ -285,14 +285,16 @@ Respond with valid JSON only."""
             except ValueError:
                 sq_intent = QueryIntent.FACTUAL
 
-            sub_queries.append(SubQuery(
-                query=sq_data.get("query", ""),
-                intent=sq_intent,
-                priority=sq_data.get("priority", 1),
-                depends_on=sq_data.get("depends_on", []),
-                keywords=sq_data.get("keywords", []),
-                estimated_sources=sq_data.get("estimated_sources", 3),
-            ))
+            sub_queries.append(
+                SubQuery(
+                    query=sq_data.get("query", ""),
+                    intent=sq_intent,
+                    priority=sq_data.get("priority", 1),
+                    depends_on=sq_data.get("depends_on", []),
+                    keywords=sq_data.get("keywords", []),
+                    estimated_sources=sq_data.get("estimated_sources", 3),
+                )
+            )
 
         # Estimate duration based on sub-queries
         estimated_minutes = len(sub_queries) * 2
@@ -353,23 +355,30 @@ Respond with valid JSON only."""
 
         llm = self._get_llm()
 
-        prompt = ChatPromptTemplate.from_messages([
-            ("system", "Refine this search query based on the context provided."),
-            ("human", """Original query: {query}
+        prompt = ChatPromptTemplate.from_messages(
+            [
+                ("system", "Refine this search query based on the context provided."),
+                (
+                    "human",
+                    """Original query: {query}
 
 Context from initial results:
 {context}
 
-Provide a refined, more specific search query. Respond with just the query text."""),
-        ])
+Provide a refined, more specific search query. Respond with just the query text.""",
+                ),
+            ]
+        )
 
         chain = prompt | llm
 
         try:
-            response = chain.invoke({
-                "query": sub_query.query,
-                "context": context[:1000],
-            })
+            response = chain.invoke(
+                {
+                    "query": sub_query.query,
+                    "context": context[:1000],
+                }
+            )
 
             # Create refined sub-query
             return SubQuery(

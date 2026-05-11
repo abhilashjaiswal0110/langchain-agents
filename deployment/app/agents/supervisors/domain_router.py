@@ -11,12 +11,11 @@ Following Enterprise Development Standards:
 - Software Engineer: Fast, efficient classification
 """
 
-import re
 from dataclasses import dataclass
 from enum import Enum
 from typing import Any
 
-from langchain_core.messages import BaseMessage, HumanMessage
+from langchain_core.messages import BaseMessage
 from langchain_core.prompts import ChatPromptTemplate
 from langsmith import traceable
 from pydantic import BaseModel, Field
@@ -35,6 +34,7 @@ class DomainIntent(str, Enum):
     CLOUD = "cloud"
     CYBERSECURITY = "cybersecurity"
     DATA_AI = "data_ai"
+    FINANCE = "finance"
     GENERAL = "general"
     UNKNOWN = "unknown"
 
@@ -80,55 +80,210 @@ class ClassificationResult(BaseModel):
 # Domain keywords for fast classification
 DOMAIN_KEYWORDS: dict[DomainIntent, list[str]] = {
     DomainIntent.MARCOM: [
-        "marketing", "campaign", "brand", "branding", "content",
-        "social media", "press release", "communications", "pr",
-        "newsletter", "advertising", "ads", "creative", "design",
-        "collateral", "logo", "messaging", "launch",
+        "marketing",
+        "campaign",
+        "brand",
+        "branding",
+        "content",
+        "social media",
+        "press release",
+        "communications",
+        "pr",
+        "newsletter",
+        "advertising",
+        "ads",
+        "creative",
+        "design",
+        "collateral",
+        "logo",
+        "messaging",
+        "launch",
     ],
     DomainIntent.HR: [
-        "hr", "human resources", "benefits", "payroll", "salary",
-        "vacation", "pto", "leave", "onboarding", "offboarding",
-        "hiring", "recruit", "performance review", "compensation",
-        "employee", "policy", "handbook", "contract", "termination",
+        "hr",
+        "human resources",
+        "benefits",
+        "payroll",
+        "salary",
+        "vacation",
+        "pto",
+        "leave",
+        "onboarding",
+        "offboarding",
+        "hiring",
+        "recruit",
+        "performance review",
+        "compensation",
+        "employee",
+        "policy",
+        "handbook",
+        "contract",
+        "termination",
     ],
     DomainIntent.LND: [
-        "training", "course", "learning", "certification", "certificate",
-        "skill", "development", "workshop", "webinar", "education",
-        "tutorial", "lesson", "exam", "assessment", "competency",
+        "training",
+        "course",
+        "learning",
+        "certification",
+        "certificate",
+        "skill",
+        "development",
+        "workshop",
+        "webinar",
+        "education",
+        "tutorial",
+        "lesson",
+        "exam",
+        "assessment",
+        "competency",
     ],
     DomainIntent.PRESALES: [
-        "presales", "sales", "demo", "proposal", "rfp", "rfi",
-        "quote", "pricing", "customer", "client", "prospect",
-        "pitch", "presentation", "poc", "proof of concept",
+        "presales",
+        "sales",
+        "demo",
+        "proposal",
+        "rfp",
+        "rfi",
+        "quote",
+        "pricing",
+        "customer",
+        "client",
+        "prospect",
+        "pitch",
+        "presentation",
+        "poc",
+        "proof of concept",
     ],
     DomainIntent.DATACENTER: [
-        "datacenter", "data center", "server", "rack", "storage",
-        "san", "nas", "backup", "physical", "hardware", "cooling",
-        "power", "ups", "network switch", "cable", "facility",
+        "datacenter",
+        "data center",
+        "server",
+        "rack",
+        "storage",
+        "san",
+        "nas",
+        "backup",
+        "physical",
+        "hardware",
+        "cooling",
+        "power",
+        "ups",
+        "network switch",
+        "cable",
+        "facility",
     ],
     DomainIntent.CLOUD: [
-        "cloud", "azure", "aws", "gcp", "vm", "virtual machine",
-        "container", "kubernetes", "docker", "iaas", "paas", "saas",
-        "serverless", "function", "lambda", "storage account",
-        "blob", "s3", "ec2", "aks", "eks", "gke",
+        "cloud",
+        "azure",
+        "aws",
+        "gcp",
+        "vm",
+        "virtual machine",
+        "container",
+        "kubernetes",
+        "docker",
+        "iaas",
+        "paas",
+        "saas",
+        "serverless",
+        "function",
+        "lambda",
+        "storage account",
+        "blob",
+        "s3",
+        "ec2",
+        "aks",
+        "eks",
+        "gke",
     ],
     DomainIntent.CYBERSECURITY: [
-        "security", "cybersecurity", "cyber", "vulnerability", "patch",
-        "firewall", "antivirus", "malware", "phishing", "incident",
-        "breach", "access control", "iam", "mfa", "2fa", "compliance",
-        "audit", "pentest", "penetration", "soc", "siem", "threat",
+        "security",
+        "cybersecurity",
+        "cyber",
+        "vulnerability",
+        "patch",
+        "firewall",
+        "antivirus",
+        "malware",
+        "phishing",
+        "incident",
+        "breach",
+        "access control",
+        "iam",
+        "mfa",
+        "2fa",
+        "compliance",
+        "audit",
+        "pentest",
+        "penetration",
+        "soc",
+        "siem",
+        "threat",
     ],
     DomainIntent.DATA_AI: [
-        "data", "analytics", "ai", "artificial intelligence", "ml",
-        "machine learning", "model", "dataset", "pipeline", "etl",
-        "bi", "business intelligence", "dashboard", "report",
-        "visualization", "prediction", "llm", "nlp", "chatbot",
+        "data",
+        "analytics",
+        "ai",
+        "artificial intelligence",
+        "ml",
+        "machine learning",
+        "model",
+        "dataset",
+        "pipeline",
+        "etl",
+        "bi",
+        "business intelligence",
+        "dashboard",
+        "report",
+        "visualization",
+        "prediction",
+        "llm",
+        "nlp",
+        "chatbot",
+    ],
+    DomainIntent.FINANCE: [
+        "finance",
+        "budget",
+        "invoice",
+        "expense",
+        "accounts payable",
+        "accounts receivable",
+        "gl",
+        "general ledger",
+        "cost centre",
+        "fiscal",
+        "reimbursement",
+        "purchase order",
+        "po",
+        "financial report",
+        "variance",
+        "actuals",
+        "forecast",
     ],
     DomainIntent.GENERAL: [
-        "password", "reset", "account", "login", "access", "vpn",
-        "email", "outlook", "teams", "office", "software", "install",
-        "printer", "wifi", "network", "laptop", "computer", "pc",
-        "monitor", "keyboard", "mouse", "desk", "equipment",
+        "password",
+        "reset",
+        "account",
+        "login",
+        "access",
+        "vpn",
+        "email",
+        "outlook",
+        "teams",
+        "office",
+        "software",
+        "install",
+        "printer",
+        "wifi",
+        "network",
+        "laptop",
+        "computer",
+        "pc",
+        "monitor",
+        "keyboard",
+        "mouse",
+        "desk",
+        "equipment",
     ],
 }
 
@@ -175,8 +330,11 @@ class DomainRouter:
 
         llm = self._get_llm()
 
-        prompt = ChatPromptTemplate.from_messages([
-            ("system", """You are an IT request classifier. Classify the user request into ONE of these domains:
+        prompt = ChatPromptTemplate.from_messages(
+            [
+                (
+                    "system",
+                    """You are an IT request classifier. Classify the user request into ONE of these domains:
 - marcom: Marketing & Communications (campaigns, branding, content)
 - hr: Human Resources (benefits, policies, payroll, onboarding)
 - lnd: Learning & Development (training, certifications, courses)
@@ -194,9 +352,11 @@ Set is_complex=true if the request:
 - Is sensitive or urgent
 - Needs clarification
 
-Respond with your classification."""),
-            ("human", "{message}"),
-        ])
+Respond with your classification.""",
+                ),
+                ("human", "{message}"),
+            ]
+        )
 
         self._classification_chain = prompt | llm.with_structured_output(ClassificationResult)
         return self._classification_chain

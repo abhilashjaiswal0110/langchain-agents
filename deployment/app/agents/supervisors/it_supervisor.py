@@ -13,18 +13,15 @@ Following Enterprise Development Standards:
 - Software Engineer: Type-safe, async-first
 """
 
-import os
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Annotated, Any, Literal, Sequence
+from typing import Annotated, Any
 
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, BaseMessage
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.tools import tool
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.graph import END, StateGraph
 from langgraph.graph.message import add_messages
-from langgraph.prebuilt import ToolNode
 from langsmith import traceable
 from pydantic import BaseModel, Field
 
@@ -165,10 +162,12 @@ class ITSupervisor:
         """Create the routing decision chain."""
         llm = self._get_llm()
 
-        prompt = ChatPromptTemplate.from_messages([
-            ("system", SUPERVISOR_PROMPT),
-            ("placeholder", "{messages}"),
-        ])
+        prompt = ChatPromptTemplate.from_messages(
+            [
+                ("system", SUPERVISOR_PROMPT),
+                ("placeholder", "{messages}"),
+            ]
+        )
 
         # Use structured output for reliable parsing
         return prompt | llm.with_structured_output(RoutingDecision)
@@ -189,14 +188,16 @@ class ITSupervisor:
 
         chain = self._create_routing_chain()
 
-        decision = await chain.ainvoke({
-            "messages": messages,
-            "user_name": user_context.get("display_name", "User"),
-            "user_email": user_context.get("email", "unknown"),
-            "user_role": user_context.get("primary_role", "user"),
-            "user_department": user_context.get("department", "unknown"),
-            "domains_consulted": ", ".join(domains_consulted) if domains_consulted else "none",
-        })
+        decision = await chain.ainvoke(
+            {
+                "messages": messages,
+                "user_name": user_context.get("display_name", "User"),
+                "user_email": user_context.get("email", "unknown"),
+                "user_role": user_context.get("primary_role", "user"),
+                "user_department": user_context.get("department", "unknown"),
+                "domains_consulted": ", ".join(domains_consulted) if domains_consulted else "none",
+            }
+        )
 
         # Update state based on decision
         updates: dict[str, Any] = {
@@ -214,8 +215,7 @@ class ITSupervisor:
         elif decision.action == SupervisorAction.ESCALATE:
             updates["escalation_requested"] = True
             updates["final_response"] = (
-                "I'm escalating this to a human operator who can better assist you. "
-                "Someone will reach out shortly."
+                "I'm escalating this to a human operator who can better assist you. Someone will reach out shortly."
             )
             updates["messages"] = [AIMessage(content=updates["final_response"])]
         elif decision.action == SupervisorAction.CLARIFY:
@@ -240,7 +240,9 @@ class ITSupervisor:
 
         if not domain:
             return {
-                "messages": [AIMessage(content="I apologize, but I couldn't determine the right department. Please try again.")],
+                "messages": [
+                    AIMessage(content="I apologize, but I couldn't determine the right department. Please try again.")
+                ],
             }
 
         # Get domain agent
@@ -249,12 +251,16 @@ class ITSupervisor:
         if agent:
             # Real domain agent available
             try:
-                result = await agent.ainvoke({
-                    "messages": messages,
-                    "user_context": user_context,
-                })
-                response = result.get("response", result.get("messages", [])[-1].content if result.get("messages") else "")
-            except Exception as e:
+                result = await agent.ainvoke(
+                    {
+                        "messages": messages,
+                        "user_context": user_context,
+                    }
+                )
+                response = result.get(
+                    "response", result.get("messages", [])[-1].content if result.get("messages") else ""
+                )
+            except Exception:
                 response = f"The {domain} team is currently experiencing issues. Please try again later."
         else:
             # Simulate domain agent response for now
@@ -300,10 +306,12 @@ class ITSupervisor:
             "general": "You are the General IT support specialist. Help with basic tech issues, account access, and software.",
         }
 
-        prompt = ChatPromptTemplate.from_messages([
-            ("system", domain_prompts.get(domain, domain_prompts["general"])),
-            ("placeholder", "{messages}"),
-        ])
+        prompt = ChatPromptTemplate.from_messages(
+            [
+                ("system", domain_prompts.get(domain, domain_prompts["general"])),
+                ("placeholder", "{messages}"),
+            ]
+        )
 
         chain = prompt | llm
         result = await chain.ainvoke({"messages": messages})

@@ -67,7 +67,7 @@ class PersistentStorage(BaseStorage):
             meta_path = file_path.with_suffix(file_path.suffix + ".meta")
             if meta_path.exists():
                 try:
-                    with open(meta_path, "r") as f:
+                    with open(meta_path) as f:
                         existing_meta = json.load(f)
                         created_at = datetime.fromisoformat(existing_meta.get("created_at", now.isoformat()))
                 except (json.JSONDecodeError, ValueError):
@@ -117,7 +117,7 @@ class PersistentStorage(BaseStorage):
             return None
 
         # Read content
-        with open(file_path, "r", encoding="utf-8") as f:
+        with open(file_path, encoding="utf-8") as f:
             content = f.read()
 
         # Read metadata
@@ -129,7 +129,7 @@ class PersistentStorage(BaseStorage):
 
         if meta_path.exists():
             try:
-                with open(meta_path, "r") as f:
+                with open(meta_path) as f:
                     meta = json.load(f)
                     created_at = datetime.fromisoformat(meta.get("created_at", created_at.isoformat()))
                     updated_at = datetime.fromisoformat(meta.get("updated_at", updated_at.isoformat()))
@@ -205,7 +205,7 @@ class PersistentStorage(BaseStorage):
             return []
 
         try:
-            with open(todos_path, "r", encoding="utf-8") as f:
+            with open(todos_path, encoding="utf-8") as f:
                 data = json.load(f)
                 return [Todo(**t) for t in data]
         except (json.JSONDecodeError, ValueError):
@@ -219,7 +219,7 @@ class PersistentStorage(BaseStorage):
         existing = {}
         if meta_path.exists():
             try:
-                with open(meta_path, "r", encoding="utf-8") as f:
+                with open(meta_path, encoding="utf-8") as f:
                     existing = json.load(f)
             except json.JSONDecodeError:
                 # If the existing metadata file is corrupt, create new metadata from scratch.
@@ -239,7 +239,7 @@ class PersistentStorage(BaseStorage):
             return None
 
         try:
-            with open(meta_path, "r", encoding="utf-8") as f:
+            with open(meta_path, encoding="utf-8") as f:
                 return json.load(f)
         except json.JSONDecodeError:
             return None

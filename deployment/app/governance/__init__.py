@@ -8,6 +8,7 @@ This module provides a comprehensive governance layer including:
 - PII detection and masking
 - Token usage cost tracking
 - Anomaly detection
+- Prompt injection / jailbreak detection
 - FastAPI middleware integration
 
 Usage:
@@ -31,6 +32,10 @@ Usage:
         # PII detection
         PIIDetector, PIIType, PIIMatch, PIIConfig,
         get_pii_detector, detect_pii, mask_pii,
+
+        # Injection detection
+        InjectionDetector, InjectionResult,
+        get_injection_detector, detect_injection,
 
         # Cost tracking
         CostTracker, TokenUsage, CostConfig,
@@ -57,44 +62,22 @@ Usage:
 """
 
 # RBAC exports
-from app.governance.rbac import (
-    Permission,
-    PermissionDeniedError,
-    RBACConfig,
-    RBACManager,
-    Role,
-    ROLE_PERMISSIONS,
-    UserContext,
-    check_permission,
-    get_permissions_for_role,
-    get_rbac_manager,
-    require_permission,
-    reset_rbac_manager,
-)
-
-# Audit logging exports
-from app.governance.audit_logger import (
-    AuditAction,
-    AuditConfig,
-    AuditEntry,
-    AuditLevel,
-    AuditLogger,
-    audit_agent_response,
-    get_audit_logger,
-    reset_audit_logger,
-)
-
-# Rate limiting exports
-from app.governance.rate_limiter import (
-    RateLimitConfig,
-    RateLimitExceededError,
-    RateLimiter,
-    RateLimitResult,
-    RateLimitRule,
-    check_rate_limit,
-    get_rate_limiter,
-    require_rate_limit,
-    reset_rate_limiter,
+# Anomaly detection exports
+from app.governance.anomaly_detector import (
+    Anomaly,
+    AnomalyBlockedError,
+    AnomalyConfig,
+    AnomalyDetector,
+    AnomalySeverity,
+    AnomalyType,
+    ContentConfig,
+    ErrorConfig,
+    Event,
+    RateConfig,
+    check_for_anomalies,
+    get_anomaly_detector,
+    record_event,
+    reset_anomaly_detector,
 )
 
 # Approval workflow exports
@@ -115,12 +98,50 @@ from app.governance.approval_workflow import (
     reset_approval_manager,
 )
 
+# Audit logging exports
+from app.governance.audit_logger import (
+    AuditAction,
+    AuditConfig,
+    AuditEntry,
+    AuditLevel,
+    AuditLogger,
+    audit_agent_response,
+    get_audit_logger,
+    reset_audit_logger,
+)
+
+# Cost tracking exports
+from app.governance.cost_tracker import (
+    BudgetConfig,
+    BudgetExceededError,
+    CostConfig,
+    CostTracker,
+    ModelPricing,
+    ModelProvider,
+    TokenUsage,
+    UsageSummary,
+    get_cost_tracker,
+    get_usage_summary,
+    reset_cost_tracker,
+    track_usage,
+)
+
+# Injection detection exports
+from app.governance.injection_detector import (
+    InjectionDetector,
+    InjectionResult,
+    detect_injection,
+    get_injection_detector,
+    reset_injection_detector,
+)
+
 # Middleware exports
 from app.governance.middleware import (
     AnomalyMiddleware,
     AuditMiddleware,
     GovernanceContext,
     GovernanceExceptionMiddleware,
+    InjectionMiddleware,
     PIIMiddleware,
     RateLimitMiddleware,
     RBACMiddleware,
@@ -152,38 +173,31 @@ from app.governance.pii_detector import (
     reset_pii_detector,
 )
 
-# Cost tracking exports
-from app.governance.cost_tracker import (
-    BudgetConfig,
-    BudgetExceededError,
-    CostConfig,
-    CostTracker,
-    ModelPricing,
-    ModelProvider,
-    TokenUsage,
-    UsageSummary,
-    get_cost_tracker,
-    get_usage_summary,
-    reset_cost_tracker,
-    track_usage,
+# Rate limiting exports
+from app.governance.rate_limiter import (
+    RateLimitConfig,
+    RateLimiter,
+    RateLimitExceededError,
+    RateLimitResult,
+    RateLimitRule,
+    check_rate_limit,
+    get_rate_limiter,
+    require_rate_limit,
+    reset_rate_limiter,
 )
-
-# Anomaly detection exports
-from app.governance.anomaly_detector import (
-    Anomaly,
-    AnomalyBlockedError,
-    AnomalyConfig,
-    AnomalyDetector,
-    AnomalySeverity,
-    AnomalyType,
-    ContentConfig,
-    ErrorConfig,
-    Event,
-    RateConfig,
-    check_for_anomalies,
-    get_anomaly_detector,
-    record_event,
-    reset_anomaly_detector,
+from app.governance.rbac import (
+    ROLE_PERMISSIONS,
+    Permission,
+    PermissionDeniedError,
+    RBACConfig,
+    RBACManager,
+    Role,
+    UserContext,
+    check_permission,
+    get_permissions_for_role,
+    get_rbac_manager,
+    require_permission,
+    reset_rbac_manager,
 )
 
 __all__ = [
@@ -240,6 +254,7 @@ __all__ = [
     "RateLimitMiddleware",
     "AuditMiddleware",
     "PIIMiddleware",
+    "InjectionMiddleware",
     "AnomalyMiddleware",
     "GovernanceExceptionMiddleware",
     "setup_governance_middleware",
@@ -265,6 +280,12 @@ __all__ = [
     "detect_pii",
     "mask_pii",
     "check_for_pii",
+    # Injection detection
+    "InjectionDetector",
+    "InjectionResult",
+    "get_injection_detector",
+    "reset_injection_detector",
+    "detect_injection",
     # Cost tracking
     "ModelProvider",
     "ModelPricing",

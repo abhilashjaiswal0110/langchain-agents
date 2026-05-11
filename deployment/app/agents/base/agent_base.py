@@ -11,29 +11,30 @@ Following Enterprise Development Standards:
 """
 
 import os
+import uuid
 from abc import ABC, abstractmethod
+from collections.abc import AsyncGenerator
 from dataclasses import dataclass, field
 from typing import Annotated, Any, Literal, TypeVar
 
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
-from langgraph.checkpoint.memory import MemorySaver
 from langgraph.checkpoint.base import BaseCheckpointSaver
-from langgraph.graph import StateGraph, START, END
+from langgraph.checkpoint.memory import MemorySaver
+from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode
 from langsmith import traceable
 from pydantic import BaseModel, Field
 
+from app.agents.base.llm_factory import get_llm
+
 # Import memory module components
 from app.agents.memory.checkpointers import (
-    CheckpointerBackend,
     get_checkpointer,
 )
 from app.agents.memory.semantic_memory import get_semantic_memory
 from app.agents.memory.summarizer import get_summarizer
-from app.agents.base.llm_factory import get_llm
-
 
 # Type variable for state
 StateT = TypeVar("StateT", bound=BaseModel)
@@ -54,6 +55,9 @@ class AgentConfig:
         conversation_summarization: Whether to enable conversation summarization
         tracing_enabled: Whether to enable LangSmith tracing
         project_name: LangSmith project name for tracing
+        max_history: Maximum number of messages to retain per session (0 = unlimited).
+            Defaults to the value of the ``MAX_HISTORY_MESSAGES`` environment variable,
+            falling back to 0 (unlimited) when the variable is unset.
     """
 
     model_provider: Literal["azure_openai", "openai", "anthropic", "auto"] = "auto"
@@ -66,6 +70,7 @@ class AgentConfig:
     conversation_summarization: bool = False
     tracing_enabled: bool = True
     project_name: str = "enterprise-it-agents"
+    max_history: int = field(default_factory=lambda: int(os.getenv("MAX_HISTORY_MESSAGES", "0")))
 
 
 class BaseAgentState(BaseModel):
@@ -76,21 +81,11 @@ class BaseAgentState(BaseModel):
     """
 
     messages: Annotated[list[BaseMessage], add_messages] = Field(
-        default_factory=list,
-        description="Conversation message history"
+        default_factory=list, description="Conversation message history"
     )
-    session_id: str | None = Field(
-        default=None,
-        description="Unique session identifier"
-    )
-    user_id: str | None = Field(
-        default=None,
-        description="User identifier for personalization"
-    )
-    metadata: dict[str, Any] = Field(
-        default_factory=dict,
-        description="Additional metadata for the session"
-    )
+    session_id: str | None = Field(default=None, description="Unique session identifier")
+    user_id: str | None = Field(default=None, description="User identifier for personalization")
+    metadata: dict[str, Any] = Field(default_factory=dict, description="Additional metadata for the session")
 
 
 class BaseAgent(ABC):
@@ -205,18 +200,20 @@ class BaseAgent(ABC):
             checkpointer = get_checkpointer()
         elif self.config.memory_backend == "postgres":
             from app.agents.memory.checkpointers import (
-                CheckpointerConfig,
                 CheckpointerBackend,
+                CheckpointerConfig,
                 create_checkpointer,
             )
+
             config = CheckpointerConfig(backend=CheckpointerBackend.POSTGRES)
             checkpointer = create_checkpointer(config)
         elif self.config.memory_backend == "sqlite":
             from app.agents.memory.checkpointers import (
-                CheckpointerConfig,
                 CheckpointerBackend,
+                CheckpointerConfig,
                 create_checkpointer,
             )
+
             config = CheckpointerConfig(backend=CheckpointerBackend.SQLITE)
             checkpointer = create_checkpointer(config)
         else:
@@ -269,8 +266,18 @@ class BaseAgent(ABC):
         session_id: str | None = None,
         user_id: str | None = None,
         **kwargs: Any,
-    ):
-        """Stream agent responses asynchronously.
+    ) -> AsyncGenerator[dict[str, Any], None]:
+        """Stream agent responses as typed SSE events.
+
+        Yields structured events compatible with Server-Sent Events (SSE):
+        - ``token``: Incremental LLM output token
+        - ``tool_start``: Tool invocation begins
+        - ``tool_end``: Tool invocation completes
+        - ``complete``: Final response when the graph finishes
+        - ``error``: Emitted if the agent fails to initialize or errors during execution
+
+        Mirrors the DeepAgent.astream_chat() pattern so enterprise agents
+        and deep agents share the same client-side event contract.
 
         Args:
             message: User message to process
@@ -279,10 +286,14 @@ class BaseAgent(ABC):
             **kwargs: Additional state fields
 
         Yields:
-            Streaming response chunks
+            dict with ``type`` and ``data`` keys for each SSE event.
         """
-        if self._compiled_graph is None:
-            self.compile()
+        try:
+            if self._compiled_graph is None:
+                self.compile()
+        except Exception:
+            yield {"type": "error", "data": {"error": "Agent unavailable — failed to initialize"}}
+            return
 
         input_state = {
             "messages": [HumanMessage(content=message)],
@@ -291,12 +302,31 @@ class BaseAgent(ABC):
             **kwargs,
         }
 
-        config = {"configurable": {"thread_id": session_id or "default"}}
+        config = {"configurable": {"thread_id": session_id or str(uuid.uuid4())}}
 
-        async for chunk in self._compiled_graph.astream(
-            input_state, config=config, stream_mode="values"
-        ):
-            yield chunk
+        try:
+            async for event in self._compiled_graph.astream_events(input_state, config=config, version="v2"):
+                kind = event["event"]
+                if kind == "on_chat_model_stream":
+                    chunk_content = event["data"]["chunk"].content
+                    if chunk_content:
+                        yield {"type": "token", "data": chunk_content}
+                elif kind == "on_tool_start":
+                    yield {"type": "tool_start", "data": {"name": event.get("name", "")}}
+                elif kind == "on_tool_end":
+                    yield {"type": "tool_end", "data": {"name": event.get("name", "")}}
+                elif kind == "on_chain_end" and event.get("name") == "LangGraph":
+                    output = event["data"].get("output", {})
+                    # Extract the final AI message text from graph output
+                    final_messages = output.get("messages", []) if isinstance(output, dict) else []
+                    response_text = ""
+                    for msg in reversed(final_messages):
+                        if isinstance(msg, AIMessage):
+                            response_text = msg.content if isinstance(msg.content, str) else str(msg.content)
+                            break
+                    yield {"type": "complete", "data": {"response": response_text}}
+        except Exception:
+            yield {"type": "error", "data": {"error": "Agent encountered an error during execution"}}
 
     def get_last_response(self, result: dict[str, Any]) -> str:
         """Extract the last AI response from result.
@@ -382,10 +412,9 @@ class BaseAgent(ABC):
                     user_id=user_id,
                 )
                 if results:
-                    relevant = "\n".join([
-                        f"- {r.content[:200]}..." if len(r.content) > 200 else f"- {r.content}"
-                        for r in results
-                    ])
+                    relevant = "\n".join(
+                        [f"- {r.content[:200]}..." if len(r.content) > 200 else f"- {r.content}" for r in results]
+                    )
                     context_parts.append(f"## Relevant Past Context\n{relevant}")
 
             if context_parts:
@@ -537,11 +566,7 @@ def create_react_agent_graph(
     graph.add_edge(START, "agent")
 
     if agent._tools:
-        graph.add_conditional_edges(
-            "agent",
-            should_continue,
-            {"tools": "tools", "end": END}
-        )
+        graph.add_conditional_edges("agent", should_continue, {"tools": "tools", "end": END})
         graph.add_edge("tools", "agent")
     else:
         graph.add_edge("agent", END)

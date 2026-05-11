@@ -20,9 +20,9 @@ import subprocess
 import sys
 from pathlib import Path
 from typing import Any, Literal
+
 from langchain_core.tools import tool
 from langsmith import traceable
-
 
 # Security patterns for dangerous commands
 DANGEROUS_PATTERNS = [
@@ -239,7 +239,7 @@ def execute_bash_command(
 
         return response
 
-    except subprocess.TimeoutExpired as e:
+    except subprocess.TimeoutExpired:
         return {
             "success": False,
             "stdout": "",
@@ -305,7 +305,7 @@ def execute_python_code(
         tree = ast.parse(code)
         for node in ast.walk(tree):
             if isinstance(node, ast.Call):
-                if isinstance(node.func, ast.Name) and node.func.id in ('eval', 'exec'):
+                if isinstance(node.func, ast.Name) and node.func.id in ("eval", "exec"):
                     return {
                         "success": False,
                         "stdout": "",
@@ -403,12 +403,14 @@ def execute_tests_real(
     # Build command based on framework with proper shell escaping
     quoted_path = shlex.quote(test_path)
     # Split additional_args and quote each argument
-    quoted_args = ' '.join(shlex.quote(arg) for arg in additional_args.split()) if additional_args else ""
+    quoted_args = " ".join(shlex.quote(arg) for arg in additional_args.split()) if additional_args else ""
 
     commands = {
         "pytest": f"pytest {quoted_path} {quoted_args}",
         "unittest": f"python -m unittest discover {quoted_path} {quoted_args}",
-        "jest": f"npm test {quoted_args}" if not test_path or test_path == "tests/" else f"jest {quoted_path} {quoted_args}",
+        "jest": f"npm test {quoted_args}"
+        if not test_path or test_path == "tests/"
+        else f"jest {quoted_path} {quoted_args}",
         "mocha": f"npx mocha {quoted_path} {quoted_args}",
         "cargo": f"cargo test {quoted_args}",
         "go": f"go test {quoted_path} {quoted_args}",
@@ -462,7 +464,7 @@ def install_dependencies(
     # Build command based on package manager with proper shell escaping
     if packages:
         # Quote each package individually
-        quoted_packages = ' '.join(shlex.quote(pkg) for pkg in packages.split())
+        quoted_packages = " ".join(shlex.quote(pkg) for pkg in packages.split())
         commands = {
             "pip": f"pip install {quoted_packages}",
             "npm": f"npm install {quoted_packages}",

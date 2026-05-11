@@ -18,8 +18,27 @@
             --bg-primary: #f8fafc;
             --bg-secondary: #ffffff;
             --text-primary: #1e293b;
-            --text-secondary: #64748b;
+            /* #4b5563 gives 7:1 contrast on white — WCAG AAA */
+            --text-secondary: #4b5563;
             --border: #e2e8f0;
+        }
+
+        /* Skip-to-main-content link (WCAG 2.4.1) */
+        .skip-link {
+            position: absolute;
+            top: -40px;
+            left: 0;
+            background: var(--primary);
+            color: #fff;
+            padding: 8px 16px;
+            z-index: 9999;
+            border-radius: 0 0 4px 0;
+            font-weight: 600;
+            text-decoration: none;
+            transition: top 0.1s;
+        }
+        .skip-link:focus {
+            top: 0;
         }
 
         * {
@@ -847,12 +866,13 @@
     </style>
 </head>
 <body>
+    <a class="skip-link" href="#main-chat">Skip to main content</a>
     <div class="container">
         <header class="header">
             <h1>Enterprise AI Agents <span style="font-size: 0.6rem; background: var(--primary); color: white; padding: 2px 6px; border-radius: 4px; vertical-align: middle;">v2.0</span></h1>
             <div class="agent-selector">
-                <label>Agent:</label>
-                <select id="agentSelect">
+                <label for="agentSelect">Agent:</label>
+                <select id="agentSelect" aria-label="Select agent type">
                     <option value="">Select an agent...</option>
                     <optgroup label="Deep Agents">
                         <option value="it_operations_deep">IT Operations Deep Agent</option>
@@ -874,74 +894,74 @@
                         <option value="document_intelligence">Document Intelligence</option>
                     </optgroup>
                 </select>
-                <span id="statusBadge" class="status-badge disconnected">
-                    <span class="status-dot red"></span>
+                <span id="statusBadge" class="status-badge disconnected" role="status" aria-live="polite" aria-label="Connection status: Disconnected">
+                    <span class="status-dot red" aria-hidden="true"></span>
                     Disconnected
                 </span>
             </div>
         </header>
 
-        <div class="chat-container">
+        <main class="chat-container" aria-label="Chat interface">
             <div class="messages-panel">
                 <div class="messages-header">
                     <div class="session-info" id="sessionInfo">
                         No active session
                     </div>
-                    <button onclick="clearChat()" style="padding: 6px 12px; border: 1px solid var(--border); border-radius: 6px; background: white; cursor: pointer;">
+                    <button onclick="clearChat()" aria-label="Clear chat history" style="padding: 6px 12px; border: 1px solid var(--border); border-radius: 6px; background: white; cursor: pointer;">
                         Clear Chat
                     </button>
                 </div>
 
-                <div class="messages" id="messages">
+                <div class="messages" id="main-chat" role="log" aria-live="polite" aria-label="Conversation messages">
                     <div class="welcome-screen" id="welcomeScreen">
                         <h2>Welcome to Enterprise AI Agents</h2>
                         <p>Select an agent to start your session</p>
                         <div class="agent-cards" style="flex-wrap: wrap; justify-content: center;">
-                            <div class="agent-card" onclick="startDeepAgentSession('it_operations_deep')" style="border-color: var(--primary); background: #eff6ff;">
+                            <div class="agent-card" role="button" tabindex="0" onclick="startDeepAgentSession('it_operations_deep')" onkeydown="if(event.key==='Enter'||event.key===' ')startDeepAgentSession('it_operations_deep')" aria-label="Start IT Operations Deep Agent" style="border-color: var(--primary); background: #eff6ff;">
                                 <h3>IT Ops Deep Agent</h3>
                                 <p>Planning, multi-domain ITSM with task tracking</p>
                             </div>
-                            <div class="agent-card" onclick="startDeepAgentSession('sales_intelligence_deep')" style="border-color: #22c55e; background: #f0fdf4;">
+                            <div class="agent-card" role="button" tabindex="0" onclick="startDeepAgentSession('sales_intelligence_deep')" onkeydown="if(event.key==='Enter'||event.key===' ')startDeepAgentSession('sales_intelligence_deep')" aria-label="Start Sales Intelligence Deep Agent" style="border-color: #22c55e; background: #f0fdf4;">
                                 <h3>Sales Intelligence</h3>
                                 <p>Deal qualification, RFP, pricing, competitive analysis</p>
                             </div>
-                            <div class="agent-card" onclick="startDeepAgentSession('recruitment_deep')" style="border-color: #8b5cf6; background: #faf5ff;">
+                            <div class="agent-card" role="button" tabindex="0" onclick="startDeepAgentSession('recruitment_deep')" onkeydown="if(event.key==='Enter'||event.key===' ')startDeepAgentSession('recruitment_deep')" aria-label="Start Recruitment Deep Agent" style="border-color: #8b5cf6; background: #faf5ff;">
                                 <h3>Recruitment Agent</h3>
                                 <p>Resume screening, L1/L2/L3 evaluation, interviews, scoring</p>
                             </div>
-                            <div class="agent-card" onclick="startSession('it_helpdesk')">
+                            <div class="agent-card" role="button" tabindex="0" onclick="startSession('it_helpdesk')" onkeydown="if(event.key==='Enter'||event.key===' ')startSession('it_helpdesk')" aria-label="Start IT Helpdesk agent">
                                 <h3>IT Helpdesk</h3>
                                 <p>Password resets, software help, network issues</p>
                             </div>
-                            <div class="agent-card" onclick="startSession('servicenow')">
+                            <div class="agent-card" role="button" tabindex="0" onclick="startSession('servicenow')" onkeydown="if(event.key==='Enter'||event.key===' ')startSession('servicenow')" aria-label="Start ServiceNow ITSM agent">
                                 <h3>ServiceNow</h3>
                                 <p>Ticket management, change requests, CMDB</p>
                             </div>
-                            <div class="agent-card" onclick="startEnterpriseAgent('research')">
+                            <div class="agent-card" role="button" tabindex="0" onclick="startEnterpriseAgent('research')" onkeydown="if(event.key==='Enter'||event.key===' ')startEnterpriseAgent('research')" aria-label="Start Research Agent">
                                 <h3>Research Agent</h3>
                                 <p>Web research, information synthesis</p>
                             </div>
-                            <div class="agent-card" onclick="startEnterpriseAgent('content')">
+                            <div class="agent-card" role="button" tabindex="0" onclick="startEnterpriseAgent('content')" onkeydown="if(event.key==='Enter'||event.key===' ')startEnterpriseAgent('content')" aria-label="Start Content Generation agent">
                                 <h3>Content Gen</h3>
                                 <p>LinkedIn, X, blog content creation</p>
                             </div>
-                            <div class="agent-card" onclick="startEnterpriseAgent('data_analyst')">
+                            <div class="agent-card" role="button" tabindex="0" onclick="startEnterpriseAgent('data_analyst')" onkeydown="if(event.key==='Enter'||event.key===' ')startEnterpriseAgent('data_analyst')" aria-label="Start Data Analyst agent">
                                 <h3>Data Analyst</h3>
                                 <p>Excel/CSV analysis and insights</p>
                             </div>
-                            <div class="agent-card" onclick="startEnterpriseAgent('document')">
+                            <div class="agent-card" role="button" tabindex="0" onclick="startEnterpriseAgent('document')" onkeydown="if(event.key==='Enter'||event.key===' ')startEnterpriseAgent('document')" aria-label="Start Document Generator agent">
                                 <h3>Document Gen</h3>
                                 <p>SOP, WLI, Policy documents</p>
                             </div>
-                            <div class="agent-card" onclick="startEnterpriseAgent('multilingual_rag')">
+                            <div class="agent-card" role="button" tabindex="0" onclick="startEnterpriseAgent('multilingual_rag')" onkeydown="if(event.key==='Enter'||event.key===' ')startEnterpriseAgent('multilingual_rag')" aria-label="Start Multilingual RAG agent">
                                 <h3>RAG Agent</h3>
                                 <p>Multilingual document Q&A</p>
                             </div>
-                            <div class="agent-card" onclick="startEnterpriseAgent('code_assistant')">
+                            <div class="agent-card" role="button" tabindex="0" onclick="startEnterpriseAgent('code_assistant')" onkeydown="if(event.key==='Enter'||event.key===' ')startEnterpriseAgent('code_assistant')" aria-label="Start Code Assistant agent">
                                 <h3>Code Assistant</h3>
                                 <p>Code modernization & security</p>
                             </div>
-                            <div class="agent-card" onclick="startEnterpriseAgent('document_intelligence')">
+                            <div class="agent-card" role="button" tabindex="0" onclick="startEnterpriseAgent('document_intelligence')" onkeydown="if(event.key==='Enter'||event.key===' ')startEnterpriseAgent('document_intelligence')" aria-label="Start Document Intelligence agent">
                                 <h3>Doc Intelligence</h3>
                                 <p>PDF/DOCX analysis, OCR, translation</p>
                             </div>
@@ -949,21 +969,21 @@
                     </div>
                 </div>
 
-                <div class="typing-indicator" id="typingIndicator">
+                <div class="typing-indicator" id="typingIndicator" role="status" aria-live="polite" aria-label="Agent is typing">
                     Agent is typing
-                    <div class="typing-dots">
+                    <div class="typing-dots" aria-hidden="true">
                         <span></span>
                         <span></span>
                         <span></span>
                     </div>
                 </div>
 
-                <div class="input-area">
-                    <input type="file" id="fileInput" style="display:none" onchange="handleFileUpload(event)">
-                    <button id="uploadButton" onclick="document.getElementById('fileInput').click()" disabled style="display:none" title="Upload Document (📎)">📎</button>
-                    <input type="text" id="messageInput" placeholder="Type your message..." disabled onkeypress="handleKeyPress(event)">
-                    <button id="sendButton" onclick="sendMessage()" disabled>Send</button>
-                    <button id="stopButton" onclick="stopExecution()" style="display:none" title="Stop query execution">Stop</button>
+                <div class="input-area" role="form" aria-label="Message input">
+                    <input type="file" id="fileInput" style="display:none" onchange="handleFileUpload(event)" aria-label="Upload document">
+                    <button id="uploadButton" onclick="document.getElementById('fileInput').click()" disabled style="display:none" title="Upload Document" aria-label="Upload document">📎</button>
+                    <input type="text" id="messageInput" placeholder="Type your message..." disabled onkeypress="handleKeyPress(event)" aria-label="Message text" autocomplete="off">
+                    <button id="sendButton" onclick="sendMessage()" disabled aria-label="Send message">Send</button>
+                    <button id="stopButton" onclick="stopExecution()" style="display:none" title="Stop query execution" aria-label="Stop agent execution">Stop</button>
                 </div>
             </div>
 
@@ -1056,7 +1076,7 @@
                     </div>
                 </div>
             </div>
-        </div>
+        </main>
     </div>
 
     <script>
@@ -1149,7 +1169,7 @@
         };
 
         // Elements
-        const messagesEl = document.getElementById('messages');
+        const messagesEl = document.getElementById('main-chat');
         const welcomeScreen = document.getElementById('welcomeScreen');
         const messageInput = document.getElementById('messageInput');
         const sendButton = document.getElementById('sendButton');
@@ -1932,6 +1952,7 @@
 
             // Show typing indicator
             typingIndicator.classList.add('visible');
+            messagesEl.setAttribute('aria-busy', 'true');
             sendButton.disabled = true;
 
             try {
@@ -1940,7 +1961,7 @@
                 if (isDeepAgent) {
                     // Use Deep Agent streaming endpoint
                     await streamDeepAgentChat(message, sessionId);
-                    typingIndicator.classList.remove('visible');
+                    typingIndicator.classList.remove('visible'); messagesEl.setAttribute('aria-busy', 'false');
                     sendButton.disabled = false;
                 } else if (isEnterpriseAgent && enterpriseEndpoints[currentAgent]) {
                     // Use enterprise agent endpoint
@@ -1957,7 +1978,7 @@
                     });
                     data = await response.json();
 
-                    typingIndicator.classList.remove('visible');
+                    typingIndicator.classList.remove('visible'); messagesEl.setAttribute('aria-busy', 'false');
                     sendButton.disabled = false;
 
                     if (data.success && data.response) {
@@ -1982,7 +2003,7 @@
                     });
                     data = await response.json();
 
-                    typingIndicator.classList.remove('visible');
+                    typingIndicator.classList.remove('visible'); messagesEl.setAttribute('aria-busy', 'false');
                     sendButton.disabled = false;
 
                     if (data.response) {
@@ -2150,6 +2171,7 @@
             // Show upload status
             addMessage(`📤 Uploading: ${file.name}...`, 'user');
             typingIndicator.classList.add('visible');
+            messagesEl.setAttribute('aria-busy', 'true');
             uploadButton.disabled = true;
 
             try {

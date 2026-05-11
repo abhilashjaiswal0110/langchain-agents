@@ -13,46 +13,32 @@ Following Enterprise Development Standards:
 - Software Engineer: Clean code principles
 """
 
-from datetime import datetime
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any
 
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.messages import SystemMessage
 from langchain_core.tools import tool
-from langgraph.checkpoint.memory import MemorySaver
-from langgraph.graph import StateGraph, START, END
+from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode
 from langsmith import traceable
 from pydantic import BaseModel, Field
 
-from app.agents.base.agent_base import BaseAgent, AgentConfig
+from app.agents.base.agent_base import AgentConfig, BaseAgent
 from app.agents.base.tools import tool_error_handler
 
 
 class CodeAssistantState(BaseModel):
     """State schema for the Code Assistant Agent."""
 
-    messages: Annotated[list, add_messages] = Field(
-        default_factory=list,
-        description="Conversation history"
-    )
+    messages: Annotated[list, add_messages] = Field(default_factory=list, description="Conversation history")
     session_id: str | None = Field(default=None)
     user_id: str | None = Field(default=None)
     source_code: str = Field(default="", description="Code being analyzed")
     source_language: str = Field(default="python", description="Source language")
     target_framework: str | None = Field(default=None, description="Target framework")
-    analysis: dict[str, Any] = Field(
-        default_factory=dict,
-        description="Analysis results"
-    )
-    suggestions: list[str] = Field(
-        default_factory=list,
-        description="Improvement suggestions"
-    )
-    modernized_code: str | None = Field(
-        default=None,
-        description="Modernized code output"
-    )
+    analysis: dict[str, Any] = Field(default_factory=dict, description="Analysis results")
+    suggestions: list[str] = Field(default_factory=list, description="Improvement suggestions")
+    modernized_code: str | None = Field(default=None, description="Modernized code output")
 
 
 # Code pattern definitions
@@ -132,11 +118,13 @@ def analyze_code(code: str, language: str = "python") -> str:
     for pattern_name, pattern_regex in patterns.items():
         matches = re.findall(pattern_regex, code, re.MULTILINE)
         if matches:
-            results["patterns"].append({
-                "name": pattern_name,
-                "count": len(matches),
-                "severity": "warning",
-            })
+            results["patterns"].append(
+                {
+                    "name": pattern_name,
+                    "count": len(matches),
+                    "severity": "warning",
+                }
+            )
 
     # Basic complexity analysis
     if language == "python":
@@ -189,19 +177,19 @@ def detect_security_issues(code: str, language: str = "python") -> str:
     common_patterns = {
         "hardcoded_secret": (r'(password|secret|api_key|token)\s*=\s*["\'][^"\']+["\']', "HIGH"),
         "sql_injection": (r'(execute|query)\s*\([^)]*\+|f["\'].*SELECT', "HIGH"),
-        "eval_usage": (r'\beval\s*\(', "HIGH"),
-        "exec_usage": (r'\bexec\s*\(', "HIGH"),
+        "eval_usage": (r"\beval\s*\(", "HIGH"),
+        "exec_usage": (r"\bexec\s*\(", "HIGH"),
     }
 
     language_patterns = {
         "python": {
-            "pickle_load": (r'pickle\.load', "MEDIUM"),
-            "shell_true": (r'shell\s*=\s*True', "MEDIUM"),
-            "yaml_load": (r'yaml\.load\s*\([^)]*\)', "MEDIUM"),
+            "pickle_load": (r"pickle\.load", "MEDIUM"),
+            "shell_true": (r"shell\s*=\s*True", "MEDIUM"),
+            "yaml_load": (r"yaml\.load\s*\([^)]*\)", "MEDIUM"),
         },
         "javascript": {
-            "innerhtml": (r'\.innerHTML\s*=', "MEDIUM"),
-            "document_write": (r'document\.write\s*\(', "MEDIUM"),
+            "innerhtml": (r"\.innerHTML\s*=", "MEDIUM"),
+            "document_write": (r"document\.write\s*\(", "MEDIUM"),
         },
     }
 
@@ -209,11 +197,13 @@ def detect_security_issues(code: str, language: str = "python") -> str:
 
     for name, (pattern, severity) in all_patterns.items():
         if re.search(pattern, code, re.IGNORECASE):
-            vulnerabilities.append({
-                "name": name.replace("_", " ").title(),
-                "severity": severity,
-                "pattern": pattern,
-            })
+            vulnerabilities.append(
+                {
+                    "name": name.replace("_", " ").title(),
+                    "severity": severity,
+                    "pattern": pattern,
+                }
+            )
 
     output = f"Security Analysis\n{'=' * 40}\n\n"
 
@@ -281,11 +271,7 @@ def suggest_improvements(code: str, language: str = "python") -> str:
 
 @tool
 @tool_error_handler
-def transform_code_pattern(
-    code: str,
-    transformation: str,
-    language: str = "python"
-) -> str:
+def transform_code_pattern(code: str, transformation: str, language: str = "python") -> str:
     """Apply a specific code transformation.
 
     Args:
@@ -301,9 +287,7 @@ def transform_code_pattern(
     transformations = {
         "python": {
             "format_to_fstring": lambda c: re.sub(
-                r'"([^"]*)"\.format\(([^)]+)\)',
-                lambda m: f'f"{m.group(1).replace("{}", "{" + m.group(2) + "}")}"',
-                c
+                r'"([^"]*)"\.format\(([^)]+)\)', lambda m: f'f"{m.group(1).replace("{}", "{" + m.group(2) + "}")}"', c
             ),
             "add_type_hints_example": lambda c: (
                 "# Example transformation:\n"
@@ -345,12 +329,14 @@ class CodeAssistantAgent(BaseAgent):
         """Initialize the Code Assistant Agent."""
         super().__init__(config)
 
-        self.register_tools([
-            analyze_code,
-            detect_security_issues,
-            suggest_improvements,
-            transform_code_pattern,
-        ])
+        self.register_tools(
+            [
+                analyze_code,
+                detect_security_issues,
+                suggest_improvements,
+                transform_code_pattern,
+            ]
+        )
 
     def _get_system_prompt(self) -> str:
         """Get the code assistant's system prompt."""
@@ -438,7 +424,7 @@ For unsupported languages, provide general best practices."""
 Provide:
 1. Code structure analysis
 2. Legacy patterns found
-{'3. Security vulnerabilities' if include_security else ''}
+{"3. Security vulnerabilities" if include_security else ""}
 4. Modernization suggestions
 5. Example improvements"""
 
@@ -474,7 +460,7 @@ Provide:
 {code}
 ```
 
-{'Target framework: ' + target_framework if target_framework else ''}
+{"Target framework: " + target_framework if target_framework else ""}
 
 Provide step-by-step modernization recommendations."""
 

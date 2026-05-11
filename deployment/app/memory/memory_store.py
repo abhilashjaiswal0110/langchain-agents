@@ -5,6 +5,7 @@ Data is lost when the application restarts.
 """
 
 import logging
+import os
 from datetime import datetime, timedelta
 from threading import Lock
 from typing import Any
@@ -15,6 +16,10 @@ from app.memory.base import (
     Session,
     SessionMetadata,
 )
+
+# Maximum number of messages to keep per session (0 = unlimited).
+# Set MAX_HISTORY_MESSAGES environment variable to override.
+MAX_HISTORY_MESSAGES: int = int(os.getenv("MAX_HISTORY_MESSAGES", "0"))
 
 logger = logging.getLogger(__name__)
 
@@ -37,12 +42,25 @@ class InMemorySessionStore(BaseSessionStore):
         self._lock = Lock()
         self._max_sessions = max_sessions
 
+    def _key(self, tenant_id: str, session_id: str) -> str:
+        """Build namespaced key for the internal dict.
+
+        Args:
+            tenant_id: Tenant identifier.
+            session_id: Session identifier.
+
+        Returns:
+            Namespaced key string.
+        """
+        return f"{tenant_id}:{session_id}"
+
     def create_session(
         self,
         agent_type: str,
         user_id: str = "",
         metadata: dict | None = None,
         ttl_hours: int | None = None,
+        tenant_id: str = "default",
     ) -> str:
         """Create a new session.
 
@@ -51,6 +69,7 @@ class InMemorySessionStore(BaseSessionStore):
             user_id: User identifier.
             metadata: Additional metadata.
             ttl_hours: Session TTL in hours (None for no expiry).
+            tenant_id: Tenant identifier for session isolation.
 
         Returns:
             Session ID.
@@ -65,6 +84,7 @@ class InMemorySessionStore(BaseSessionStore):
                 user_id=user_id,
                 agent_type=agent_type,
                 custom=metadata or {},
+                tenant_id=tenant_id,
             )
 
             expires_at = None
@@ -76,27 +96,30 @@ class InMemorySessionStore(BaseSessionStore):
                 expires_at=expires_at,
             )
 
-            self._sessions[session.id] = session
-            logger.debug(f"Created session {session.id} for agent {agent_type}")
+            key = self._key(tenant_id, session.id)
+            self._sessions[key] = session
+            logger.debug(f"Created session {session.id} for agent {agent_type} (tenant={tenant_id})")
 
             return session.id
 
-    def get_session(self, session_id: str) -> Session | None:
+    def get_session(self, session_id: str, tenant_id: str = "default") -> Session | None:
         """Get a session by ID.
 
         Returns a deep copy to prevent callers from modifying internal state.
 
         Args:
             session_id: Session identifier.
+            tenant_id: Tenant identifier for session isolation.
 
         Returns:
             Deep copy of Session or None if not found.
         """
         with self._lock:
-            session = self._sessions.get(session_id)
+            key = self._key(tenant_id, session_id)
+            session = self._sessions.get(key)
 
             if session and session.is_expired:
-                del self._sessions[session_id]
+                del self._sessions[key]
                 return None
 
             # Return deep copy to prevent external modifications
@@ -108,6 +131,7 @@ class InMemorySessionStore(BaseSessionStore):
         user_message: str,
         assistant_message: str,
         metadata: dict | None = None,
+        tenant_id: str = "default",
     ) -> bool:
         """Update session with new messages.
 
@@ -116,17 +140,19 @@ class InMemorySessionStore(BaseSessionStore):
             user_message: User's message.
             assistant_message: Assistant's response.
             metadata: Optional additional metadata.
+            tenant_id: Tenant identifier for session isolation.
 
         Returns:
             True if updated successfully.
         """
         with self._lock:
-            session = self._sessions.get(session_id)
+            key = self._key(tenant_id, session_id)
+            session = self._sessions.get(key)
             if not session:
                 return False
 
             if session.is_expired:
-                del self._sessions[session_id]
+                del self._sessions[key]
                 return False
 
             session.add_exchange(
@@ -135,21 +161,27 @@ class InMemorySessionStore(BaseSessionStore):
                 assistant_metadata=metadata,
             )
 
+            # Trim history if a limit is configured.
+            if MAX_HISTORY_MESSAGES > 0:
+                session.messages = session.messages[-MAX_HISTORY_MESSAGES:]
+
             return True
 
-    def delete_session(self, session_id: str) -> bool:
+    def delete_session(self, session_id: str, tenant_id: str = "default") -> bool:
         """Delete a session.
 
         Args:
             session_id: Session identifier.
+            tenant_id: Tenant identifier for session isolation.
 
         Returns:
             True if deleted successfully.
         """
         with self._lock:
-            if session_id in self._sessions:
-                del self._sessions[session_id]
-                logger.debug(f"Deleted session {session_id}")
+            key = self._key(tenant_id, session_id)
+            if key in self._sessions:
+                del self._sessions[key]
+                logger.debug(f"Deleted session {session_id} (tenant={tenant_id})")
                 return True
             return False
 
@@ -159,6 +191,7 @@ class InMemorySessionStore(BaseSessionStore):
         agent_type: str | None = None,
         limit: int = 100,
         offset: int = 0,
+        tenant_id: str | None = None,
     ) -> list[Session]:
         """List sessions with optional filters.
 
@@ -169,6 +202,8 @@ class InMemorySessionStore(BaseSessionStore):
             agent_type: Filter by agent type.
             limit: Maximum number of sessions.
             offset: Offset for pagination.
+            tenant_id: Filter by tenant. When provided, only sessions for that
+                tenant are returned.
 
         Returns:
             List of session deep copies.
@@ -176,8 +211,10 @@ class InMemorySessionStore(BaseSessionStore):
         with self._lock:
             results = []
 
-            for session in self._sessions.values():
+            for key, session in self._sessions.items():
                 if session.is_expired:
+                    continue
+                if tenant_id and session.metadata.tenant_id != tenant_id:
                     continue
                 if user_id and session.metadata.user_id != user_id:
                     continue
@@ -195,33 +232,37 @@ class InMemorySessionStore(BaseSessionStore):
         self,
         session_id: str,
         limit: int | None = None,
+        tenant_id: str = "default",
     ) -> list[Message]:
         """Get conversation history for a session.
 
         Args:
             session_id: Session identifier.
             limit: Maximum number of messages.
+            tenant_id: Tenant identifier for session isolation.
 
         Returns:
             List of messages.
         """
-        session = self.get_session(session_id)
+        session = self.get_session(session_id, tenant_id=tenant_id)
         if not session:
             return []
 
         return session.get_history(limit)
 
-    def clear_session(self, session_id: str) -> bool:
+    def clear_session(self, session_id: str, tenant_id: str = "default") -> bool:
         """Clear messages from a session.
 
         Args:
             session_id: Session identifier.
+            tenant_id: Tenant identifier for session isolation.
 
         Returns:
             True if cleared successfully.
         """
         with self._lock:
-            session = self._sessions.get(session_id)
+            key = self._key(tenant_id, session_id)
+            session = self._sessions.get(key)
             if not session:
                 return False
 
@@ -232,18 +273,21 @@ class InMemorySessionStore(BaseSessionStore):
         self,
         session_id: str,
         context: dict[str, Any],
+        tenant_id: str = "default",
     ) -> bool:
         """Set session context.
 
         Args:
             session_id: Session identifier.
             context: Context data to set.
+            tenant_id: Tenant identifier for session isolation.
 
         Returns:
             True if set successfully.
         """
         with self._lock:
-            session = self._sessions.get(session_id)
+            key = self._key(tenant_id, session_id)
+            session = self._sessions.get(key)
             if not session:
                 return False
 
@@ -251,16 +295,17 @@ class InMemorySessionStore(BaseSessionStore):
             session.updated_at = datetime.now()
             return True
 
-    def get_context(self, session_id: str) -> dict[str, Any]:
+    def get_context(self, session_id: str, tenant_id: str = "default") -> dict[str, Any]:
         """Get session context.
 
         Args:
             session_id: Session identifier.
+            tenant_id: Tenant identifier for session isolation.
 
         Returns:
             Context data.
         """
-        session = self.get_session(session_id)
+        session = self.get_session(session_id, tenant_id=tenant_id)
         if not session:
             return {}
 
@@ -273,13 +318,10 @@ class InMemorySessionStore(BaseSessionStore):
             Number of sessions removed.
         """
         with self._lock:
-            expired = [
-                sid for sid, session in self._sessions.items()
-                if session.is_expired
-            ]
+            expired = [key for key, session in self._sessions.items() if session.is_expired]
 
-            for sid in expired:
-                del self._sessions[sid]
+            for key in expired:
+                del self._sessions[key]
 
             if expired:
                 logger.info(f"Cleaned up {len(expired)} expired sessions")

@@ -6,40 +6,39 @@ IT Operations Deep Agent for context-isolated task execution.
 
 from app.deepagents.core.types import SubAgentDefinition
 from app.deepagents.tools import (
-    # Incident tools
-    search_incidents,
-    get_incident_details,
-    create_incident,
-    update_incident,
-    escalate_incident,
-    # Change tools
-    search_changes,
-    get_change_details,
-    validate_change,
     assess_change_risk,
-    # Problem tools
-    search_problems,
-    get_problem_details,
-    create_problem,
-    link_incidents_to_problem,
+    calculate_sla_breach_time,
+    create_incident,
+    create_kb_article,
     create_known_error,
-    # Asset tools
-    search_cmdb,
+    create_problem,
+    escalate_incident,
+    get_affected_services,
+    get_change_details,
     get_ci_details,
     get_ci_relationships,
-    get_affected_services,
+    get_incident_details,
+    get_kb_article,
+    get_problem_details,
+    get_sla_report,
     # SLA tools
     get_sla_status,
-    calculate_sla_breach_time,
-    get_sla_report,
+    link_incidents_to_problem,
     predict_sla_breach,
+    # Change tools
+    search_changes,
+    # Asset tools
+    search_cmdb,
+    # Incident tools
+    search_incidents,
     # Knowledge tools
     search_knowledge_base,
-    get_kb_article,
-    create_kb_article,
+    # Problem tools
+    search_problems,
     suggest_kb_articles,
+    update_incident,
+    validate_change,
 )
-
 
 # =============================================================================
 # Incident Management Subagent
@@ -273,6 +272,7 @@ Knowledge Centered Service (KCS):
 # =============================================================================
 # Helper Functions
 # =============================================================================
+
 
 def get_all_subagents() -> list[SubAgentDefinition]:
     """Get all available subagent definitions."""

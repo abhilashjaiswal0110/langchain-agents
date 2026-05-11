@@ -4,12 +4,8 @@ Provides webhook handling for Microsoft Teams bot integration,
 supporting Adaptive Cards, message formatting, and JWT verification.
 """
 
-import hashlib
-import hmac
-import json
 import logging
 import os
-import secrets
 import time
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -154,7 +150,9 @@ class TeamsJWTVerifier:
                 )
 
             # Create JWKS client
-            jwks_client = PyJWKClient(jwks_uri=OPENID_METADATA_URL.replace(".well-known/openidconfiguration", ".well-known/keys"))
+            jwks_client = PyJWKClient(
+                jwks_uri=OPENID_METADATA_URL.replace(".well-known/openidconfiguration", ".well-known/keys")
+            )
 
             # Get signing key
             signing_key = jwks_client.get_signing_key_from_jwt(token)
@@ -334,9 +332,7 @@ class TeamsMessageCard:
         if text:
             section["text"] = text
         if facts:
-            section["facts"] = [
-                {"name": name, "value": value} for name, value in facts
-            ]
+            section["facts"] = [{"name": name, "value": value} for name, value in facts]
 
         self.sections.append(section)
         return self
@@ -410,13 +406,12 @@ class TeamsAdaptiveCard:
         Returns:
             Self for chaining.
         """
-        self.body.append({
-            "type": "FactSet",
-            "facts": [
-                {"title": title, "value": value}
-                for title, value in facts
-            ],
-        })
+        self.body.append(
+            {
+                "type": "FactSet",
+                "facts": [{"title": title, "value": value} for title, value in facts],
+            }
+        )
         return self
 
     def add_action_button(
@@ -436,17 +431,21 @@ class TeamsAdaptiveCard:
             Self for chaining.
         """
         if url:
-            self.actions.append({
-                "type": "Action.OpenUrl",
-                "title": title,
-                "url": url,
-            })
+            self.actions.append(
+                {
+                    "type": "Action.OpenUrl",
+                    "title": title,
+                    "url": url,
+                }
+            )
         elif data:
-            self.actions.append({
-                "type": "Action.Submit",
-                "title": title,
-                "data": data,
-            })
+            self.actions.append(
+                {
+                    "type": "Action.Submit",
+                    "title": title,
+                    "data": data,
+                }
+            )
         return self
 
 
@@ -540,15 +539,19 @@ class TeamsWebhookHandler:
 
         if card:
             if isinstance(card, TeamsAdaptiveCard):
-                response["attachments"] = [{
-                    "contentType": "application/vnd.microsoft.card.adaptive",
-                    "content": card.to_dict(),
-                }]
+                response["attachments"] = [
+                    {
+                        "contentType": "application/vnd.microsoft.card.adaptive",
+                        "content": card.to_dict(),
+                    }
+                ]
             elif isinstance(card, TeamsMessageCard):
-                response["attachments"] = [{
-                    "contentType": "application/vnd.microsoft.teams.card.o365connector",
-                    "content": card.to_dict(),
-                }]
+                response["attachments"] = [
+                    {
+                        "contentType": "application/vnd.microsoft.teams.card.o365connector",
+                        "content": card.to_dict(),
+                    }
+                ]
 
         return response
 
@@ -602,11 +605,13 @@ class TeamsWebhookHandler:
         )
 
         if session_id:
-            card.add_fact_set([
-                ("Agent", agent_type),
-                ("Session", session_id[:8] + "..."),
-                ("Time", datetime.now().strftime("%H:%M:%S")),
-            ])
+            card.add_fact_set(
+                [
+                    ("Agent", agent_type),
+                    ("Session", session_id[:8] + "..."),
+                    ("Time", datetime.now().strftime("%H:%M:%S")),
+                ]
+            )
 
         return self.create_response(agent_response, card)
 
@@ -636,9 +641,7 @@ async def process_teams_webhook(
         verification = verify_teams_request(authorization_header, body)
         if not verification.valid:
             logger.warning(f"Teams JWT verification failed: {verification.error}")
-            return handler.create_error_response(
-                f"Authentication failed: {verification.error}"
-            )
+            return handler.create_error_response(f"Authentication failed: {verification.error}")
 
     try:
         activity = handler.parse_activity(body)
@@ -680,9 +683,7 @@ async def process_teams_webhook(
 
         elif activity.type == "conversationUpdate":
             # Handle conversation update (bot added/removed)
-            return handler.create_response(
-                "Hello! I'm your AI assistant. How can I help you today?"
-            )
+            return handler.create_response("Hello! I'm your AI assistant. How can I help you today?")
 
         else:
             # Acknowledge other activity types

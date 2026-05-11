@@ -4,20 +4,28 @@ This FastAPI application serves multiple LangChain chains and LangGraph agents
 as REST API endpoints using LangServe with LangSmith tracing enabled.
 """
 
+import json
 import os
+import re
 import secrets
 import time
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator
-
 from pathlib import Path
 from typing import Literal
 
 from dotenv import load_dotenv
-from fastapi import Depends, FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi import BackgroundTasks, FastAPI, File, Form, Header, HTTPException, Request, UploadFile
+from fastapi import Path as FastAPIPath
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
-from fastapi.security import APIKeyHeader
+from fastapi.responses import (
+    HTMLResponse,
+    JSONResponse,
+    PlainTextResponse,
+    RedirectResponse,
+    Response,
+    StreamingResponse,
+)
 from fastapi.staticfiles import StaticFiles
 from langserve import add_routes
 from pydantic import BaseModel
@@ -32,10 +40,16 @@ print(f"[Startup] .env file exists: {_ENV_FILE.exists()}, loaded: {_env_loaded}"
 # Import AIMessage for response extraction
 from langchain_core.messages import AIMessage
 
+from app.agents.evals.eval_middleware import submit_for_evaluation
+
+# Response cache (opt-in via CACHE_ENABLED=true; default off for backward compat)
+from app.cache.response_cache import CACHE_TTL_SECONDS, MAX_CACHE_SIZE, get_cache, is_cache_enabled
+from app.governance.cost_estimator import get_cost_estimator
 
 # ============================================================================
 # Agent Response Helper
 # ============================================================================
+
 
 def extract_agent_response(result: dict) -> str:
     """Extract the AI response from agent result state.
@@ -68,9 +82,35 @@ def extract_agent_response(result: dict) -> str:
     return ""
 
 
+def _serialize_sse(event: dict) -> str:
+    """Serialize an SSE event dict to a JSON string.
+
+    Handles common non-serializable types such as datetime objects,
+    Pydantic models, and arbitrary objects with a ``__dict__`` attribute.
+
+    Args:
+        event: SSE event dict with ``type`` and ``data`` keys.
+
+    Returns:
+        JSON-encoded string representation of the event.
+    """
+
+    def _default(obj: object) -> object:
+        if hasattr(obj, "isoformat"):
+            return obj.isoformat()
+        if hasattr(obj, "model_dump"):
+            return obj.model_dump()
+        if hasattr(obj, "__dict__"):
+            return obj.__dict__
+        return str(obj)
+
+    return json.dumps(event, default=_default)
+
+
 # ============================================================================
 # LangSmith Tracing Configuration
 # ============================================================================
+
 
 def setup_langsmith_tracing() -> bool:
     """Configure LangSmith tracing if enabled.
@@ -86,9 +126,7 @@ def setup_langsmith_tracing() -> bool:
         os.environ["LANGCHAIN_TRACING_V2"] = "true"
         os.environ["LANGCHAIN_API_KEY"] = langsmith_api_key
         os.environ.setdefault("LANGCHAIN_PROJECT", "langchain-platform")
-        os.environ.setdefault(
-            "LANGCHAIN_ENDPOINT", "https://api.smith.langchain.com"
-        )
+        os.environ.setdefault("LANGCHAIN_ENDPOINT", "https://api.smith.langchain.com")
         print(f"LangSmith tracing enabled for project: {os.getenv('LANGCHAIN_PROJECT')}")
         return True
 
@@ -113,9 +151,9 @@ API_KEY_HEADER = "X-API-Key"
 # Log API key configuration at startup for debugging
 print(f"[Security] API_KEY_ENABLED={API_KEY_ENABLED} (env: '{os.getenv('API_KEY_ENABLED', 'not set')}')")
 if API_KEY_ENABLED:
-    print(f"[Security] API key authentication is ENABLED - protected endpoints require X-API-Key header")
+    print("[Security] API key authentication is ENABLED - protected endpoints require X-API-Key header")
 else:
-    print(f"[Security] API key authentication is DISABLED - all endpoints are open")
+    print("[Security] API key authentication is DISABLED - all endpoints are open")
 
 # Paths that don't require authentication
 PUBLIC_PATHS = {"/", "/docs", "/redoc", "/openapi.json", "/health", "/ready", "/chat", "/chatui"}
@@ -139,6 +177,7 @@ class APIKeyMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next):
         import sys
+
         # Normalize path (remove trailing slash for comparison)
         path = request.url.path.rstrip("/") or "/"
 
@@ -221,11 +260,13 @@ def _is_azure_openai_configured() -> bool:
     Returns:
         True if all required Azure OpenAI env vars are set.
     """
-    return all([
-        os.getenv("AZURE_OPENAI_API_KEY"),
-        os.getenv("AZURE_OPENAI_ENDPOINT"),
-        os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME"),
-    ])
+    return all(
+        [
+            os.getenv("AZURE_OPENAI_API_KEY"),
+            os.getenv("AZURE_OPENAI_ENDPOINT"),
+            os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME"),
+        ]
+    )
 
 
 def _is_any_llm_configured() -> bool:
@@ -252,9 +293,9 @@ def load_chains() -> bool:
         return False
 
     try:
+        from app.chains.agent import agent_executor as _agent_executor
         from app.chains.chat import chat_chain as _chat_chain
         from app.chains.rag import rag_chain as _rag_chain
-        from app.chains.agent import agent_executor as _agent_executor
 
         chat_chain = _chat_chain
         rag_chain = _rag_chain
@@ -279,6 +320,7 @@ def load_langgraph_agent() -> bool:
 
     try:
         from app.chains.langgraph_agent import LangGraphAgentRunnable
+
         langgraph_agent = LangGraphAgentRunnable(model_provider="auto")
         if langgraph_agent.agent is not None:
             langgraph_loaded = True
@@ -302,6 +344,7 @@ def load_doc_rag() -> bool:
 
     try:
         from app.chains.doc_rag import doc_rag_chain as _doc_rag_chain
+
         doc_rag_chain = _doc_rag_chain
         doc_rag_loaded = True
         return True
@@ -323,6 +366,7 @@ def load_it_support_agents() -> bool:
 
     try:
         from app.agents.conversation_manager import ConversationManager
+
         conversation_manager = ConversationManager()
         it_support_loaded = True
         return True
@@ -350,6 +394,7 @@ def load_enterprise_agents() -> dict[str, bool]:
     # Research Agent
     try:
         from app.agents.research import ResearchAgent
+
         research_agent = ResearchAgent()
         status["research"] = True
     except Exception as e:
@@ -359,6 +404,7 @@ def load_enterprise_agents() -> dict[str, bool]:
     # Content Agent (with auto_approve=True for API usage - skip HITL review)
     try:
         from app.agents.content import ContentAgent
+
         content_agent = ContentAgent(auto_approve=True)
         status["content"] = True
     except Exception as e:
@@ -368,6 +414,7 @@ def load_enterprise_agents() -> dict[str, bool]:
     # Data Analyst Agent
     try:
         from app.agents.data_analyst import DataAnalystAgent
+
         data_analyst_agent = DataAnalystAgent()
         status["data_analyst"] = True
     except Exception as e:
@@ -377,6 +424,7 @@ def load_enterprise_agents() -> dict[str, bool]:
     # Document Agent
     try:
         from app.agents.documents import DocumentAgent
+
         document_agent = DocumentAgent()
         status["document"] = True
     except Exception as e:
@@ -386,6 +434,7 @@ def load_enterprise_agents() -> dict[str, bool]:
     # Multilingual RAG Agent
     try:
         from app.agents.rag import MultilingualRAGAgent
+
         multilingual_rag_agent = MultilingualRAGAgent()
         status["multilingual_rag"] = True
     except Exception as e:
@@ -395,6 +444,7 @@ def load_enterprise_agents() -> dict[str, bool]:
     # HITL Support Agent
     try:
         from app.agents.it_support import HITLSupportAgent
+
         hitl_support_agent = HITLSupportAgent()
         status["hitl_support"] = True
     except Exception as e:
@@ -404,6 +454,7 @@ def load_enterprise_agents() -> dict[str, bool]:
     # Code Assistant Agent
     try:
         from app.agents.code_assistant import CodeAssistantAgent
+
         code_assistant_agent = CodeAssistantAgent()
         status["code_assistant"] = True
     except Exception as e:
@@ -413,6 +464,7 @@ def load_enterprise_agents() -> dict[str, bool]:
     # Document Intelligence Agent
     try:
         from app.agents.document_intelligence import DocumentIntelligenceAgent
+
         document_intelligence_agent = DocumentIntelligenceAgent()
         status["document_intelligence"] = True
     except Exception as e:
@@ -433,13 +485,15 @@ def load_deep_agent() -> bool:
     global deep_agent_loaded, it_operations_deep_agent, sales_intelligence_deep_agent, recruitment_deep_agent
 
     if not _is_any_llm_configured():
-        print("[DEBUG] Deep Agent: No LLM provider configured (Azure OpenAI, OpenAI with OPENAI_ENABLED=true, or Anthropic)")
+        print(
+            "[DEBUG] Deep Agent: No LLM provider configured (Azure OpenAI, OpenAI with OPENAI_ENABLED=true, or Anthropic)"
+        )
         return False
 
     try:
         from app.deepagents import create_it_operations_agent
-        from app.deepagents.sales_intelligence_agent import create_sales_intelligence_agent
         from app.deepagents.recruitment_agent import create_recruitment_agent
+        from app.deepagents.sales_intelligence_agent import create_sales_intelligence_agent
 
         # Get model configuration from environment
         provider = os.getenv("DEEP_AGENT_PROVIDER", "auto")
@@ -468,7 +522,7 @@ def load_deep_agent() -> bool:
         # Log model info
         model_info = model_name or "default"
         print(f"[DEBUG] Deep Agents using provider={provider}, model={model_info}")
-        print(f"[DEBUG] Loaded: IT Operations, Sales Intelligence, Recruitment")
+        print("[DEBUG] Loaded: IT Operations, Sales Intelligence, Recruitment")
 
         return True
     except Exception as e:
@@ -483,6 +537,7 @@ def load_deep_agent() -> bool:
 # Application Lifespan
 # ============================================================================
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Application lifespan handler for startup and shutdown."""
@@ -493,7 +548,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     # Report tracing status
     if tracing_enabled:
-        print(f"[OK] LangSmith tracing enabled")
+        print("[OK] LangSmith tracing enabled")
         print(f"     Project: {os.getenv('LANGCHAIN_PROJECT')}")
         print(f"     Endpoint: {os.getenv('LANGCHAIN_ENDPOINT')}")
     else:
@@ -540,6 +595,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         print("[OK] IT Operations Deep Agent loaded")
     else:
         print("[--] Deep Agent not loaded (no API keys set)")
+
+    # Initialise response cache singleton (no-op when CACHE_ENABLED=false)
+    _agent_cache = get_cache()
+    if is_cache_enabled():
+        print(f"[OK] Response cache enabled (TTL={CACHE_TTL_SECONDS}s, max_size={MAX_CACHE_SIZE})")
+    else:
+        print("[--] Response cache disabled (set CACHE_ENABLED=true to enable)")
 
     print("=" * 60)
     print("Platform ready!")
@@ -613,6 +675,7 @@ app.add_middleware(APIKeyMiddleware)
 # Include integration routes (Teams, Slack webhooks)
 try:
     from app.integrations.routes import router as integrations_router
+
     app.include_router(integrations_router)
     print("[OK] Integration routes loaded (Teams, Slack)")
 except ImportError as e:
@@ -621,15 +684,44 @@ except ImportError as e:
 # Include Software Development Deep Agent routes
 try:
     from app.deepagents.software_dev.routes import router as software_dev_router
+
     app.include_router(software_dev_router)
     print("[OK] Software Development Deep Agent routes loaded")
 except ImportError as e:
     print(f"[--] Software Development Deep Agent routes not loaded: {e}")
 
+# Include Domain Agent routes (8 specialised domain agents)
+try:
+    from app.agents.domains.routes import router as domain_router
+
+    app.include_router(domain_router)
+    print("[OK] Domain Agent routes loaded (marcom, hr, lnd, presales, datacenter, cloud, cybersecurity, data_ai)")
+except ImportError as e:
+    print(f"[--] Domain Agent routes not loaded: {e}")
+
+# Include Analytics routes
+try:
+    from app.analytics.metrics_api import router as analytics_router
+
+    app.include_router(analytics_router)
+    print("[OK] Analytics routes loaded")
+except ImportError as e:
+    print(f"[--] Analytics routes not loaded: {e}")
+
+# Mount Prometheus /metrics endpoint
+try:
+    from app.monitoring.prometheus import setup_metrics
+
+    setup_metrics(app)
+    print("[OK] Prometheus /metrics endpoint mounted")
+except Exception as e:  # noqa: BLE001
+    print(f"[--] Prometheus metrics not mounted: {e}")
+
 
 # ============================================================================
 # Response Models
 # ============================================================================
+
 
 class HealthResponse(BaseModel):
     """Health check response model."""
@@ -807,6 +899,7 @@ class ThirdPartyResponse(BaseModel):
 # Enterprise Agent Models
 # ============================================================================
 
+
 class EnterpriseAgentRequest(BaseModel):
     """Base request for enterprise agents."""
 
@@ -823,6 +916,7 @@ class EnterpriseAgentResponse(BaseModel):
     agent_type: str | None = None
     tool_calls: list | None = None
     error: str | None = None
+    cached: bool = False
 
 
 class ResearchAgentRequest(BaseModel):
@@ -919,6 +1013,7 @@ class DocumentIntelligenceUploadResponse(BaseModel):
 # Deep Agent Models
 # ============================================================================
 
+
 class DeepAgentStartRequest(BaseModel):
     """Request to start a Deep Agent session."""
 
@@ -984,6 +1079,7 @@ class DeepAgentUploadResponse(BaseModel):
 # ============================================================================
 # API Endpoints
 # ============================================================================
+
 
 @app.get("/")
 async def root() -> RedirectResponse:
@@ -1156,16 +1252,50 @@ async def doc_rag_clear() -> dict:
 # Conversation API Endpoints (IT Support Agents)
 # ============================================================================
 
+_TENANT_ID_RE = re.compile(r"^[a-zA-Z0-9_\-]{1,64}$")
+
+
+def _validate_tenant_id(tenant_id: str) -> str:
+    """Validate and return the tenant ID.
+
+    Args:
+        tenant_id: Raw tenant identifier from the request header.
+
+    Returns:
+        The validated tenant identifier, unchanged.
+
+    Raises:
+        HTTPException: 400 if the value contains disallowed characters or
+            exceeds the maximum length.
+    """
+    if not _TENANT_ID_RE.fullmatch(tenant_id):
+        raise HTTPException(
+            status_code=400,
+            detail="X-Tenant-ID must be 1-64 alphanumeric, dash, or underscore characters.",
+        )
+    return tenant_id
+
+
 @app.post("/api/conversation/start", response_model=ConversationStartResponse)
-async def conversation_start(request: ConversationStartRequest) -> ConversationStartResponse:
+async def conversation_start(
+    request: ConversationStartRequest,
+    x_tenant_id: str = Header(default="default"),
+) -> ConversationStartResponse:
     """Start a new conversation with an IT Support agent.
+
+    The optional `X-Tenant-ID` request header scopes the session to a specific
+    tenant. When the header is absent the session is created in the `"default"`
+    tenant, preserving full backward compatibility.
 
     Args:
         request: The conversation start request with agent type.
+        x_tenant_id: Tenant identifier extracted from the `X-Tenant-ID` header.
 
     Returns:
         Session ID, welcome message, and available commands.
     """
+    tenant_id = _validate_tenant_id(x_tenant_id)
+
     if not it_support_loaded or conversation_manager is None:
         raise HTTPException(
             status_code=503,
@@ -1176,21 +1306,31 @@ async def conversation_start(request: ConversationStartRequest) -> ConversationS
         agent_type=request.agent_type,
         user_id=request.user_id,
         metadata=request.metadata,
+        tenant_id=tenant_id,
     )
 
     return ConversationStartResponse(**result)
 
 
 @app.post("/api/conversation/chat", response_model=ConversationChatResponse)
-async def conversation_chat(request: ConversationChatRequest) -> ConversationChatResponse:
+async def conversation_chat(
+    request: ConversationChatRequest,
+    x_tenant_id: str = Header(default="default"),
+) -> ConversationChatResponse:
     """Send a message in an existing conversation.
+
+    The optional `X-Tenant-ID` request header must match the tenant used when
+    the session was created. Omitting the header uses the `"default"` tenant.
 
     Args:
         request: The chat request with session ID and message.
+        x_tenant_id: Tenant identifier extracted from the `X-Tenant-ID` header.
 
     Returns:
         Agent's response and metadata.
     """
+    tenant_id = _validate_tenant_id(x_tenant_id)
+
     if not it_support_loaded or conversation_manager is None:
         raise HTTPException(
             status_code=503,
@@ -1200,25 +1340,32 @@ async def conversation_chat(request: ConversationChatRequest) -> ConversationCha
     result = await conversation_manager.achat(
         session_id=request.session_id,
         message=request.message,
+        tenant_id=tenant_id,
     )
 
     return ConversationChatResponse(**result)
 
 
 @app.get("/api/conversation/{session_id}")
-async def conversation_info(session_id: str) -> dict:
+async def conversation_info(
+    session_id: str,
+    x_tenant_id: str = Header(default="default"),
+) -> dict:
     """Get information about a conversation session.
 
     Args:
         session_id: The session ID to query.
+        x_tenant_id: Tenant identifier extracted from the `X-Tenant-ID` header.
 
     Returns:
         Session information.
     """
+    tenant_id = _validate_tenant_id(x_tenant_id)
+
     if not it_support_loaded or conversation_manager is None:
         raise HTTPException(status_code=503, detail="IT Support agents not available.")
 
-    info = conversation_manager.get_session_info(session_id)
+    info = conversation_manager.get_session_info(session_id, tenant_id=tenant_id)
     if not info:
         raise HTTPException(status_code=404, detail="Session not found.")
 
@@ -1226,19 +1373,130 @@ async def conversation_info(session_id: str) -> dict:
 
 
 @app.delete("/api/conversation/{session_id}")
-async def conversation_end(session_id: str) -> dict:
+async def conversation_end(
+    session_id: str,
+    x_tenant_id: str = Header(default="default"),
+) -> dict:
     """End a conversation session.
 
     Args:
         session_id: The session ID to end.
+        x_tenant_id: Tenant identifier extracted from the `X-Tenant-ID` header.
 
     Returns:
         Session summary.
     """
+    tenant_id = _validate_tenant_id(x_tenant_id)
+
     if not it_support_loaded or conversation_manager is None:
         raise HTTPException(status_code=503, detail="IT Support agents not available.")
 
-    return conversation_manager.end_conversation(session_id)
+    return conversation_manager.end_conversation(session_id, tenant_id=tenant_id)
+
+
+@app.get("/api/conversation/{session_id}/export")
+async def export_conversation(
+    session_id: str = FastAPIPath(..., pattern=r"^[0-9a-f\-]{36}$"),
+    export_format: str = "json",
+    x_tenant_id: str = Header(default="default"),
+) -> Response:
+    """Export a conversation session as JSON, plain text, or PDF.
+
+    Args:
+        session_id: The session ID to export (UUID format).
+        export_format: Output format — one of ``json``, ``text``, or ``pdf``.
+        x_tenant_id: Tenant identifier extracted from the `X-Tenant-ID` header.
+
+    Returns:
+        The exported conversation in the requested format.
+
+    Raises:
+        HTTPException: 400 if the tenant ID is invalid, 404 if the session is
+            not found, 422 if the format is not supported, or 503 if IT Support
+            agents are unavailable.
+    """
+    tenant_id = _validate_tenant_id(x_tenant_id)
+
+    if not it_support_loaded or conversation_manager is None:
+        raise HTTPException(status_code=503, detail="IT Support agents not available.")
+
+    session = conversation_manager.session_store.get_session(session_id, tenant_id=tenant_id)
+    if session is None:
+        raise HTTPException(status_code=404, detail="Session not found.")
+
+    supported_formats = {"json", "text", "pdf"}
+    if export_format not in supported_formats:
+        raise HTTPException(
+            status_code=422,
+            detail="Unsupported format. Choose one of: json, text, pdf",
+        )
+
+    from app.agents.export import ConversationExporter
+
+    exporter = ConversationExporter()
+
+    if export_format == "text":
+        return PlainTextResponse(exporter.to_text(session))
+    elif export_format == "pdf":
+        try:
+            content = exporter.to_pdf(session)
+        except ImportError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+        safe_id = re.sub(r"[^\w\-]", "_", session_id)
+        return Response(
+            content=content,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'attachment; filename="conversation-{safe_id}.pdf"'},
+        )
+    # Default: JSON
+    return JSONResponse(json.loads(exporter.to_json(session)))
+
+
+@app.post("/api/conversation/{session_id}/handoff", tags=["IT Support"])
+async def handoff_conversation(
+    session_id: str = FastAPIPath(..., pattern=r"^[0-9a-f\-]{36}$"),
+    body: dict = None,
+    x_tenant_id: str = Header(default="default"),
+) -> dict:
+    """Transfer a conversation to a different agent, preserving context.
+
+    Args:
+        session_id: The session to transfer.
+        body: JSON body with ``to_agent``, ``reason``, and optional
+              ``conversation_summary`` / ``key_entities``.
+        x_tenant_id: Tenant scope.
+
+    Returns:
+        Handoff result with ``success``, ``new_agent``, and optional ``error``.
+    """
+    if not it_support_loaded or conversation_manager is None:
+        raise HTTPException(status_code=503, detail="IT Support agents not available")
+    if body is None:
+        body = {}
+
+    from app.agents.handoff.handoff_manager import HandoffManager
+    from app.agents.handoff.handoff_protocol import HandoffRequest
+
+    try:
+        session = conversation_manager.session_store.get_session(session_id, tenant_id=x_tenant_id)
+    except Exception:
+        session = None
+    if session is None:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    req = HandoffRequest(
+        from_agent=session.metadata.agent_type,
+        to_agent=body.get("to_agent", ""),
+        reason=body.get("reason", "User requested transfer"),
+        session_id=session_id,
+        conversation_summary=body.get("conversation_summary", ""),
+        key_entities=body.get("key_entities", {}),
+    )
+
+    result = await HandoffManager().execute_handoff(req, conversation_manager)
+    if not result.success:
+        raise HTTPException(status_code=400, detail=result.error)
+    return result.model_dump()
 
 
 @app.get("/api/agents")
@@ -1254,8 +1512,53 @@ async def list_agents() -> dict:
 
 
 # ============================================================================
+# Master Orchestrator — unified single-entry-point endpoint
+# ============================================================================
+
+_orchestrator_instance = None
+
+
+def _get_orchestrator():
+    global _orchestrator_instance
+    if _orchestrator_instance is None:
+        from app.agents.supervisors.master_orchestrator import MasterOrchestrator
+
+        _orchestrator_instance = MasterOrchestrator(
+            conversation_manager=conversation_manager,
+        )
+    return _orchestrator_instance
+
+
+@app.post("/api/orchestrate", tags=["Orchestration"])
+async def orchestrate(body: dict) -> dict:
+    """Route a message to the most appropriate agent automatically.
+
+    Classifies the request and forwards it to one of:
+    IT Support, Domain Agent, Deep Agent, or Research Agent.
+
+    Args:
+        body: JSON with ``message`` (required), ``session_id`` (optional),
+              and ``user_context`` dict (optional).
+
+    Returns:
+        Dict with ``cluster``, ``agent_type``, ``session_id``, and ``response``.
+    """
+    message = body.get("message", "")
+    if not message:
+        raise HTTPException(status_code=422, detail="'message' field is required")
+
+    result = await _get_orchestrator().route(
+        message=message,
+        session_id=body.get("session_id"),
+        user_context=body.get("user_context", {}),
+    )
+    return result
+
+
+# ============================================================================
 # Integration Endpoints (for external platforms: Copilot Studio, Azure AI, etc.)
 # ============================================================================
+
 
 @app.post("/api/webhook/chat", response_model=IntegrationResponse)
 async def webhook_chat(payload: WebhookPayload) -> IntegrationResponse:
@@ -1349,6 +1652,7 @@ async def webhook_chat(payload: WebhookPayload) -> IntegrationResponse:
 # ============================================================================
 # 3rd Party Platform Webhook Endpoints
 # ============================================================================
+
 
 def _invoke_enterprise_agent(agent_type: str, query: str) -> tuple[bool, str | None]:
     """Helper to invoke an enterprise agent by type.
@@ -1509,6 +1813,7 @@ async def aws_lex_webhook(request: AWSLexRequest) -> ThirdPartyResponse:
 # Enterprise Agent Endpoints
 # ============================================================================
 
+
 @app.get("/api/enterprise/agents")
 async def list_enterprise_agents() -> dict:
     """List all available enterprise agents and their status."""
@@ -1559,9 +1864,52 @@ async def list_enterprise_agents() -> dict:
     }
 
 
+_VALID_AGENTS = {
+    "research",
+    "content",
+    "data-analyst",
+    "documents",
+    "rag",
+    "support",
+    "code",
+    "document-intelligence",
+}
+
+
+@app.get("/api/enterprise/{agent}/estimate", tags=["Enterprise Agents"])
+async def estimate_agent_cost(
+    agent: str,
+    message: str,
+) -> dict:
+    """Estimate token count and USD cost before invoking an enterprise agent.
+
+    This endpoint is free — it does **not** call the LLM.
+
+    Args:
+        agent: Agent type (research, content, data-analyst, …).
+        message: The message you intend to send.
+
+    Returns:
+        Dict with ``input_tokens``, ``estimated_output_tokens``,
+        ``estimated_cost_usd``, and ``model``.
+    """
+    if agent not in _VALID_AGENTS:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Unknown agent '{agent}'. Valid agents: {sorted(_VALID_AGENTS)}",
+        )
+    return get_cost_estimator().estimate(message, agent)
+
+
 @app.post("/api/enterprise/research/invoke", response_model=EnterpriseAgentResponse, tags=["Enterprise Agents"])
-async def research_agent_invoke(request: ResearchAgentRequest) -> EnterpriseAgentResponse:
+async def research_agent_invoke(
+    request: ResearchAgentRequest, background_tasks: BackgroundTasks
+) -> EnterpriseAgentResponse:
     """Invoke the Research Agent for web search and information synthesis.
+
+    Responses are served from the in-memory cache when ``CACHE_ENABLED=true``
+    and an identical (whitespace-normalised) query has been answered before.
+    Cache hits are indicated by ``cached: true`` in the response.
 
     Args:
         request: Research query and optional session ID.
@@ -1575,6 +1923,19 @@ async def research_agent_invoke(request: ResearchAgentRequest) -> EnterpriseAgen
             detail="Research Agent not available. Set OPENAI_API_KEY or ANTHROPIC_API_KEY.",
         )
 
+    # Cache key is message-only (not session-scoped): research responses are stateless
+    # with respect to session context — the same query always yields the same answer.
+    # Check cache before invoking the LLM (no-op when CACHE_ENABLED=false)
+    _agent_cache = get_cache()
+    cached_response = _agent_cache.get("research", request.query)
+    if cached_response is not None:
+        return EnterpriseAgentResponse(
+            success=True,
+            response=cached_response,
+            agent_type="research",
+            cached=True,
+        )
+
     try:
         result = research_agent.research(
             query=request.query,
@@ -1582,11 +1943,18 @@ async def research_agent_invoke(request: ResearchAgentRequest) -> EnterpriseAgen
         )
         # Extract response from LangGraph state messages
         response_text = extract_agent_response(result)
+
+        # Persist result in cache for future identical queries
+        _agent_cache.set("research", request.query, response_text)
+
+        submit_for_evaluation(background_tasks, "research", request.query, response_text)
+
         return EnterpriseAgentResponse(
             success=True,
             response=response_text,
             session_id=result.get("session_id") if isinstance(result, dict) else getattr(result, "session_id", None),
             agent_type="research",
+            cached=False,
         )
     except Exception as e:
         return EnterpriseAgentResponse(
@@ -1594,6 +1962,44 @@ async def research_agent_invoke(request: ResearchAgentRequest) -> EnterpriseAgen
             error=str(e),
             agent_type="research",
         )
+
+
+@app.post("/api/enterprise/research/stream", tags=["Enterprise Agents"])
+async def research_agent_stream(request: ResearchAgentRequest) -> StreamingResponse:
+    """Stream responses from the Research Agent using Server-Sent Events.
+
+    Streams incremental tokens, tool events, and a final ``complete`` event.
+
+    Args:
+        request: Research query and optional session ID.
+
+    Returns:
+        SSE stream of events.
+    """
+    if not enterprise_agents_loaded or research_agent is None:
+
+        async def _unavailable():
+            yield f"data: {_serialize_sse({'type': 'error', 'data': {'error': 'Research Agent not available. Set OPENAI_API_KEY or ANTHROPIC_API_KEY.'}})}\n\n"
+
+        return StreamingResponse(_unavailable(), media_type="text/event-stream")
+
+    async def _event_generator():
+        try:
+            async for event in research_agent.astream(
+                message=request.query,
+                session_id=request.session_id,
+            ):
+                yield f"data: {_serialize_sse(event)}\n\n"
+        except GeneratorExit:
+            pass
+        except Exception:
+            yield f"data: {_serialize_sse({'type': 'error', 'data': {'error': 'An error occurred processing your request'}})}\n\n"
+
+    return StreamingResponse(
+        _event_generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
+    )
 
 
 @app.post("/api/enterprise/content/invoke", response_model=EnterpriseAgentResponse, tags=["Enterprise Agents"])
@@ -1642,6 +2048,44 @@ async def content_agent_invoke(request: ContentAgentRequest) -> EnterpriseAgentR
         )
 
 
+@app.post("/api/enterprise/content/stream", tags=["Enterprise Agents"])
+async def content_agent_stream(request: ContentAgentRequest) -> StreamingResponse:
+    """Stream responses from the Content Generation Agent using Server-Sent Events.
+
+    Args:
+        request: Content topic, platform, tone, and audience.
+
+    Returns:
+        SSE stream of events.
+    """
+    if not enterprise_agents_loaded or content_agent is None:
+
+        async def _unavailable():
+            yield f"data: {_serialize_sse({'type': 'error', 'data': {'error': 'Content Agent not available. Set OPENAI_API_KEY or ANTHROPIC_API_KEY.'}})}\n\n"
+
+        return StreamingResponse(_unavailable(), media_type="text/event-stream")
+
+    message = f"Create {request.tone} content for {request.platform} about: {request.topic}. Target audience: {request.audience}."
+
+    async def _event_generator():
+        try:
+            async for event in content_agent.astream(
+                message=message,
+                session_id=request.session_id,
+            ):
+                yield f"data: {_serialize_sse(event)}\n\n"
+        except GeneratorExit:
+            pass
+        except Exception:
+            yield f"data: {_serialize_sse({'type': 'error', 'data': {'error': 'An error occurred processing your request'}})}\n\n"
+
+    return StreamingResponse(
+        _event_generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
+    )
+
+
 @app.post("/api/enterprise/data-analyst/invoke", response_model=EnterpriseAgentResponse, tags=["Enterprise Agents"])
 async def data_analyst_invoke(request: DataAnalystRequest) -> EnterpriseAgentResponse:
     """Invoke the Data Analyst Agent.
@@ -1684,6 +2128,44 @@ async def data_analyst_invoke(request: DataAnalystRequest) -> EnterpriseAgentRes
         )
 
 
+@app.post("/api/enterprise/data-analyst/stream", tags=["Enterprise Agents"])
+async def data_analyst_stream(request: DataAnalystRequest) -> StreamingResponse:
+    """Stream responses from the Data Analyst Agent using Server-Sent Events.
+
+    Args:
+        request: Analysis message and optional session ID.
+
+    Returns:
+        SSE stream of events.
+    """
+    if not enterprise_agents_loaded or data_analyst_agent is None:
+
+        async def _unavailable():
+            yield f"data: {_serialize_sse({'type': 'error', 'data': {'error': 'Data Analyst Agent not available. Set OPENAI_API_KEY or ANTHROPIC_API_KEY.'}})}\n\n"
+
+        return StreamingResponse(_unavailable(), media_type="text/event-stream")
+
+    effective_session_id = request.session_id or "default_session"
+
+    async def _event_generator():
+        try:
+            async for event in data_analyst_agent.astream(
+                message=request.message,
+                session_id=effective_session_id,
+            ):
+                yield f"data: {_serialize_sse(event)}\n\n"
+        except GeneratorExit:
+            pass
+        except Exception:
+            yield f"data: {_serialize_sse({'type': 'error', 'data': {'error': 'An error occurred processing your request'}})}\n\n"
+
+    return StreamingResponse(
+        _event_generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
+    )
+
+
 @app.post("/api/enterprise/data-analyst/upload", tags=["Enterprise Agents"])
 async def data_analyst_upload(
     file: UploadFile = File(...),
@@ -1720,13 +2202,14 @@ async def data_analyst_upload(
 
     # Save to temp location for analysis
     import tempfile
+
     with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
         tmp.write(content)
         tmp_path = tmp.name
 
     # Automatically load the file into the agent's memory
     try:
-        from app.agents.data_analyst.data_analyst_agent import load_excel_file, load_csv_file, _dataframes
+        from app.agents.data_analyst.data_analyst_agent import _dataframes, load_csv_file, load_excel_file
 
         # Use provided session_id or default
         effective_session_id = session_id or "default_session"
@@ -1828,9 +2311,9 @@ async def document_agent_invoke(request: DocumentAgentRequest) -> EnterpriseAgen
         result = document_agent.create_document(
             doc_type=request.doc_type,
             title=request.title,
-            department=getattr(request, 'department', ''),
+            department=getattr(request, "department", ""),
             purpose=request.description,
-            additional_context=str(getattr(request, 'sections', [])),
+            additional_context=str(getattr(request, "sections", [])),
             session_id=request.session_id,
         )
         # Extract response from LangGraph state messages
@@ -1848,6 +2331,45 @@ async def document_agent_invoke(request: DocumentAgentRequest) -> EnterpriseAgen
             error=str(e),
             agent_type="document",
         )
+
+
+@app.post("/api/enterprise/documents/stream", tags=["Enterprise Agents"])
+async def document_agent_stream(request: DocumentAgentRequest) -> StreamingResponse:
+    """Stream responses from the IT Document Generator Agent using Server-Sent Events.
+
+    Args:
+        request: Document type, title, description, and sections.
+
+    Returns:
+        SSE stream of events.
+    """
+    if not enterprise_agents_loaded or document_agent is None:
+
+        async def _unavailable():
+            yield f"data: {_serialize_sse({'type': 'error', 'data': {'error': 'Document Agent not available. Set OPENAI_API_KEY or ANTHROPIC_API_KEY.'}})}\n\n"
+
+        return StreamingResponse(_unavailable(), media_type="text/event-stream")
+
+    sections_str = str(request.sections or [])
+    message = f"Create a {request.doc_type} document titled '{request.title}'. Purpose: {request.description}. Sections: {sections_str}."
+
+    async def _event_generator():
+        try:
+            async for event in document_agent.astream(
+                message=message,
+                session_id=request.session_id,
+            ):
+                yield f"data: {_serialize_sse(event)}\n\n"
+        except GeneratorExit:
+            pass
+        except Exception:
+            yield f"data: {_serialize_sse({'type': 'error', 'data': {'error': 'An error occurred processing your request'}})}\n\n"
+
+    return StreamingResponse(
+        _event_generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
+    )
 
 
 @app.post("/api/enterprise/rag/invoke", response_model=EnterpriseAgentResponse, tags=["Enterprise Agents"])
@@ -1889,6 +2411,45 @@ async def rag_agent_invoke(request: RAGAgentRequest) -> EnterpriseAgentResponse:
             error=str(e),
             agent_type="multilingual_rag",
         )
+
+
+@app.post("/api/enterprise/rag/stream", tags=["Enterprise Agents"])
+async def rag_agent_stream(request: RAGAgentRequest) -> StreamingResponse:
+    """Stream responses from the Multilingual RAG Agent using Server-Sent Events.
+
+    Args:
+        request: Query, optional language, and session ID.
+
+    Returns:
+        SSE stream of events.
+    """
+    if not enterprise_agents_loaded or multilingual_rag_agent is None:
+
+        async def _unavailable():
+            yield f"data: {_serialize_sse({'type': 'error', 'data': {'error': 'RAG Agent not available. Set OPENAI_API_KEY or ANTHROPIC_API_KEY.'}})}\n\n"
+
+        return StreamingResponse(_unavailable(), media_type="text/event-stream")
+
+    language_hint = f" Answer in {request.language}." if request.language and request.language != "auto" else ""
+    message = f"{request.query}{language_hint}"
+
+    async def _event_generator():
+        try:
+            async for event in multilingual_rag_agent.astream(
+                message=message,
+                session_id=request.session_id,
+            ):
+                yield f"data: {_serialize_sse(event)}\n\n"
+        except GeneratorExit:
+            pass
+        except Exception:
+            yield f"data: {_serialize_sse({'type': 'error', 'data': {'error': 'An error occurred processing your request'}})}\n\n"
+
+    return StreamingResponse(
+        _event_generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
+    )
 
 
 @app.post("/api/enterprise/rag/upload", tags=["Enterprise Agents"])
@@ -1934,7 +2495,9 @@ async def rag_upload_document(
             # PDF files - use PyPDF2 or pdfplumber
             try:
                 import io
+
                 from PyPDF2 import PdfReader
+
                 pdf_reader = PdfReader(io.BytesIO(content_bytes))
                 text_content = ""
                 for page in pdf_reader.pages:
@@ -1948,7 +2511,9 @@ async def rag_upload_document(
             # Word files - use python-docx
             try:
                 import io
+
                 from docx import Document
+
                 doc = Document(io.BytesIO(content_bytes))
                 text_content = "\n".join([para.text for para in doc.paragraphs])
             except ImportError:
@@ -2013,6 +2578,43 @@ async def hitl_support_invoke(request: HITLSupportRequest) -> EnterpriseAgentRes
             error=str(e),
             agent_type="hitl_support",
         )
+
+
+@app.post("/api/enterprise/support/stream", tags=["Enterprise Agents"])
+async def hitl_support_stream(request: HITLSupportRequest) -> StreamingResponse:
+    """Stream responses from the HITL IT Support Agent using Server-Sent Events.
+
+    Args:
+        request: Support message, session ID, and user ID.
+
+    Returns:
+        SSE stream of events.
+    """
+    if not enterprise_agents_loaded or hitl_support_agent is None:
+
+        async def _unavailable():
+            yield f"data: {_serialize_sse({'type': 'error', 'data': {'error': 'HITL Support Agent not available. Set OPENAI_API_KEY or ANTHROPIC_API_KEY.'}})}\n\n"
+
+        return StreamingResponse(_unavailable(), media_type="text/event-stream")
+
+    async def _event_generator():
+        try:
+            async for event in hitl_support_agent.astream(
+                message=request.message,
+                session_id=request.session_id,
+                user_id=request.user_id,
+            ):
+                yield f"data: {_serialize_sse(event)}\n\n"
+        except GeneratorExit:
+            pass
+        except Exception:
+            yield f"data: {_serialize_sse({'type': 'error', 'data': {'error': 'An error occurred processing your request'}})}\n\n"
+
+    return StreamingResponse(
+        _event_generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
+    )
 
 
 @app.post("/api/enterprise/support/approve", tags=["Enterprise Agents"])
@@ -2093,12 +2695,65 @@ async def code_assistant_invoke(request: CodeAssistantRequest) -> EnterpriseAgen
         )
 
 
+@app.post("/api/enterprise/code/stream", tags=["Enterprise Agents"])
+async def code_assistant_stream(request: CodeAssistantRequest) -> StreamingResponse:
+    """Stream responses from the Code Assistant Agent using Server-Sent Events.
+
+    Args:
+        request: Code, language, action type, and security flag.
+
+    Returns:
+        SSE stream of events.
+    """
+    if not enterprise_agents_loaded or code_assistant_agent is None:
+
+        async def _unavailable():
+            yield f"data: {_serialize_sse({'type': 'error', 'data': {'error': 'Code Assistant Agent not available. Set OPENAI_API_KEY or ANTHROPIC_API_KEY.'}})}\n\n"
+
+        return StreamingResponse(_unavailable(), media_type="text/event-stream")
+
+    if request.action == "analyze":
+        security_line = "3. Security vulnerabilities\n" if request.include_security else ""
+        message = (
+            f"Please analyze this {request.language} code:\n\n"
+            f"```{request.language}\n{request.code}\n```\n\n"
+            f"Provide:\n1. Code structure analysis\n2. Legacy patterns found\n"
+            f"{security_line}4. Modernization suggestions\n5. Example improvements"
+        )
+    else:
+        message = (
+            f"Please help modernize this {request.language} code:\n\n"
+            f"```{request.language}\n{request.code}\n```\n\n"
+            f"Provide step-by-step modernization recommendations."
+        )
+
+    async def _event_generator():
+        try:
+            async for event in code_assistant_agent.astream(
+                message=message,
+                session_id=request.session_id,
+            ):
+                yield f"data: {_serialize_sse(event)}\n\n"
+        except GeneratorExit:
+            pass
+        except Exception:
+            yield f"data: {_serialize_sse({'type': 'error', 'data': {'error': 'An error occurred processing your request'}})}\n\n"
+
+    return StreamingResponse(
+        _event_generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
+    )
+
+
 # ============================================================================
 # Document Intelligence Agent Endpoints
 # ============================================================================
 
 
-@app.post("/api/enterprise/document-intelligence/invoke", response_model=EnterpriseAgentResponse, tags=["Enterprise Agents"])
+@app.post(
+    "/api/enterprise/document-intelligence/invoke", response_model=EnterpriseAgentResponse, tags=["Enterprise Agents"]
+)
 async def document_intelligence_invoke(request: DocumentIntelligenceRequest) -> EnterpriseAgentResponse:
     """Invoke the Document Intelligence Agent.
 
@@ -2136,7 +2791,50 @@ async def document_intelligence_invoke(request: DocumentIntelligenceRequest) -> 
         )
 
 
-@app.post("/api/enterprise/document-intelligence/upload", response_model=DocumentIntelligenceUploadResponse, tags=["Enterprise Agents"])
+@app.post("/api/enterprise/document-intelligence/stream", tags=["Enterprise Agents"])
+async def document_intelligence_stream(request: DocumentIntelligenceRequest) -> StreamingResponse:
+    """Stream responses from the Document Intelligence Agent using Server-Sent Events.
+
+    Args:
+        request: Message, optional session ID, and target language.
+
+    Returns:
+        SSE stream of events.
+    """
+    if not enterprise_agents_loaded or document_intelligence_agent is None:
+
+        async def _unavailable():
+            yield f"data: {_serialize_sse({'type': 'error', 'data': {'error': 'Document Intelligence Agent not available. Set OPENAI_API_KEY or ANTHROPIC_API_KEY.'}})}\n\n"
+
+        return StreamingResponse(_unavailable(), media_type="text/event-stream")
+
+    language_hint = f" Respond in {request.target_language}." if request.target_language else ""
+    message = f"{request.message}{language_hint}"
+
+    async def _event_generator():
+        try:
+            async for event in document_intelligence_agent.astream(
+                message=message,
+                session_id=request.session_id,
+            ):
+                yield f"data: {_serialize_sse(event)}\n\n"
+        except GeneratorExit:
+            pass
+        except Exception:
+            yield f"data: {_serialize_sse({'type': 'error', 'data': {'error': 'An error occurred processing your request'}})}\n\n"
+
+    return StreamingResponse(
+        _event_generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
+    )
+
+
+@app.post(
+    "/api/enterprise/document-intelligence/upload",
+    response_model=DocumentIntelligenceUploadResponse,
+    tags=["Enterprise Agents"],
+)
 async def document_intelligence_upload(
     file: UploadFile = File(...),
     session_id: str | None = Form(None),
@@ -2250,8 +2948,38 @@ async def document_intelligence_clear_documents(
 
 
 # ============================================================================
+# Cache Management Endpoints
+# ============================================================================
+
+
+@app.get("/api/cache/stats", tags=["Cache"])
+async def cache_stats() -> dict:
+    """Return current response-cache statistics.
+
+    The cache is opt-in via ``CACHE_ENABLED=true``.  When disabled the size
+    will always be zero because all cache writes are suppressed.
+
+    Returns:
+        Dictionary with ``enabled`` (bool) and ``size`` (int) fields.
+    """
+    return {"enabled": is_cache_enabled(), "size": get_cache().size()}
+
+
+@app.delete("/api/cache/clear", tags=["Cache"])
+async def cache_clear() -> dict:
+    """Clear all entries from the in-memory response cache.
+
+    Returns:
+        Confirmation dictionary with ``cleared: true``.
+    """
+    get_cache().clear()
+    return {"cleared": True}
+
+
+# ============================================================================
 # Deep Agent Endpoints
 # ============================================================================
+
 
 @app.post("/api/deepagent/start", response_model=DeepAgentStartResponse, tags=["Deep Agent"])
 async def deep_agent_start(request: DeepAgentStartRequest) -> DeepAgentStartResponse:
@@ -2271,6 +2999,7 @@ async def deep_agent_start(request: DeepAgentStartRequest) -> DeepAgentStartResp
         )
 
     import uuid
+
     session_id = str(uuid.uuid4())
 
     return DeepAgentStartResponse(
@@ -2349,6 +3078,7 @@ async def deep_agent_chat_stream(request: DeepAgentChatRequest):
 
     def serialize_event(event: dict) -> str:
         """Serialize event to JSON, handling datetime and other types."""
+
         def default_serializer(obj):
             if hasattr(obj, "isoformat"):
                 return obj.isoformat()
@@ -2357,9 +3087,11 @@ async def deep_agent_chat_stream(request: DeepAgentChatRequest):
             if hasattr(obj, "__dict__"):
                 return str(obj)
             return str(obj)
+
         return json.dumps(event, default=default_serializer)
 
     if not deep_agent_loaded or it_operations_deep_agent is None:
+
         async def error_generator():
             yield f"data: {serialize_event({'type': 'error', 'data': {'error': 'Deep Agent not available. Set OPENAI_API_KEY or ANTHROPIC_API_KEY.'}})}\n\n"
 
@@ -2611,6 +3343,7 @@ async def deep_agent_upload(
         )
     except Exception as e:
         import traceback
+
         traceback.print_exc()
         return DeepAgentUploadResponse(
             success=False,
@@ -2636,17 +3369,19 @@ async def deep_agent_list_attachments(session_id: str) -> dict:
             detail="Deep Agent not available.",
         )
 
-    from app.deepagents.tools.document_tools import _document_metadata, _current_document
+    from app.deepagents.tools.document_tools import _current_document, _document_metadata
 
     docs = _document_metadata.get(session_id, {})
     current_doc_id = _current_document.get(session_id)
 
     documents = []
     for doc_id, meta in docs.items():
-        documents.append({
-            **meta,
-            "is_current": doc_id == current_doc_id,
-        })
+        documents.append(
+            {
+                **meta,
+                "is_current": doc_id == current_doc_id,
+            }
+        )
 
     return {
         "success": True,
@@ -2693,6 +3428,7 @@ async def deep_agent_clear_attachments(
 # Sales Intelligence Deep Agent Endpoints
 # ============================================================================
 
+
 @app.post("/api/sales-agent/start", response_model=DeepAgentStartResponse, tags=["Sales Agent"])
 async def sales_agent_start(request: DeepAgentStartRequest) -> DeepAgentStartResponse:
     """Start a new Sales Intelligence Deep Agent session.
@@ -2711,6 +3447,7 @@ async def sales_agent_start(request: DeepAgentStartRequest) -> DeepAgentStartRes
         )
 
     import uuid
+
     session_id = str(uuid.uuid4())
 
     return DeepAgentStartResponse(
@@ -2786,10 +3523,10 @@ async def sales_agent_chat_stream(request: DeepAgentChatRequest):
         SSE stream of events.
     """
     import json
-    import traceback
 
     def serialize_event(event: dict) -> str:
         """Serialize event to JSON, handling datetime and other types."""
+
         def default_serializer(obj):
             if hasattr(obj, "isoformat"):
                 return obj.isoformat()
@@ -2798,6 +3535,7 @@ async def sales_agent_chat_stream(request: DeepAgentChatRequest):
             if hasattr(obj, "__dict__"):
                 return str(obj)
             return str(obj)
+
         return json.dumps(event, default=default_serializer)
 
     async def event_generator():
@@ -2823,6 +3561,7 @@ async def sales_agent_chat_stream(request: DeepAgentChatRequest):
         except Exception as e:
             print(f"[ERROR] Sales Agent stream error for session {request.session_id}: {e}")
             import traceback
+
             traceback.print_exc()
             yield f"data: {serialize_event({'type': 'error', 'data': {'error': str(e)}})}\n\n"
 
@@ -3043,6 +3782,7 @@ async def sales_agent_upload(
         )
     except Exception as e:
         import traceback
+
         traceback.print_exc()
         return DeepAgentUploadResponse(
             success=False,
@@ -3068,17 +3808,19 @@ async def sales_agent_list_attachments(session_id: str) -> dict:
             detail="Sales Agent not available.",
         )
 
-    from app.deepagents.tools.document_tools import _document_metadata, _current_document
+    from app.deepagents.tools.document_tools import _current_document, _document_metadata
 
     docs = _document_metadata.get(session_id, {})
     current_doc_id = _current_document.get(session_id)
 
     documents = []
     for doc_id, meta in docs.items():
-        documents.append({
-            **meta,
-            "is_current": doc_id == current_doc_id,
-        })
+        documents.append(
+            {
+                **meta,
+                "is_current": doc_id == current_doc_id,
+            }
+        )
 
     return {
         "success": True,
@@ -3125,6 +3867,7 @@ async def sales_agent_clear_attachments(
 # Recruitment Deep Agent Endpoints
 # ============================================================================
 
+
 @app.post("/api/recruitment-agent/start", response_model=DeepAgentStartResponse, tags=["Recruitment Agent"])
 async def recruitment_agent_start(request: DeepAgentStartRequest) -> DeepAgentStartResponse:
     """Start a new Recruitment Deep Agent session.
@@ -3143,6 +3886,7 @@ async def recruitment_agent_start(request: DeepAgentStartRequest) -> DeepAgentSt
         )
 
     import uuid
+
     session_id = str(uuid.uuid4())
 
     return DeepAgentStartResponse(
@@ -3218,10 +3962,10 @@ async def recruitment_agent_chat_stream(request: DeepAgentChatRequest):
         SSE stream of events.
     """
     import json
-    import traceback
 
     def serialize_event(event: dict) -> str:
         """Serialize event to JSON, handling datetime and other types."""
+
         def default_serializer(obj):
             if hasattr(obj, "isoformat"):
                 return obj.isoformat()
@@ -3230,6 +3974,7 @@ async def recruitment_agent_chat_stream(request: DeepAgentChatRequest):
             if hasattr(obj, "__dict__"):
                 return str(obj)
             return str(obj)
+
         return json.dumps(event, default=default_serializer)
 
     async def event_generator():
@@ -3255,6 +4000,7 @@ async def recruitment_agent_chat_stream(request: DeepAgentChatRequest):
         except Exception as e:
             print(f"[ERROR] Recruitment Agent stream error for session {request.session_id}: {e}")
             import traceback
+
             traceback.print_exc()
             yield f"data: {serialize_event({'type': 'error', 'data': {'error': str(e)}})}\n\n"
 
@@ -3269,7 +4015,9 @@ async def recruitment_agent_chat_stream(request: DeepAgentChatRequest):
     )
 
 
-@app.get("/api/recruitment-agent/context/{session_id}", response_model=DeepAgentContextResponse, tags=["Recruitment Agent"])
+@app.get(
+    "/api/recruitment-agent/context/{session_id}", response_model=DeepAgentContextResponse, tags=["Recruitment Agent"]
+)
 async def recruitment_agent_context(session_id: str) -> DeepAgentContextResponse:
     """Get context for a Recruitment Agent session.
 
@@ -3363,27 +4111,62 @@ async def recruitment_agent_subagents() -> dict:
         {
             "name": "document-manager",
             "description": "Specialized in SharePoint document management - listing, downloading, uploading, and organizing recruitment documents.",
-            "tools": ["list_sharepoint_folder", "download_sharepoint_document", "upload_to_sharepoint", "search_sharepoint_documents", "get_cached_document", "create_sharepoint_folder"],
+            "tools": [
+                "list_sharepoint_folder",
+                "download_sharepoint_document",
+                "upload_to_sharepoint",
+                "search_sharepoint_documents",
+                "get_cached_document",
+                "create_sharepoint_folder",
+            ],
         },
         {
             "name": "resume-screener",
             "description": "Specialized in resume parsing and candidate screening - extracting skills, experience, and matching candidates to job requirements.",
-            "tools": ["parse_resume", "parse_job_description", "screen_candidate", "batch_screen_resumes", "get_candidate_profile", "list_candidates", "list_job_descriptions", "get_shortlisted_candidates"],
+            "tools": [
+                "parse_resume",
+                "parse_job_description",
+                "screen_candidate",
+                "batch_screen_resumes",
+                "get_candidate_profile",
+                "list_candidates",
+                "list_job_descriptions",
+                "get_shortlisted_candidates",
+            ],
         },
         {
             "name": "question-generator",
             "description": "Specialized in creating technical interview questions based on candidate skills and level.",
-            "tools": ["generate_interview_questions", "export_question_set", "list_question_sets", "get_candidate_profile", "list_candidates"],
+            "tools": [
+                "generate_interview_questions",
+                "export_question_set",
+                "list_question_sets",
+                "get_candidate_profile",
+                "list_candidates",
+            ],
         },
         {
             "name": "answer-evaluator",
             "description": "Specialized in evaluating candidate answers and generating scores.",
-            "tools": ["submit_candidate_answers", "evaluate_candidate_answers", "get_candidate_score", "list_question_sets", "get_candidate_profile"],
+            "tools": [
+                "submit_candidate_answers",
+                "evaluate_candidate_answers",
+                "get_candidate_score",
+                "list_question_sets",
+                "get_candidate_profile",
+            ],
         },
         {
             "name": "report-generator",
             "description": "Specialized in generating recruitment reports, Excel exports, and shortlists.",
-            "tools": ["generate_scoring_report", "export_scoring_excel", "get_ranking_summary", "generate_shortlist_report", "get_passing_score_thresholds", "get_shortlisted_candidates"],
+            "tools": [
+                "generate_scoring_report",
+                "export_scoring_excel",
+                "get_ranking_summary",
+                "generate_shortlist_report",
+                "get_passing_score_thresholds",
+                "get_shortlisted_candidates",
+            ],
         },
     ]
 
@@ -3470,6 +4253,7 @@ async def recruitment_agent_upload(
         )
     except Exception as e:
         import traceback
+
         traceback.print_exc()
         return DeepAgentUploadResponse(
             success=False,
@@ -3495,17 +4279,19 @@ async def recruitment_agent_list_attachments(session_id: str) -> dict:
             detail="Recruitment Agent not available.",
         )
 
-    from app.deepagents.tools.document_tools import _document_metadata, _current_document
+    from app.deepagents.tools.document_tools import _current_document, _document_metadata
 
     docs = _document_metadata.get(session_id, {})
     current_doc_id = _current_document.get(session_id)
 
     documents = []
     for doc_id, meta in docs.items():
-        documents.append({
-            **meta,
-            "is_current": doc_id == current_doc_id,
-        })
+        documents.append(
+            {
+                **meta,
+                "is_current": doc_id == current_doc_id,
+            }
+        )
 
     return {
         "success": True,
@@ -3611,6 +4397,7 @@ async def recruitment_agent_dashboard(session_id: str) -> dict:
         raise HTTPException(status_code=503, detail="Recruitment agent not loaded")
 
     from app.deepagents.tools.recruitment_tools import get_session_dashboard
+
     result = get_session_dashboard.invoke({"session_id": session_id})
 
     return {
@@ -3637,6 +4424,7 @@ async def recruitment_agent_clear_session(session_id: str) -> dict:
         raise HTTPException(status_code=503, detail="Recruitment agent not loaded")
 
     from app.deepagents.tools.recruitment_tools import clear_session_data
+
     result = clear_session_data.invoke({"session_id": session_id})
 
     return {
@@ -3693,6 +4481,25 @@ async def chatui_redirect() -> RedirectResponse:
     return RedirectResponse(url="/chat", status_code=301)
 
 
+@app.get("/analytics", response_class=HTMLResponse)
+async def analytics_ui() -> HTMLResponse:
+    """Serve the real-time analytics dashboard at /analytics."""
+    analytics_file = STATIC_DIR / "analytics.html"
+    if analytics_file.exists():
+        return HTMLResponse(
+            content=analytics_file.read_text(encoding="utf-8"),
+            headers={
+                "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0",
+                "Pragma": "no-cache",
+                "Expires": "0",
+            },
+        )
+    return HTMLResponse(
+        content="<h1>Analytics UI not found</h1><p>Please ensure app/static/analytics.html exists.</p>",
+        status_code=404,
+    )
+
+
 @app.get("/software-dev-chat", response_class=HTMLResponse)
 async def software_dev_chat_ui() -> HTMLResponse:
     """Serve the Software Development Deep Agent chat UI.
@@ -3732,6 +4539,7 @@ if STATIC_DIR.exists():
 # ============================================================================
 # LangServe Routes Setup
 # ============================================================================
+
 
 def setup_langchain_routes() -> None:
     """Set up LangServe routes for LangChain chains.

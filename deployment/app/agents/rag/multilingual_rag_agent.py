@@ -16,43 +16,30 @@ Following Enterprise Development Standards:
 
 import os
 from datetime import datetime
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any
 
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.messages import SystemMessage
 from langchain_core.tools import tool
-from langgraph.checkpoint.memory import MemorySaver
-from langgraph.graph import StateGraph, START, END
+from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode
 from langsmith import traceable
 from pydantic import BaseModel, Field
 
-from app.agents.base.agent_base import BaseAgent, AgentConfig
-from app.agents.base.tools import tool_error_handler, chunk_text
+from app.agents.base.agent_base import AgentConfig, BaseAgent
+from app.agents.base.tools import chunk_text, tool_error_handler
 
 
 class RAGState(BaseModel):
     """State schema for the Multilingual RAG Agent."""
 
-    messages: Annotated[list, add_messages] = Field(
-        default_factory=list,
-        description="Conversation history"
-    )
+    messages: Annotated[list, add_messages] = Field(default_factory=list, description="Conversation history")
     session_id: str | None = Field(default=None)
     user_id: str | None = Field(default=None)
-    documents: list[dict[str, Any]] = Field(
-        default_factory=list,
-        description="Loaded documents with metadata"
-    )
-    language: str = Field(
-        default="auto",
-        description="Detected/specified language"
-    )
+    documents: list[dict[str, Any]] = Field(default_factory=list, description="Loaded documents with metadata")
+    language: str = Field(default="auto", description="Detected/specified language")
     query: str = Field(default="", description="Current query")
-    context: list[str] = Field(
-        default_factory=list,
-        description="Retrieved context chunks"
-    )
+    context: list[str] = Field(default_factory=list, description="Retrieved context chunks")
     response: str | None = Field(default=None, description="Generated response")
 
 
@@ -64,6 +51,7 @@ def _detect_language(text: str) -> str:
     """Detect language of text."""
     try:
         from langdetect import detect
+
         return detect(text)
     except Exception:
         return "en"  # Default to English
@@ -71,11 +59,7 @@ def _detect_language(text: str) -> str:
 
 @tool
 @tool_error_handler
-def upload_document(
-    content: str,
-    filename: str,
-    doc_type: str = "text"
-) -> str:
+def upload_document(content: str, filename: str, doc_type: str = "text") -> str:
     """Upload and process a document for RAG.
 
     Args:
@@ -125,39 +109,46 @@ def search_documents(query: str, top_k: int = 5) -> str:
     Returns:
         Relevant document chunks
     """
+
     if not _document_store:
         return "No documents uploaded. Please upload documents first."
 
-    # Simple keyword search (use vector similarity in production)
+    # Keyword overlap retrieval — gather extra candidates for reranking
     query_words = set(query.lower().split())
-    results = []
+    candidates = []
 
     for doc_id, doc in _document_store.items():
         for i, chunk in enumerate(doc["chunks"]):
             chunk_words = set(chunk.lower().split())
             overlap = len(query_words & chunk_words)
             if overlap > 0:
-                results.append({
-                    "doc_id": doc_id,
-                    "filename": doc["filename"],
-                    "chunk_idx": i,
-                    "content": chunk[:500],
-                    "relevance": overlap,
-                })
+                candidates.append(
+                    {
+                        "doc_id": doc_id,
+                        "filename": doc["filename"],
+                        "chunk_idx": i,
+                        "content": chunk[:500],
+                        "relevance": overlap,
+                    }
+                )
 
-    # Sort by relevance
-    results.sort(key=lambda x: x["relevance"], reverse=True)
-    results = results[:top_k]
+    candidates.sort(key=lambda x: x["relevance"], reverse=True)
 
-    if not results:
+    # Apply cross-encoder reranking when enabled
+    reranker_enabled = os.getenv("RERANKER_ENABLED", "true").lower() == "true"
+    if reranker_enabled and candidates:
+        from app.agents.rag.reranker import get_reranker
+
+        candidates = get_reranker().rerank(query, candidates, top_k=top_k)
+    else:
+        candidates = candidates[:top_k]
+
+    if not candidates:
         return "No relevant content found for your query."
 
-    output = f"Found {len(results)} relevant chunks:\n\n"
-    for i, r in enumerate(results, 1):
-        output += (
-            f"**Result {i}** (from {r['filename']}):\n"
-            f"{r['content']}...\n\n"
-        )
+    output = f"Found {len(candidates)} relevant chunks:\n\n"
+    for i, r in enumerate(candidates, 1):
+        output += f"**Result {i}** (from {r['filename']}):\n{r['content']}...\n\n"
 
     return output
 
@@ -253,13 +244,15 @@ class MultilingualRAGAgent(BaseAgent):
         """Initialize the RAG Agent."""
         super().__init__(config)
 
-        self.register_tools([
-            upload_document,
-            search_documents,
-            summarize_document,
-            list_documents,
-            translate_response,
-        ])
+        self.register_tools(
+            [
+                upload_document,
+                search_documents,
+                summarize_document,
+                list_documents,
+                translate_response,
+            ]
+        )
 
     def _get_system_prompt(self) -> str:
         """Get the RAG agent's system prompt."""
@@ -359,8 +352,10 @@ document retrieval and question answering across multiple languages.
         Returns:
             Upload confirmation
         """
-        return upload_document.invoke({
-            "content": content,
-            "filename": filename,
-            "doc_type": doc_type,
-        })
+        return upload_document.invoke(
+            {
+                "content": content,
+                "filename": filename,
+                "doc_type": doc_type,
+            }
+        )

@@ -65,13 +65,12 @@ class CandidateRanking(BaseModel):
 # =============================================================================
 
 # Import storage from recruitment tools
+from app.deepagents.tools.interview_tools import (
+    _get_scores as _get_interview_scores,
+)
 from app.deepagents.tools.recruitment_tools import (
     _get_jds,
     _get_screening_results,
-)
-
-from app.deepagents.tools.interview_tools import (
-    _get_scores as _get_interview_scores,
 )
 
 _scoring_reports: dict[str, list[ScoringReport]] = {}
@@ -136,10 +135,7 @@ def generate_scoring_report(
         interview_weight = base_interview_weight if interview else 0.0
 
         if interview:
-            combined_score = (
-                screening.overall_score * resume_weight +
-                interview.percentage_score * interview_weight
-            )
+            combined_score = screening.overall_score * resume_weight + interview.percentage_score * interview_weight
         else:
             combined_score = screening.overall_score
 
@@ -160,7 +156,9 @@ def generate_scoring_report(
             "matched_skills": screening.matched_skills[:5],
             "missing_skills": screening.missing_skills[:5],
             "recommendation": interview.recommendation if interview else screening.recommendation,
-            "status": "interviewed" if interview else ("shortlisted" if screening.shortlisted else ("passed" if screening.passed else "rejected")),
+            "status": "interviewed"
+            if interview
+            else ("shortlisted" if screening.shortlisted else ("passed" if screening.passed else "rejected")),
         }
         candidates_data.append(candidate_entry)
 
@@ -214,7 +212,7 @@ def generate_scoring_report(
         int_score = f"{c['interview_score']:.1f}%" if c["interview_score"] is not None else "N/A"
         output += f"| {i} | {c['candidate_name']} | {c['level']} | {c['resume_score']:.1f}% | {int_score} | {c['combined_score']:.1f}% | {c['status'].upper()} |\n"
 
-    output += f"""
+    output += """
 ---
 
 ### Final Recommendations
@@ -239,7 +237,7 @@ def generate_scoring_report(
     else:
         output += "- No additional candidates shortlisted\n"
 
-    output += f"""
+    output += """
 ---
 
 *Use `export_scoring_excel` to generate Excel report.*
@@ -286,29 +284,31 @@ def export_scoring_excel(
     writer = csv.writer(output)
 
     # Write header
-    writer.writerow([
-        "Rank",
-        "Candidate ID",
-        "Candidate Name",
-        "Level",
-        "Resume Score (%)",
-        "Skill Match (%)",
-        "Experience Score (%)",
-        "Education Score (%)",
-        "Certification Score (%)",
-        "Interview Score (%)",
-        "Interview Passed",
-        "Combined Score (%)",
-        "Resume Passed",
-        "Shortlisted",
-        "Matched Skills",
-        "Missing Skills",
-        "Strengths",
-        "Gaps",
-        "Recommendation",
-        "Status",
-        "Screened At",
-    ])
+    writer.writerow(
+        [
+            "Rank",
+            "Candidate ID",
+            "Candidate Name",
+            "Level",
+            "Resume Score (%)",
+            "Skill Match (%)",
+            "Experience Score (%)",
+            "Education Score (%)",
+            "Certification Score (%)",
+            "Interview Score (%)",
+            "Interview Passed",
+            "Combined Score (%)",
+            "Resume Passed",
+            "Shortlisted",
+            "Matched Skills",
+            "Missing Skills",
+            "Strengths",
+            "Gaps",
+            "Recommendation",
+            "Status",
+            "Screened At",
+        ]
+    )
 
     # Collect and sort data
     rows = []
@@ -323,11 +323,13 @@ def export_scoring_excel(
         else:
             combined = screening.overall_score
 
-        rows.append({
-            "screening": screening,
-            "interview": interview,
-            "combined": combined,
-        })
+        rows.append(
+            {
+                "screening": screening,
+                "interview": interview,
+                "combined": combined,
+            }
+        )
 
     rows.sort(key=lambda x: x["combined"], reverse=True)
 
@@ -336,29 +338,31 @@ def export_scoring_excel(
         s = row["screening"]
         i = row["interview"]
 
-        writer.writerow([
-            rank,
-            s.candidate_id,
-            s.candidate_name,
-            s.recommended_level.value,
-            f"{s.overall_score:.1f}",
-            f"{s.skill_match_score:.1f}",
-            f"{s.experience_score:.1f}",
-            f"{s.education_score:.1f}",
-            f"{s.certification_score:.1f}",
-            f"{i.percentage_score:.1f}" if i else "N/A",
-            "Yes" if i and i.passed else "No" if i else "N/A",
-            f"{row['combined']:.1f}",
-            "Yes" if s.passed else "No",
-            "Yes" if s.shortlisted else "No",
-            "; ".join(s.matched_skills[:5]),
-            "; ".join(s.missing_skills[:5]),
-            "; ".join(s.strengths),
-            "; ".join(s.gaps),
-            i.recommendation if i else s.recommendation,
-            "Interviewed" if i else ("Shortlisted" if s.shortlisted else ("Passed" if s.passed else "Rejected")),
-            s.screened_at,
-        ])
+        writer.writerow(
+            [
+                rank,
+                s.candidate_id,
+                s.candidate_name,
+                s.recommended_level.value,
+                f"{s.overall_score:.1f}",
+                f"{s.skill_match_score:.1f}",
+                f"{s.experience_score:.1f}",
+                f"{s.education_score:.1f}",
+                f"{s.certification_score:.1f}",
+                f"{i.percentage_score:.1f}" if i else "N/A",
+                "Yes" if i and i.passed else "No" if i else "N/A",
+                f"{row['combined']:.1f}",
+                "Yes" if s.passed else "No",
+                "Yes" if s.shortlisted else "No",
+                "; ".join(s.matched_skills[:5]),
+                "; ".join(s.missing_skills[:5]),
+                "; ".join(s.strengths),
+                "; ".join(s.gaps),
+                i.recommendation if i else s.recommendation,
+                "Interviewed" if i else ("Shortlisted" if s.shortlisted else ("Passed" if s.passed else "Rejected")),
+                s.screened_at,
+            ]
+        )
 
     csv_content = output.getvalue()
 
@@ -445,17 +449,19 @@ def get_ranking_summary(
             combined = s.overall_score
             status = "❌ Rejected"
 
-        rankings.append(CandidateRanking(
-            rank=0,
-            candidate_id=s.candidate_id,
-            candidate_name=s.candidate_name,
-            resume_score=s.overall_score,
-            interview_score=interview.percentage_score if interview else 0,
-            overall_score=combined,
-            level=s.recommended_level,
-            status=status,
-            recommendation=interview.recommendation if interview else s.recommendation,
-        ))
+        rankings.append(
+            CandidateRanking(
+                rank=0,
+                candidate_id=s.candidate_id,
+                candidate_name=s.candidate_name,
+                resume_score=s.overall_score,
+                interview_score=interview.percentage_score if interview else 0,
+                overall_score=combined,
+                level=s.recommended_level,
+                status=status,
+                recommendation=interview.recommendation if interview else s.recommendation,
+            )
+        )
 
     # Sort and assign ranks
     rankings.sort(key=lambda x: x.overall_score, reverse=True)
@@ -571,29 +577,35 @@ def generate_shortlist_report(
 
         if interview and interview.passed:
             combined = s.overall_score * 0.4 + interview.percentage_score * 0.6
-            ready_for_l2.append({
-                "name": s.candidate_name,
-                "id": s.candidate_id,
-                "level": s.recommended_level.value,
-                "resume_score": s.overall_score,
-                "interview_score": interview.percentage_score,
-                "combined": combined,
-                "recommendation": interview.recommendation,
-            })
+            ready_for_l2.append(
+                {
+                    "name": s.candidate_name,
+                    "id": s.candidate_id,
+                    "level": s.recommended_level.value,
+                    "resume_score": s.overall_score,
+                    "interview_score": interview.percentage_score,
+                    "combined": combined,
+                    "recommendation": interview.recommendation,
+                }
+            )
         elif s.shortlisted:
-            pending_interview.append({
-                "name": s.candidate_name,
-                "id": s.candidate_id,
-                "level": s.recommended_level.value,
-                "score": s.overall_score,
-            })
+            pending_interview.append(
+                {
+                    "name": s.candidate_name,
+                    "id": s.candidate_id,
+                    "level": s.recommended_level.value,
+                    "score": s.overall_score,
+                }
+            )
         else:
-            not_qualified.append({
-                "name": s.candidate_name,
-                "id": s.candidate_id,
-                "score": s.overall_score,
-                "reason": s.gaps[0] if s.gaps else "Below threshold",
-            })
+            not_qualified.append(
+                {
+                    "name": s.candidate_name,
+                    "id": s.candidate_id,
+                    "score": s.overall_score,
+                    "reason": s.gaps[0] if s.gaps else "Below threshold",
+                }
+            )
 
     # Sort by combined score
     ready_for_l2.sort(key=lambda x: x["combined"], reverse=True)
@@ -602,7 +614,7 @@ def generate_shortlist_report(
     output = f"""## Final Shortlist Report
 
 **Position**: {jd.title} ({jd_id})
-**Date**: {datetime.now().strftime('%Y-%m-%d %H:%M')}
+**Date**: {datetime.now().strftime("%Y-%m-%d %H:%M")}
 
 ---
 
@@ -645,7 +657,7 @@ def generate_shortlist_report(
     else:
         output += "*All candidates met minimum requirements.*\n"
 
-    output += f"""
+    output += """
 ---
 
 ### Next Steps

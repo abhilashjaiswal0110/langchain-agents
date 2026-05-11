@@ -10,13 +10,14 @@ Supports both live and simulation modes for development/testing.
 """
 
 import os
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Literal
 from uuid import uuid4
 
 try:
     import httpx
+
     HTTPX_AVAILABLE = True
 except ImportError:
     HTTPX_AVAILABLE = False
@@ -264,9 +265,7 @@ class ServiceNowClient:
             Created incident details.
         """
         if self.config.mode == "simulation":
-            return await self._simulator.create_incident(
-                short_description, description, priority, category, **kwargs
-            )
+            return await self._simulator.create_incident(short_description, description, priority, category, **kwargs)
 
         if not self.config.is_configured:
             return {"error": "ServiceNow not configured", "result": None}

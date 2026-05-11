@@ -34,10 +34,10 @@ import logging
 import statistics
 import time
 from collections import defaultdict, deque
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Callable
 
 logger = logging.getLogger(__name__)
 
@@ -133,11 +133,7 @@ class Anomaly:
     recommended_action: str = ""
 
     def __repr__(self) -> str:
-        return (
-            f"Anomaly({self.anomaly_type.value}, "
-            f"severity={self.severity.value}, "
-            f"user={self.user_id})"
-        )
+        return f"Anomaly({self.anomaly_type.value}, severity={self.severity.value}, user={self.user_id})"
 
 
 @dataclass
@@ -188,23 +184,25 @@ class ContentConfig:
 
     max_input_length: int = 50000
     max_output_length: int = 100000
-    injection_patterns: list[str] = field(default_factory=lambda: [
-        "ignore previous",
-        "ignore all previous",
-        "disregard previous",
-        "forget your instructions",
-        "new instructions:",
-        "system prompt:",
-        "you are now",
-        "pretend you are",
-        "act as if",
-        "reveal your prompt",
-        "show your instructions",
-        "what are your instructions",
-        "bypass",
-        "jailbreak",
-        "DAN mode",
-    ])
+    injection_patterns: list[str] = field(
+        default_factory=lambda: [
+            "ignore previous",
+            "ignore all previous",
+            "disregard previous",
+            "forget your instructions",
+            "new instructions:",
+            "system prompt:",
+            "you are now",
+            "pretend you are",
+            "act as if",
+            "reveal your prompt",
+            "show your instructions",
+            "what are your instructions",
+            "bypass",
+            "jailbreak",
+            "DAN mode",
+        ]
+    )
 
 
 @dataclass
@@ -246,9 +244,7 @@ class AnomalyDetector:
         self.config = config or AnomalyConfig()
 
         # Event storage (per user)
-        self._events: dict[str, deque[Event]] = defaultdict(
-            lambda: deque(maxlen=10000)
-        )
+        self._events: dict[str, deque[Event]] = defaultdict(lambda: deque(maxlen=10000))
 
         # Per-user statistics
         self._user_stats: dict[str, dict] = defaultdict(
@@ -386,9 +382,7 @@ class AnomalyDetector:
         # Calculate request rate in window
         now = event.timestamp
         window_start = now - config.window_seconds
-        recent_requests = [
-            t for t in user_stats["request_times"] if t >= window_start
-        ]
+        recent_requests = [t for t in user_stats["request_times"] if t >= window_start]
         request_count = len(recent_requests)
 
         # High request rate
@@ -423,10 +417,7 @@ class AnomalyDetector:
 
         # Off-hours activity
         current_hour = datetime.fromtimestamp(now).hour
-        is_off_hours = (
-            current_hour >= config.off_hours_start
-            or current_hour < config.off_hours_end
-        )
+        is_off_hours = current_hour >= config.off_hours_start or current_hour < config.off_hours_end
         if is_off_hours and request_count > 10:
             anomalies.append(
                 self._create_anomaly(
@@ -470,12 +461,8 @@ class AnomalyDetector:
         # Error rate
         now = event.timestamp
         window_start = now - config.window_seconds
-        recent_requests = [
-            t for t in user_stats["request_times"] if t >= window_start
-        ]
-        recent_errors = [
-            t for t in user_stats["error_times"] if t >= window_start
-        ]
+        recent_requests = [t for t in user_stats["request_times"] if t >= window_start]
+        recent_errors = [t for t in user_stats["error_times"] if t >= window_start]
 
         if len(recent_requests) > 10:
             error_rate = len(recent_errors) / len(recent_requests)
@@ -498,9 +485,9 @@ class AnomalyDetector:
         # Auth failures
         if event.metadata.get("error_type") == "auth_failure":
             auth_failures = sum(
-                1 for e in self._events[event.user_id]
-                if e.metadata.get("error_type") == "auth_failure"
-                and e.timestamp >= window_start
+                1
+                for e in self._events[event.user_id]
+                if e.metadata.get("error_type") == "auth_failure" and e.timestamp >= window_start
             )
             if auth_failures >= config.auth_failure_threshold:
                 anomalies.append(

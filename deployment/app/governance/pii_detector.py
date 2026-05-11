@@ -34,7 +34,6 @@ import logging
 import re
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -319,9 +318,7 @@ class PIIDetector:
 
         if self.config.log_detections and result.has_pii:
             logger.info(
-                f"PII detected: {len(matches)} matches, "
-                f"types: {result.pii_types_found}, "
-                f"severity: {result.severity}"
+                f"PII detected: {len(matches)} matches, types: {result.pii_types_found}, severity: {result.severity}"
             )
 
         return result
@@ -538,9 +535,7 @@ class PIIDetector:
                 continue
 
             # Generate redaction text
-            redaction = self.config.redaction_format.format(
-                type=match.pii_type.value.upper()
-            )
+            redaction = self.config.redaction_format.format(type=match.pii_type.value.upper())
 
             text = text[: match.start] + redaction + text[match.end :]
 

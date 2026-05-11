@@ -5,7 +5,6 @@ This module defines specialized subagents for sales and pre-sales operations.
 
 from app.deepagents.core.types import SubAgentDefinition
 
-
 # =============================================================================
 # Deal Qualifier Subagent
 # =============================================================================
@@ -259,6 +258,7 @@ Common Competitor Types:
 # =============================================================================
 # Helper Functions
 # =============================================================================
+
 
 def get_all_sales_subagents() -> list[SubAgentDefinition]:
     """Get all available sales subagent definitions."""

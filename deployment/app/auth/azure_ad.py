@@ -19,7 +19,7 @@ from urllib.parse import urlencode
 
 import httpx
 
-from app.auth.jwt_handler import JWTHandler, TokenValidationError
+from app.auth.jwt_handler import JWTHandler
 from app.auth.user_context import UserContext
 
 
@@ -118,8 +118,6 @@ class AuthState:
         Returns:
             AuthState with random state and nonce.
         """
-        import base64
-        import hashlib
 
         state = secrets.token_urlsafe(32)
         nonce = secrets.token_urlsafe(32)
@@ -224,12 +222,7 @@ class AzureADAuth:
     @property
     def is_configured(self) -> bool:
         """Check if Azure AD is properly configured."""
-        return bool(
-            self.tenant_id
-            and self.client_id
-            and self.client_secret
-            and self.redirect_uri
-        )
+        return bool(self.tenant_id and self.client_id and self.client_secret and self.redirect_uri)
 
     def get_authorization_url(
         self,

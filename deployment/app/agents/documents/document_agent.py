@@ -13,42 +13,33 @@ Following Enterprise Development Standards:
 - Software Engineer: Type-safe, maintainable
 """
 
-from datetime import datetime
 from typing import Annotated, Any, Literal
 
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.tools import tool
-from langgraph.checkpoint.memory import MemorySaver
-from langgraph.graph import StateGraph, START, END
+from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode
 from langsmith import traceable
 from pydantic import BaseModel, Field
 
-from app.agents.base.agent_base import BaseAgent, AgentConfig
+from app.agents.base.agent_base import AgentConfig, BaseAgent
 from app.agents.base.tools import tool_error_handler
 
 
 class DocumentState(BaseModel):
     """State schema for the Document Generator Agent."""
 
-    messages: Annotated[list, add_messages] = Field(
-        default_factory=list,
-        description="Conversation history"
-    )
+    messages: Annotated[list, add_messages] = Field(default_factory=list, description="Conversation history")
     session_id: str | None = Field(default=None)
     user_id: str | None = Field(default=None)
     doc_type: Literal["sop", "wli", "policy", "general"] = Field(
-        default="general",
-        description="Type of document to generate"
+        default="general", description="Type of document to generate"
     )
     title: str = Field(default="", description="Document title")
     department: str = Field(default="", description="Department/team")
     purpose: str = Field(default="", description="Document purpose")
-    sections: list[dict[str, Any]] = Field(
-        default_factory=list,
-        description="Document sections"
-    )
+    sections: list[dict[str, Any]] = Field(default_factory=list, description="Document sections")
     draft: str | None = Field(default=None, description="Current draft")
     version: str = Field(default="1.0", description="Document version")
     status: Literal["drafting", "review", "approved"] = Field(default="drafting")
@@ -95,7 +86,6 @@ TEMPLATES = {
 ---
 *This document is confidential and intended for internal use only.*
 """,
-
     "wli": """# Work Level Instruction (WLI)
 
 ## Document Information
@@ -129,7 +119,6 @@ For assistance, contact: {support_contact}
 ---
 *Last Updated: {date}*
 """,
-
     "policy": """# {title}
 
 ## Policy Document
@@ -179,7 +168,7 @@ For assistance, contact: {support_contact}
 
 ---
 *This policy is effective immediately upon approval.*
-"""
+""",
 }
 
 
@@ -203,11 +192,7 @@ def get_template(doc_type: str) -> str:
 
 @tool
 @tool_error_handler
-def generate_section(
-    section_name: str,
-    content_requirements: str,
-    doc_type: str = "sop"
-) -> str:
+def generate_section(section_name: str, content_requirements: str, doc_type: str = "sop") -> str:
     """Generate content for a specific document section.
 
     Args:
@@ -319,12 +304,14 @@ class DocumentAgent(BaseAgent):
         # Document generation requires multiple tool calls (template, sections, validate, format)
         self._recursion_limit = 50
 
-        self.register_tools([
-            get_template,
-            generate_section,
-            validate_document,
-            format_document,
-        ])
+        self.register_tools(
+            [
+                get_template,
+                generate_section,
+                validate_document,
+                format_document,
+            ]
+        )
 
     def _get_system_prompt(self) -> str:
         """Get the document agent's system prompt."""
@@ -434,7 +421,7 @@ Always validate documents before finalizing."""
         }
 
         # Get recursion limit (default to 50 for document workflows)
-        recursion_limit = getattr(self, '_recursion_limit', 50)
+        recursion_limit = getattr(self, "_recursion_limit", 50)
 
         # Configure thread for checkpointing with increased recursion limit
         config = {
@@ -475,7 +462,7 @@ Title: {title}
 Department: {department}
 Purpose: {purpose}
 
-Additional Context: {additional_context or 'None provided'}
+Additional Context: {additional_context or "None provided"}
 
 Please:
 1. Get the appropriate template
@@ -521,4 +508,3 @@ def get_graph():
     agent.compile()
 
     return agent._compiled_graph
-

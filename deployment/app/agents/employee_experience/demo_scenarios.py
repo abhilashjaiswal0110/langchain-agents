@@ -12,7 +12,6 @@ Usage:
 # Demo Scenario Definitions
 # =============================================================================
 
-
 DEMO_SCENARIOS = {
     "hr_policy_query": {
         "title": "HR Policy & Benefits Inquiry",
@@ -310,7 +309,7 @@ def print_scenario(scenario_key: str, verbose: bool = True) -> None:
         message = turn_data["message"]
 
         print(f"Turn {turn}:")
-        print(f"  User: \"{message}\"")
+        print(f'  User: "{message}"')
 
         if verbose:
             print(f"  Expected tools: {', '.join(turn_data.get('expected_tools', []))}")
@@ -377,7 +376,7 @@ def run_interactive_demo(scenario_key: str) -> None:
 
             print(f"\n{'─' * 80}")
             print(f"Turn {turn}:")
-            print(f"👤 User ({employee_context['employee_name']}): \"{message}\"")
+            print(f'👤 User ({employee_context["employee_name"]}): "{message}"')
             print(f"{'─' * 80}")
 
             # Send message to agent
@@ -393,7 +392,9 @@ def run_interactive_demo(scenario_key: str) -> None:
 
             # Print metadata
             if response.get("sentiment_score") is not None:
-                sentiment_emoji = "😊" if response["sentiment_score"] > 0 else "😐" if response["sentiment_score"] == 0 else "😟"
+                sentiment_emoji = (
+                    "😊" if response["sentiment_score"] > 0 else "😐" if response["sentiment_score"] == 0 else "😟"
+                )
                 print(f"   {sentiment_emoji} Sentiment: {response['sentiment_score']:.2f}")
 
             if response.get("burnout_risk"):
@@ -401,7 +402,7 @@ def run_interactive_demo(scenario_key: str) -> None:
                 print(f"   {risk_emoji} Burnout Risk: {response['burnout_risk']}")
 
             if response.get("escalation_required"):
-                print(f"   🚨 Escalation Required: Yes")
+                print("   🚨 Escalation Required: Yes")
 
             if response.get("tool_calls"):
                 print(f"   🔧 Tools Used: {len(response['tool_calls'])}")

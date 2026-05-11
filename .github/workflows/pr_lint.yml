@@ -120,6 +120,7 @@ jobs:
             infra
             deps
             partners
+            deployment
           requireScope: false
           disallowScopes: |
             release

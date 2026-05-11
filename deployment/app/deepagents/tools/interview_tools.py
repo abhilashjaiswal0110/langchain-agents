@@ -509,7 +509,7 @@ def generate_interview_questions(
     for qtype, count in sorted(type_counts.items()):
         output += f"- **{qtype.upper()}**: {count} questions\n"
 
-    output += f"""
+    output += """
 ---
 
 *Question set is ready. Use `export_question_set` to generate candidate-facing document.*
@@ -591,7 +591,7 @@ def export_question_set(
 **Signature**: _____________
 
 *Please save this document with your answers and upload to the designated SharePoint folder.*
-*File naming convention: {qs.candidate_name.replace(' ', '_')}_Assessment_{set_id}.docx*
+*File naming convention: {qs.candidate_name.replace(" ", "_")}_Assessment_{set_id}.docx*
 """
 
     return output
@@ -824,7 +824,7 @@ def evaluate_candidate_answers(
 | Total Points | {total_points} / {max_points} |
 | Percentage | {percentage:.1f}% |
 | Passing Score | {passing_score}% |
-| Status | {'PASSED' if passed else 'FAILED'} |
+| Status | {"PASSED" if passed else "FAILED"} |
 | Questions Correct | {correct_count} / {len(qs.questions)} |
 
 ---
@@ -894,7 +894,7 @@ def get_candidate_score(
 | Total Score | {score.percentage_score:.1f}% |
 | Points | {score.total_points} / {score.max_points} |
 | Questions Correct | {score.questions_correct} / {score.questions_attempted} |
-| Passed | {'Yes' if score.passed else 'No'} |
+| Passed | {"Yes" if score.passed else "No"} |
 
 ### Category Breakdown
 

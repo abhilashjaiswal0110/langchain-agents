@@ -6,8 +6,13 @@ Suitable for production deployments with multiple instances.
 
 import json
 import logging
+import os
 from datetime import datetime, timedelta
 from typing import Any
+
+# Maximum number of messages to keep per session (0 = unlimited).
+# Set MAX_HISTORY_MESSAGES environment variable to override.
+MAX_HISTORY_MESSAGES: int = int(os.getenv("MAX_HISTORY_MESSAGES", "0"))
 
 from app.memory.base import (
     BaseSessionStore,
@@ -72,17 +77,25 @@ class RedisSessionStore(BaseSessionStore):
             logger.error(f"Failed to connect to Redis: {e}")
             raise
 
-    def _key(self, session_id: str) -> str:
-        """Get Redis key for session."""
-        return f"{self._prefix}{session_id}"
+    def _key(self, session_id: str, tenant_id: str = "default") -> str:
+        """Get Redis key for session, namespaced by tenant.
 
-    def _user_index_key(self, user_id: str) -> str:
+        Args:
+            session_id: Session identifier.
+            tenant_id: Tenant identifier.
+
+        Returns:
+            Redis key string.
+        """
+        return f"{self._prefix}{tenant_id}:{session_id}"
+
+    def _user_index_key(self, user_id: str, tenant_id: str = "default") -> str:
         """Get Redis key for user session index."""
-        return f"{self._prefix}user:{user_id}"
+        return f"{self._prefix}{tenant_id}:user:{user_id}"
 
-    def _agent_index_key(self, agent_type: str) -> str:
+    def _agent_index_key(self, agent_type: str, tenant_id: str = "default") -> str:
         """Get Redis key for agent session index."""
-        return f"{self._prefix}agent:{agent_type}"
+        return f"{self._prefix}{tenant_id}:agent:{agent_type}"
 
     def create_session(
         self,
@@ -90,6 +103,7 @@ class RedisSessionStore(BaseSessionStore):
         user_id: str = "",
         metadata: dict | None = None,
         ttl_hours: int | None = None,
+        tenant_id: str = "default",
     ) -> str:
         """Create a new session.
 
@@ -98,6 +112,7 @@ class RedisSessionStore(BaseSessionStore):
             user_id: User identifier.
             metadata: Additional metadata.
             ttl_hours: Session TTL in hours (None for default).
+            tenant_id: Tenant identifier for session isolation.
 
         Returns:
             Session ID.
@@ -107,6 +122,7 @@ class RedisSessionStore(BaseSessionStore):
             user_id=user_id,
             agent_type=agent_type,
             custom=metadata or {},
+            tenant_id=tenant_id,
         )
 
         ttl = ttl_hours or self._default_ttl_hours
@@ -118,7 +134,7 @@ class RedisSessionStore(BaseSessionStore):
         )
 
         # Store in Redis
-        key = self._key(session.id)
+        key = self._key(session.id, tenant_id)
         ttl_seconds = ttl * 3600
 
         self._client.setex(
@@ -129,25 +145,26 @@ class RedisSessionStore(BaseSessionStore):
 
         # Add to indices
         if user_id:
-            self._client.sadd(self._user_index_key(user_id), session.id)
-            self._client.expire(self._user_index_key(user_id), ttl_seconds)
+            self._client.sadd(self._user_index_key(user_id, tenant_id), session.id)
+            self._client.expire(self._user_index_key(user_id, tenant_id), ttl_seconds)
 
-        self._client.sadd(self._agent_index_key(agent_type), session.id)
-        self._client.expire(self._agent_index_key(agent_type), ttl_seconds)
+        self._client.sadd(self._agent_index_key(agent_type, tenant_id), session.id)
+        self._client.expire(self._agent_index_key(agent_type, tenant_id), ttl_seconds)
 
-        logger.debug(f"Created Redis session {session.id} for agent {agent_type}")
+        logger.debug(f"Created Redis session {session.id} for agent {agent_type} (tenant={tenant_id})")
         return session.id
 
-    def get_session(self, session_id: str) -> Session | None:
+    def get_session(self, session_id: str, tenant_id: str = "default") -> Session | None:
         """Get a session by ID.
 
         Args:
             session_id: Session identifier.
+            tenant_id: Tenant identifier for session isolation.
 
         Returns:
             Session or None if not found.
         """
-        key = self._key(session_id)
+        key = self._key(session_id, tenant_id)
         data = self._client.get(key)
 
         if not data:
@@ -166,6 +183,7 @@ class RedisSessionStore(BaseSessionStore):
         user_message: str,
         assistant_message: str,
         metadata: dict | None = None,
+        tenant_id: str = "default",
     ) -> bool:
         """Update session with new messages.
 
@@ -174,11 +192,12 @@ class RedisSessionStore(BaseSessionStore):
             user_message: User's message.
             assistant_message: Assistant's response.
             metadata: Optional additional metadata.
+            tenant_id: Tenant identifier for session isolation.
 
         Returns:
             True if updated successfully.
         """
-        session = self.get_session(session_id)
+        session = self.get_session(session_id, tenant_id=tenant_id)
         if not session:
             return False
 
@@ -188,8 +207,12 @@ class RedisSessionStore(BaseSessionStore):
             assistant_metadata=metadata,
         )
 
+        # Trim to the configured history limit before persisting.
+        if MAX_HISTORY_MESSAGES > 0:
+            session.messages = session.messages[-MAX_HISTORY_MESSAGES:]
+
         # Get remaining TTL
-        key = self._key(session_id)
+        key = self._key(session_id, tenant_id)
         ttl = self._client.ttl(key)
         if ttl < 0:
             ttl = self._default_ttl_hours * 3600
@@ -203,35 +226,36 @@ class RedisSessionStore(BaseSessionStore):
 
         return True
 
-    def delete_session(self, session_id: str) -> bool:
+    def delete_session(self, session_id: str, tenant_id: str = "default") -> bool:
         """Delete a session.
 
         Args:
             session_id: Session identifier.
+            tenant_id: Tenant identifier for session isolation.
 
         Returns:
             True if deleted successfully.
         """
-        session = self.get_session(session_id)
+        session = self.get_session(session_id, tenant_id=tenant_id)
         if not session:
             return False
 
-        key = self._key(session_id)
+        key = self._key(session_id, tenant_id)
         self._client.delete(key)
 
         # Remove from indices
         if session.metadata.user_id:
             self._client.srem(
-                self._user_index_key(session.metadata.user_id),
+                self._user_index_key(session.metadata.user_id, tenant_id),
                 session_id,
             )
 
         self._client.srem(
-            self._agent_index_key(session.metadata.agent_type),
+            self._agent_index_key(session.metadata.agent_type, tenant_id),
             session_id,
         )
 
-        logger.debug(f"Deleted Redis session {session_id}")
+        logger.debug(f"Deleted Redis session {session_id} (tenant={tenant_id})")
         return True
 
     def list_sessions(
@@ -240,6 +264,7 @@ class RedisSessionStore(BaseSessionStore):
         agent_type: str | None = None,
         limit: int = 100,
         offset: int = 0,
+        tenant_id: str | None = None,
     ) -> list[Session]:
         """List sessions with optional filters.
 
@@ -248,27 +273,33 @@ class RedisSessionStore(BaseSessionStore):
             agent_type: Filter by agent type.
             limit: Maximum number of sessions.
             offset: Offset for pagination.
+            tenant_id: Filter by tenant. Scopes index lookups and scan to the
+                given tenant so cross-tenant sessions are never returned.
 
         Returns:
             List of sessions.
         """
+        effective_tenant = tenant_id or "default"
         session_ids = set()
 
         # Get from indices
         if user_id:
-            user_sessions = self._client.smembers(self._user_index_key(user_id))
+            user_sessions = self._client.smembers(self._user_index_key(user_id, effective_tenant))
             session_ids.update(user_sessions)
         elif agent_type:
-            agent_sessions = self._client.smembers(self._agent_index_key(agent_type))
+            agent_sessions = self._client.smembers(self._agent_index_key(agent_type, effective_tenant))
             session_ids.update(agent_sessions)
         else:
-            # Scan all sessions (expensive, use with caution)
+            # Scan all sessions for this tenant (expensive, use with caution)
             cursor = 0
-            pattern = f"{self._prefix}[0-9a-f]*"
+            tenant_prefix = f"{self._prefix}{effective_tenant}:"
+            # Use a wildcard pattern; filter out index keys afterwards.
+            # UUID v4 strings contain hyphens so a hex-only pattern would miss them.
+            pattern = f"{tenant_prefix}*"
             while True:
                 cursor, keys = self._client.scan(cursor, match=pattern, count=1000)
                 for key in keys:
-                    sid = key.replace(self._prefix, "")
+                    sid = key.replace(tenant_prefix, "")
                     if not sid.startswith("user:") and not sid.startswith("agent:"):
                         session_ids.add(sid)
                 if cursor == 0:
@@ -277,7 +308,7 @@ class RedisSessionStore(BaseSessionStore):
         # Fetch sessions
         sessions = []
         for sid in session_ids:
-            session = self.get_session(sid)
+            session = self.get_session(sid, tenant_id=effective_tenant)
             if session:
                 # Apply filters
                 if user_id and session.metadata.user_id != user_id:
@@ -295,39 +326,42 @@ class RedisSessionStore(BaseSessionStore):
         self,
         session_id: str,
         limit: int | None = None,
+        tenant_id: str = "default",
     ) -> list[Message]:
         """Get conversation history for a session.
 
         Args:
             session_id: Session identifier.
             limit: Maximum number of messages.
+            tenant_id: Tenant identifier for session isolation.
 
         Returns:
             List of messages.
         """
-        session = self.get_session(session_id)
+        session = self.get_session(session_id, tenant_id=tenant_id)
         if not session:
             return []
 
         return session.get_history(limit)
 
-    def clear_session(self, session_id: str) -> bool:
+    def clear_session(self, session_id: str, tenant_id: str = "default") -> bool:
         """Clear messages from a session.
 
         Args:
             session_id: Session identifier.
+            tenant_id: Tenant identifier for session isolation.
 
         Returns:
             True if cleared successfully.
         """
-        session = self.get_session(session_id)
+        session = self.get_session(session_id, tenant_id=tenant_id)
         if not session:
             return False
 
         session.clear_messages()
 
         # Get remaining TTL
-        key = self._key(session_id)
+        key = self._key(session_id, tenant_id)
         ttl = self._client.ttl(key)
         if ttl < 0:
             ttl = self._default_ttl_hours * 3600
@@ -345,17 +379,19 @@ class RedisSessionStore(BaseSessionStore):
         self,
         session_id: str,
         context: dict[str, Any],
+        tenant_id: str = "default",
     ) -> bool:
         """Set session context.
 
         Args:
             session_id: Session identifier.
             context: Context data to set.
+            tenant_id: Tenant identifier for session isolation.
 
         Returns:
             True if set successfully.
         """
-        session = self.get_session(session_id)
+        session = self.get_session(session_id, tenant_id=tenant_id)
         if not session:
             return False
 
@@ -363,7 +399,7 @@ class RedisSessionStore(BaseSessionStore):
         session.updated_at = datetime.now()
 
         # Get remaining TTL
-        key = self._key(session_id)
+        key = self._key(session_id, tenant_id)
         ttl = self._client.ttl(key)
         if ttl < 0:
             ttl = self._default_ttl_hours * 3600
@@ -377,32 +413,34 @@ class RedisSessionStore(BaseSessionStore):
 
         return True
 
-    def get_context(self, session_id: str) -> dict[str, Any]:
+    def get_context(self, session_id: str, tenant_id: str = "default") -> dict[str, Any]:
         """Get session context.
 
         Args:
             session_id: Session identifier.
+            tenant_id: Tenant identifier for session isolation.
 
         Returns:
             Context data.
         """
-        session = self.get_session(session_id)
+        session = self.get_session(session_id, tenant_id=tenant_id)
         if not session:
             return {}
 
         return session.context.copy()
 
-    def extend_ttl(self, session_id: str, hours: int) -> bool:
+    def extend_ttl(self, session_id: str, hours: int, tenant_id: str = "default") -> bool:
         """Extend session TTL.
 
         Args:
             session_id: Session identifier.
             hours: Hours to extend by.
+            tenant_id: Tenant identifier for session isolation.
 
         Returns:
             True if extended successfully.
         """
-        key = self._key(session_id)
+        key = self._key(session_id, tenant_id)
         current_ttl = self._client.ttl(key)
 
         if current_ttl < 0:

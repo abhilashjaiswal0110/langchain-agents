@@ -10,10 +10,11 @@ Provides:
 
 import asyncio
 import os
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from enum import Enum
-from typing import Any, Callable, Literal
+from typing import Any
 from uuid import uuid4
 
 from app.governance.rbac import Permission, Role, UserContext
@@ -68,13 +69,11 @@ ACTION_APPROVAL_LEVELS: dict[ActionType, ApprovalLevel] = {
     ActionType.CREATE_INCIDENT: ApprovalLevel.L1,
     ActionType.UPDATE_INCIDENT: ApprovalLevel.L1,
     ActionType.DOCUMENT_SHARE: ApprovalLevel.L1,
-
     # L2 - Elevated operations
     ActionType.CLOSE_INCIDENT: ApprovalLevel.L2,
     ActionType.PASSWORD_RESET: ApprovalLevel.L2,
     ActionType.ACCESS_GRANT: ApprovalLevel.L2,
     ActionType.CREATE_CHANGE: ApprovalLevel.L2,
-
     # L3 - Critical operations
     ActionType.ACCESS_REVOKE: ApprovalLevel.L3,
     ActionType.SYSTEM_RESTART: ApprovalLevel.L3,

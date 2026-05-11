@@ -9,9 +9,9 @@ from langchain_core.tools import tool
 
 # Import ServiceNow API from existing agent
 from app.agents.servicenow_agent import (
+    INCIDENTS_DB,
     get_api_client,
     is_live_mode,
-    INCIDENTS_DB,
 )
 
 
@@ -57,11 +57,11 @@ def search_incidents(
             output = [f"**Found {len(incidents)} incident(s) [LIVE]:**\n"]
             for inc in incidents:
                 output.append(f"""
-**{inc.get('number', 'N/A')}** - {inc.get('short_description', 'No description')}
-- State: {inc.get('state', 'Unknown')} | Priority: {inc.get('priority', 'Unknown')}
-- Category: {inc.get('category', 'N/A')}
-- Assigned: {inc.get('assigned_to', 'Unassigned') or 'Unassigned'}
-- Created: {inc.get('sys_created_on', 'Unknown')}
+**{inc.get("number", "N/A")}** - {inc.get("short_description", "No description")}
+- State: {inc.get("state", "Unknown")} | Priority: {inc.get("priority", "Unknown")}
+- Category: {inc.get("category", "N/A")}
+- Assigned: {inc.get("assigned_to", "Unassigned") or "Unassigned"}
+- Created: {inc.get("sys_created_on", "Unknown")}
 """)
             return "\n".join(output)
         except Exception as e:
@@ -78,7 +78,10 @@ def search_incidents(
             continue
         if query:
             query_lower = query.lower()
-            if query_lower not in incident["short_description"].lower() and query_lower not in incident["description"].lower():
+            if (
+                query_lower not in incident["short_description"].lower()
+                and query_lower not in incident["description"].lower()
+            ):
                 continue
         results.append(incident)
         if len(results) >= limit:
@@ -90,10 +93,10 @@ def search_incidents(
     output = [f"**Found {len(results)} incident(s) [SIMULATION]:**\n"]
     for inc in results:
         output.append(f"""
-**{inc['number']}** - {inc['short_description']}
-- State: {inc['state']} | Priority: {inc['priority']}
-- Category: {inc.get('category', 'N/A')}
-- Assigned: {inc.get('assigned_to') or 'Unassigned'}
+**{inc["number"]}** - {inc["short_description"]}
+- State: {inc["state"]} | Priority: {inc["priority"]}
+- Category: {inc.get("category", "N/A")}
+- Assigned: {inc.get("assigned_to") or "Unassigned"}
 """)
     return "\n".join(output)
 
@@ -118,35 +121,35 @@ def get_incident_details(incident_number: str) -> str:
             if not incident:
                 return f"Incident {incident_number} not found."
 
-            return f"""**Incident: {incident.get('number')}** [LIVE]
+            return f"""**Incident: {incident.get("number")}** [LIVE]
 
-**Summary:** {incident.get('short_description', 'N/A')}
-**Description:** {incident.get('description', 'N/A')}
+**Summary:** {incident.get("short_description", "N/A")}
+**Description:** {incident.get("description", "N/A")}
 
 **Status:**
-- State: {incident.get('state', 'Unknown')}
-- Priority: {incident.get('priority', 'Unknown')}
-- Impact: {incident.get('impact', 'N/A')}
-- Urgency: {incident.get('urgency', 'N/A')}
+- State: {incident.get("state", "Unknown")}
+- Priority: {incident.get("priority", "Unknown")}
+- Impact: {incident.get("impact", "N/A")}
+- Urgency: {incident.get("urgency", "N/A")}
 
 **Classification:**
-- Category: {incident.get('category', 'N/A')}
-- Subcategory: {incident.get('subcategory', 'N/A')}
-- Service: {incident.get('business_service', 'N/A')}
+- Category: {incident.get("category", "N/A")}
+- Subcategory: {incident.get("subcategory", "N/A")}
+- Service: {incident.get("business_service", "N/A")}
 
 **Assignment:**
-- Group: {incident.get('assignment_group', 'N/A')}
-- Assigned To: {incident.get('assigned_to', 'Unassigned') or 'Unassigned'}
+- Group: {incident.get("assignment_group", "N/A")}
+- Assigned To: {incident.get("assigned_to", "Unassigned") or "Unassigned"}
 
-**Caller:** {incident.get('caller_id', 'Unknown')}
+**Caller:** {incident.get("caller_id", "Unknown")}
 
 **Timeline:**
-- Opened: {incident.get('sys_created_on', 'Unknown')}
-- Updated: {incident.get('sys_updated_on', 'Unknown')}
-- Resolved: {incident.get('resolved_at', 'Not resolved')}
+- Opened: {incident.get("sys_created_on", "Unknown")}
+- Updated: {incident.get("sys_updated_on", "Unknown")}
+- Resolved: {incident.get("resolved_at", "Not resolved")}
 
 **Work Notes:**
-{incident.get('work_notes', 'No work notes')}"""
+{incident.get("work_notes", "No work notes")}"""
 
         except Exception as e:
             return f"Error getting incident details: {e}"
@@ -156,28 +159,28 @@ def get_incident_details(incident_number: str) -> str:
     if not incident:
         return f"Incident {incident_number} not found."
 
-    return f"""**Incident: {incident['number']}** [SIMULATION]
+    return f"""**Incident: {incident["number"]}** [SIMULATION]
 
-**Summary:** {incident['short_description']}
-**Description:** {incident['description']}
+**Summary:** {incident["short_description"]}
+**Description:** {incident["description"]}
 
 **Status:**
-- State: {incident['state']}
-- Priority: {incident['priority']}
+- State: {incident["state"]}
+- Priority: {incident["priority"]}
 
 **Classification:**
-- Category: {incident.get('category', 'N/A')}
-- Subcategory: {incident.get('subcategory', 'N/A')}
+- Category: {incident.get("category", "N/A")}
+- Subcategory: {incident.get("subcategory", "N/A")}
 
 **Assignment:**
-- Group: {incident.get('assignment_group', 'N/A')}
-- Assigned To: {incident.get('assigned_to') or 'Unassigned'}
+- Group: {incident.get("assignment_group", "N/A")}
+- Assigned To: {incident.get("assigned_to") or "Unassigned"}
 
-**Caller:** {incident.get('caller', 'Unknown')}
+**Caller:** {incident.get("caller", "Unknown")}
 
 **Timeline:**
-- Created: {incident.get('created', 'Unknown')}
-- Updated: {incident.get('updated', 'Unknown')}"""
+- Created: {incident.get("created", "Unknown")}
+- Updated: {incident.get("updated", "Unknown")}"""
 
 
 @tool
@@ -234,9 +237,9 @@ def create_incident(
 
             return f"""**Incident Created** [LIVE]
 
-**Number:** {result.get('number', 'N/A')}
+**Number:** {result.get("number", "N/A")}
 **Title:** {short_description}
-**Priority:** {priority_map.get(priority, '3 - Moderate')}
+**Priority:** {priority_map.get(priority, "3 - Moderate")}
 **Category:** {category} / {subcategory}
 
 The incident has been created in ServiceNow.
@@ -247,13 +250,14 @@ Response SLA begins now based on priority level."""
 
     # Simulation mode
     import uuid
+
     incident_number = f"INC{str(uuid.uuid4().int)[:7]}"
 
     return f"""**Incident Created** [SIMULATION]
 
 **Number:** {incident_number}
 **Title:** {short_description}
-**Priority:** {priority_map.get(priority, '3 - Moderate')}
+**Priority:** {priority_map.get(priority, "3 - Moderate")}
 **Category:** {category} / {subcategory}
 **Impact:** {impact} | **Urgency:** {urgency}
 
@@ -306,7 +310,7 @@ def update_incident(
             return f"""**Incident {incident_number} Updated** [LIVE]
 
 Updates applied:
-{chr(10).join('- ' + u for u in updates)}"""
+{chr(10).join("- " + u for u in updates)}"""
 
         except Exception as e:
             return f"Error updating incident: {e}"

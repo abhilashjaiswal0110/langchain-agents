@@ -16,7 +16,6 @@ from typing import Literal
 
 from langchain_core.tools import tool
 
-
 # =============================================================================
 # Simulated Data Stores
 # =============================================================================
@@ -265,7 +264,11 @@ CAREER_PATHS_DB = {
                 "type": "vertical",
                 "typical_years": "2-4",
                 "key_skills": ["Advanced coding", "System design", "Mentorship", "Project leadership"],
-                "readiness_factors": ["Consistent high performance", "Technical expertise", "Code review participation"],
+                "readiness_factors": [
+                    "Consistent high performance",
+                    "Technical expertise",
+                    "Code review participation",
+                ],
             },
             {
                 "role": "Staff Engineer",
@@ -359,14 +362,34 @@ LEARNING_RESOURCES_DB = {
         {"title": "Manager as Coach", "provider": "Internal Training", "duration": "4 weeks", "type": "program"},
     ],
     "technical": [
-        {"title": "AWS Certified Solutions Architect", "provider": "AWS Training", "duration": "40 hours", "type": "certification"},
+        {
+            "title": "AWS Certified Solutions Architect",
+            "provider": "AWS Training",
+            "duration": "40 hours",
+            "type": "certification",
+        },
         {"title": "Advanced Python Programming", "provider": "Coursera", "duration": "6 weeks", "type": "course"},
-        {"title": "Machine Learning Specialization", "provider": "Coursera", "duration": "3 months", "type": "specialization"},
+        {
+            "title": "Machine Learning Specialization",
+            "provider": "Coursera",
+            "duration": "3 months",
+            "type": "specialization",
+        },
     ],
     "soft_skills": [
         {"title": "Effective Communication", "provider": "Toastmasters", "duration": "Ongoing", "type": "club"},
-        {"title": "Emotional Intelligence at Work", "provider": "LinkedIn Learning", "duration": "1.5 hours", "type": "course"},
-        {"title": "Time Management Mastery", "provider": "Internal Training", "duration": "2 hours", "type": "workshop"},
+        {
+            "title": "Emotional Intelligence at Work",
+            "provider": "LinkedIn Learning",
+            "duration": "1.5 hours",
+            "type": "course",
+        },
+        {
+            "title": "Time Management Mastery",
+            "provider": "Internal Training",
+            "duration": "2 hours",
+            "type": "workshop",
+        },
     ],
     "career_development": [
         {"title": "Career Planning Workshop", "provider": "Internal L&D", "duration": "Half day", "type": "workshop"},
@@ -655,10 +678,10 @@ def explore_career_paths(current_role: str, interests: str | None = None) -> str
         output.append(f"\n{emoji} **Path {i}: {path['role']}**")
         output.append(f"- **Type:** {path['type'].replace('_', ' ').title()}")
         output.append(f"- **Typical Timeline:** {path['typical_years']} years")
-        output.append(f"- **Key Skills Required:**")
+        output.append("- **Key Skills Required:**")
         for skill in path["key_skills"]:
             output.append(f"  - {skill}")
-        output.append(f"- **Readiness Factors:**")
+        output.append("- **Readiness Factors:**")
         for factor in path["readiness_factors"]:
             output.append(f"  - {factor}")
 
@@ -801,8 +824,8 @@ def request_career_coaching(reason: str, preferred_coach_type: str = "internal")
     return f"""**Career Coaching Request Submitted:**
 
 📋 **Request ID:** {request_id}
-🎯 **Coaching Focus:** {reason.replace('_', ' ').title()}
-👤 **Coach Type:** {coach_types_info.get(preferred_coach_type, 'Internal')}
+🎯 **Coaching Focus:** {reason.replace("_", " ").title()}
+👤 **Coach Type:** {coach_types_info.get(preferred_coach_type, "Internal")}
 
 **What Happens Next:**
 
@@ -1055,7 +1078,9 @@ Providing constructive peer feedback:
 
 **Questions?** Contact your manager or hr@company.com"""
 
-    return f"Review type '{review_type}' not recognized. Available types: self_assessment, manager_review, peer_feedback."
+    return (
+        f"Review type '{review_type}' not recognized. Available types: self_assessment, manager_review, peer_feedback."
+    )
 
 
 @tool
@@ -1515,12 +1540,12 @@ def schedule_wellbeing_check(reason: str, preferred_contact: str = "confidential
     return f"""**Wellbeing Check-In Requested:**
 
 🆔 **Check-In ID:** {check_id}
-🎯 **Focus Area:** {reason.replace('_', ' ').title()}
-📞 **Contact Method:** {preferred_contact.replace('_', ' ').title()}
+🎯 **Focus Area:** {reason.replace("_", " ").title()}
+📞 **Contact Method:** {preferred_contact.replace("_", " ").title()}
 
 **What Happens Next:**
 
-{contact_info.get(preferred_contact, contact_info['confidential_eap'])}
+{contact_info.get(preferred_contact, contact_info["confidential_eap"])}
 
 **You're Not Alone:**
 Taking care of your wellbeing is important, and we're here to support you. Whether you're dealing with stress, burnout, personal challenges, or career concerns, there are resources and people ready to help.
@@ -1577,9 +1602,9 @@ def submit_hr_request(
     return f"""**HR Request Submitted Successfully:**
 
 📋 **Case ID:** {case_id}
-📂 **Request Type:** {request_type.replace('_', ' ').title()}
+📂 **Request Type:** {request_type.replace("_", " ").title()}
 ⏱️ **Urgency:** {urgency.title()}
-📅 **Submitted:** {datetime.now().strftime('%Y-%m-%d %H:%M')}
+📅 **Submitted:** {datetime.now().strftime("%Y-%m-%d %H:%M")}
 
 **Description:**
 {description}
@@ -1589,7 +1614,7 @@ def submit_hr_request(
 1. **Acknowledgment:** You'll receive an email confirmation within 1 hour
 2. **Assignment:** Case assigned to HR specialist within 4 hours
 3. **Review:** HR will review and may request additional information
-4. **Resolution:** Expected within {case_data['expected_resolution']}
+4. **Resolution:** Expected within {case_data["expected_resolution"]}
 
 **Expected Timeline by Request Type:**
 - Leave requests: 1-2 business days
@@ -1650,19 +1675,19 @@ If you just submitted a request, it may take a few minutes to appear in the syst
 
     return f"""{emoji} **HR Case Status: {case_id}**
 
-**Request Type:** {case['type'].replace('_', ' ').title()}
-**Current Status:** {case['status'].replace('_', ' ').title()}
-**Submitted:** {case['created_at'][:10]}
-**Urgency:** {case['urgency'].title()}
+**Request Type:** {case["type"].replace("_", " ").title()}
+**Current Status:** {case["status"].replace("_", " ").title()}
+**Submitted:** {case["created_at"][:10]}
+**Urgency:** {case["urgency"].title()}
 
 **Description:**
-{case['description']}
+{case["description"]}
 
 **Progress:**
 ✅ Case submitted
 ✅ Acknowledgment sent
 🔄 Under review by HR specialist
-⏳ Expected resolution: {case['expected_resolution']}
+⏳ Expected resolution: {case["expected_resolution"]}
 
 **Next Steps:**
 - HR specialist reviewing your request
@@ -1834,7 +1859,7 @@ def initiate_exit_process(exit_type: str, last_day: str, reason: str | None = No
 
 📋 **Exit ID:** {exit_id}
 📅 **Proposed Last Day:** {last_day}
-📂 **Exit Type:** {exit_type.replace('_', ' ').title()}
+📂 **Exit Type:** {exit_type.replace("_", " ").title()}
 
 **What Happens Next:**
 
@@ -1948,14 +1973,14 @@ def send_pulse_survey(survey_topic: str, target: str = "self") -> str:
     return f"""**Pulse Survey Initiated:**
 
 📊 **Survey ID:** {survey_id}
-🎯 **Topic:** {survey_topic.replace('_', ' ').title()}
+🎯 **Topic:** {survey_topic.replace("_", " ").title()}
 👥 **Target:** {target.title()}
-🔍 **Question Focus:** {survey_topics_info.get(survey_topic.lower(), 'General feedback')}
+🔍 **Question Focus:** {survey_topics_info.get(survey_topic.lower(), "General feedback")}
 
 **Survey Details:**
 
 **Quick Questions (2 minutes):**
-1. Rating scale (1-5): {survey_topics_info.get(survey_topic.lower(), 'How are things going?')}
+1. Rating scale (1-5): {survey_topics_info.get(survey_topic.lower(), "How are things going?")}
 2. Open feedback: What's working well?
 3. Open feedback: What could be better?
 4. Priority improvement: What would have the biggest impact?
@@ -2014,7 +2039,7 @@ def get_engagement_insights(timeframe: str = "current_quarter", segment: str = "
     Returns:
         Engagement insights, trends, and action plans.
     """
-    return f"""**Employee Engagement Insights: {timeframe.replace('_', ' ').title()}**
+    return f"""**Employee Engagement Insights: {timeframe.replace("_", " ").title()}**
 
 📊 **Overall Engagement Score: 4.2 / 5.0** ⬆️ (+0.2 from last quarter)
 
@@ -2569,8 +2594,8 @@ def request_compensation_review(reason: str, supporting_data: str) -> str:
     return f"""**Compensation Review Request Submitted:**
 
 📋 **Review ID:** {review_id}
-🎯 **Reason:** {reason.replace('_', ' ').title()}
-📅 **Submitted:** {datetime.now().strftime('%Y-%m-%d')}
+🎯 **Reason:** {reason.replace("_", " ").title()}
+📅 **Submitted:** {datetime.now().strftime("%Y-%m-%d")}
 
 **Supporting Information Provided:**
 {supporting_data}
@@ -2874,7 +2899,7 @@ def enroll_in_course(course_name: str, start_date: str | None = None) -> str:
 
 📚 **Enrollment ID:** {enrollment_id}
 📖 **Course:** {course_name}
-📅 **Requested Start Date:** {start_date or 'Next available session'}
+📅 **Requested Start Date:** {start_date or "Next available session"}
 
 **What Happens Next:**
 
@@ -3044,8 +3069,8 @@ def escalate_to_hr_business_partner(
 
 🆔 **Escalation ID:** {escalation_id}
 🚨 **Urgency Level:** {urgency.upper()}
-📂 **Issue Type:** {issue_type.replace('_', ' ').title()}
-📅 **Escalated:** {datetime.now().strftime('%Y-%m-%d %H:%M')}
+📂 **Issue Type:** {issue_type.replace("_", " ").title()}
+📅 **Escalated:** {datetime.now().strftime("%Y-%m-%d %H:%M")}
 
 **Issue Summary:**
 {details}
@@ -3204,8 +3229,8 @@ def schedule_hr_meeting(meeting_topic: str, preferred_times: str | None = None) 
     return f"""**HR Meeting Scheduled:**
 
 📅 **Meeting ID:** {meeting_id}
-💼 **Topic:** {meeting_topic.replace('_', ' ').title()}
-🕐 **Preferred Times:** {preferred_times or 'Will coordinate via email'}
+💼 **Topic:** {meeting_topic.replace("_", " ").title()}
+🕐 **Preferred Times:** {preferred_times or "Will coordinate via email"}
 
 **What Happens Next:**
 

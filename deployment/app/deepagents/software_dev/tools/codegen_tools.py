@@ -11,7 +11,6 @@ from datetime import datetime
 from langchain_core.tools import tool
 from langsmith import traceable
 
-
 # Session storage for generated code
 _code_store: dict[str, dict] = {}
 
@@ -75,7 +74,7 @@ def generate_code(
 ''',
         },
         "typescript": {
-            "function": '''/**
+            "function": """/**
  * {docstring}
  * @param {params_doc}
  * @returns {returns_doc}
@@ -83,8 +82,8 @@ def generate_code(
 export function {name}({params}): {return_type} {{
     {implementation}
 }}
-''',
-            "class": '''/**
+""",
+            "class": """/**
  * {docstring}
  */
 export class {name} {{
@@ -98,15 +97,15 @@ export class {name} {{
         {method_body}
     }}
 }}
-''',
+""",
         },
         "go": {
-            "function": '''// {name} {docstring}
+            "function": """// {name} {docstring}
 func {name}({params}) {return_type} {{
     {implementation}
 }}
-''',
-            "struct": '''// {name} {docstring}
+""",
+            "struct": """// {name} {docstring}
 type {name} struct {{
     {fields}
 }}
@@ -122,7 +121,7 @@ func New{name}({params}) *{name} {{
 func ({receiver} *{name}) {method_name}({method_params}) {return_type} {{
     {method_body}
 }}
-''',
+""",
         },
     }
 
@@ -196,7 +195,7 @@ class {name}:
 
     elif language == "typescript":
         if code_type == "function":
-            code = f'''/**
+            code = f"""/**
  * {description}
  * @param data - Input data object
  * @returns Processed result
@@ -214,9 +213,9 @@ export function {name.lower().replace("_", "")}(data: Record<string, unknown>): 
         processedAt: new Date().toISOString(),
     }};
 }}
-'''
+"""
         else:
-            code = f'''/**
+            code = f"""/**
  * {description}
  */
 export class {name} {{
@@ -242,11 +241,11 @@ export class {name} {{
         return Boolean(this.id && this.data);
     }}
 }}
-'''
+"""
 
     elif language == "go":
         if code_type == "function":
-            code = f'''package main
+            code = f"""package main
 
 import (
     "errors"
@@ -269,9 +268,9 @@ func {name}(data map[string]interface{{}}) (map[string]interface{{}}, error) {{
 
     return result, nil
 }}
-'''
+"""
         else:
-            code = f'''package main
+            code = f"""package main
 
 import (
     "time"
@@ -306,7 +305,7 @@ func (e *{name}) Process() map[string]interface{{}} {{
 func (e *{name}) Validate() bool {{
     return e.ID != "" && e.Data != nil
 }}
-'''
+"""
     else:
         code = f"// Generated code for: {description}\n// Language: {language}\n"
 
@@ -382,7 +381,7 @@ def refactor_code(
         # Simulate extracting a function
         explanation = "Extracted repeated logic into a separate function for reusability"
         if language == "python":
-            refactored_code = f'''def extracted_function(data):
+            refactored_code = '''def extracted_function(data):
     """Extracted function containing the repeated logic."""
     # Extracted logic here
     return data
@@ -409,7 +408,7 @@ result = extracted_function(input_data)
     elif refactoring_type == "extract_class":
         explanation = "Extracted related functions into a cohesive class"
         if language == "python":
-            refactored_code = f'''class ExtractedClass:
+            refactored_code = '''class ExtractedClass:
     """Class containing related functionality."""
 
     def __init__(self):
@@ -477,7 +476,7 @@ def apply_design_pattern(
             self._initialized = True
             # Add initialization logic here
 ''',
-            "typescript": '''class Singleton {
+            "typescript": """class Singleton {
     private static instance: Singleton;
 
     private constructor() {
@@ -491,7 +490,7 @@ def apply_design_pattern(
         return Singleton.instance;
     }
 }
-''',
+""",
         },
         "factory": {
             "python": '''from abc import ABC, abstractmethod
@@ -665,7 +664,7 @@ def generate_boilerplate(
 
     if language == "python":
         if project_type == "api":
-            files["main.py"] = '''"""Main API application."""
+            files["main.py"] = f'''"""Main API application."""
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
 
@@ -683,19 +682,19 @@ app = FastAPI(title="{name}", lifespan=lifespan)
 
 @app.get("/health")
 async def health():
-    return {"status": "healthy"}
+    return {{"status": "healthy"}}
 
 
 @app.get("/")
 async def root():
-    return {"message": "Welcome to {name}"}
-'''.format(name=name)
+    return {{"message": "Welcome to {name}"}}
+'''
 
-            files["requirements.txt"] = '''fastapi>=0.115.0
+            files["requirements.txt"] = """fastapi>=0.115.0
 uvicorn[standard]>=0.30.0
 pydantic>=2.0.0
 python-dotenv>=1.0.0
-'''
+"""
 
         files["pyproject.toml"] = f'''[project]
 name = "{name}"
@@ -712,7 +711,7 @@ line-length = 100
 target-version = "py310"
 '''
 
-        files[".gitignore"] = '''__pycache__/
+        files[".gitignore"] = """__pycache__/
 *.py[cod]
 .env
 .venv/
@@ -721,10 +720,10 @@ dist/
 build/
 .coverage
 .pytest_cache/
-'''
+"""
 
     if include_docker:
-        files["Dockerfile"] = f'''FROM python:3.11-slim
+        files["Dockerfile"] = """FROM python:3.11-slim
 
 WORKDIR /app
 
@@ -736,9 +735,9 @@ COPY . .
 EXPOSE 8000
 
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
-'''
+"""
 
-        files["docker-compose.yml"] = f'''version: "3.8"
+        files["docker-compose.yml"] = f"""version: "3.8"
 
 services:
   {name}:
@@ -749,7 +748,7 @@ services:
       - ENV=development
     volumes:
       - .:/app
-'''
+"""
 
     result = {
         "project_name": name,

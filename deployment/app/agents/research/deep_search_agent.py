@@ -15,36 +15,30 @@ Following Enterprise Development Standards:
 - Software Engineer: Type-safe, async-first, well-documented
 """
 
-import asyncio
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Literal
+from typing import Any
 from uuid import uuid4
 
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.prompts import ChatPromptTemplate
 from langsmith import traceable
-from pydantic import BaseModel, Field
 
 from app.agents.research.planner import (
     ResearchPlan,
     ResearchPlanner,
     SubQuery,
-    QueryIntent,
+)
+from app.agents.research.search_providers import (
+    SearchProviderManager,
+    SearchResult,
+    get_search_manager,
 )
 from app.agents.research.source_manager import (
     CitationFormat,
     CredibilityLevel,
     Source,
     SourceManager,
-    SourceType,
-)
-from app.agents.research.search_providers import (
-    SearchProviderManager,
-    SearchResponse,
-    SearchResult,
-    get_search_manager,
 )
 
 
@@ -99,9 +93,7 @@ class ResearchReport:
     findings: list[ResearchFinding] = field(default_factory=list)
     sources: SourceManager = field(default_factory=SourceManager)
     citations: str = ""
-    created_at: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
+    created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     depth: ResearchDepth = ResearchDepth.STANDARD
     metadata: dict[str, Any] = field(default_factory=dict)
 
@@ -131,18 +123,22 @@ class ResearchReport:
         for i, finding in enumerate(self.findings, 1):
             sections.append(f"{i}. {finding.content}")
 
-        sections.extend([
-            "\n## Sources\n",
-            self.sources.export_citations(CitationFormat.MARKDOWN),
-        ])
+        sections.extend(
+            [
+                "\n## Sources\n",
+                self.sources.export_citations(CitationFormat.MARKDOWN),
+            ]
+        )
 
         stats = self.sources.get_statistics()
-        sections.extend([
-            "\n## Statistics\n",
-            f"- Total Sources: {stats['total_sources']}",
-            f"- Average Credibility: {stats['avg_credibility']:.2f}",
-            f"- Verified Sources: {stats['verified_count']}",
-        ])
+        sections.extend(
+            [
+                "\n## Statistics\n",
+                f"- Total Sources: {stats['total_sources']}",
+                f"- Average Credibility: {stats['avg_credibility']:.2f}",
+                f"- Verified Sources: {stats['verified_count']}",
+            ]
+        )
 
         return "\n".join(sections)
 
@@ -186,6 +182,7 @@ class DeepSearchAgent:
         """Get or create LLM instance."""
         if self._llm is None:
             from app.agents.base.llm_factory import get_llm
+
             self._llm = get_llm()
         return self._llm
 
@@ -315,49 +312,57 @@ class DeepSearchAgent:
             List of research findings
         """
         if not results:
-            return [ResearchFinding(
-                content="No search results were found for this query.",
-                confidence=0.0,
-                category="error",
-            )]
+            return [
+                ResearchFinding(
+                    content="No search results were found for this query.",
+                    confidence=0.0,
+                    category="error",
+                )
+            ]
 
         llm = self._get_llm()
 
         # Prepare content for synthesis
         content_parts = []
         for result in results[:10]:
-            content_parts.append(
-                f"Source: {result.title}\n"
-                f"URL: {result.url}\n"
-                f"Content: {result.snippet}\n"
-            )
+            content_parts.append(f"Source: {result.title}\nURL: {result.url}\nContent: {result.snippet}\n")
 
         combined_content = "\n---\n".join(content_parts)
 
-        prompt = ChatPromptTemplate.from_messages([
-            ("system", """You are a research analyst. Extract key findings from the search results.
+        prompt = ChatPromptTemplate.from_messages(
+            [
+                (
+                    "system",
+                    """You are a research analyst. Extract key findings from the search results.
 
 For each finding:
 1. State the finding clearly and concisely
 2. Note which source(s) support it
 3. Assess confidence (high/medium/low)
 
-Output as a numbered list of findings. Be specific and factual."""),
-            ("human", """Research Query: {query}
+Output as a numbered list of findings. Be specific and factual.""",
+                ),
+                (
+                    "human",
+                    """Research Query: {query}
 
 Search Results:
 {content}
 
-Extract 3-7 key findings from these results."""),
-        ])
+Extract 3-7 key findings from these results.""",
+                ),
+            ]
+        )
 
         chain = prompt | llm
 
         try:
-            response = await chain.ainvoke({
-                "query": query,
-                "content": combined_content,
-            })
+            response = await chain.ainvoke(
+                {
+                    "query": query,
+                    "content": combined_content,
+                }
+            )
 
             # Parse response into findings
             findings = self._parse_findings(
@@ -368,11 +373,13 @@ Extract 3-7 key findings from these results."""),
             return findings
 
         except Exception as e:
-            return [ResearchFinding(
-                content=f"Error synthesizing findings: {e}",
-                confidence=0.0,
-                category="error",
-            )]
+            return [
+                ResearchFinding(
+                    content=f"Error synthesizing findings: {e}",
+                    confidence=0.0,
+                    category="error",
+                )
+            ]
 
     def _parse_findings(
         self,
@@ -400,22 +407,26 @@ Extract 3-7 key findings from these results."""),
             # Check if this starts a new numbered finding
             if line[0].isdigit() and "." in line[:3]:
                 if current_finding:
-                    findings.append(ResearchFinding(
-                        content=current_finding.strip(),
-                        confidence=0.7,
-                        category="general",
-                    ))
+                    findings.append(
+                        ResearchFinding(
+                            content=current_finding.strip(),
+                            confidence=0.7,
+                            category="general",
+                        )
+                    )
                 current_finding = line.split(".", 1)[-1].strip()
             else:
                 current_finding += " " + line
 
         # Don't forget the last finding
         if current_finding:
-            findings.append(ResearchFinding(
-                content=current_finding.strip(),
-                confidence=0.7,
-                category="general",
-            ))
+            findings.append(
+                ResearchFinding(
+                    content=current_finding.strip(),
+                    confidence=0.7,
+                    category="general",
+                )
+            )
 
         return findings
 
@@ -443,31 +454,41 @@ Extract 3-7 key findings from these results."""),
         findings_text = "\n".join(f"- {f.content}" for f in findings)
         sources_text = ", ".join(s.title for s in sources[:5])
 
-        prompt = ChatPromptTemplate.from_messages([
-            ("system", """You are a research analyst writing an executive summary.
+        prompt = ChatPromptTemplate.from_messages(
+            [
+                (
+                    "system",
+                    """You are a research analyst writing an executive summary.
 Write a clear, concise summary (2-4 paragraphs) that:
 1. Directly addresses the research question
 2. Synthesizes the key findings
 3. Notes any limitations or areas for further research
-Be factual and objective."""),
-            ("human", """Research Query: {query}
+Be factual and objective.""",
+                ),
+                (
+                    "human",
+                    """Research Query: {query}
 
 Key Findings:
 {findings}
 
 Sources consulted include: {sources}
 
-Write an executive summary."""),
-        ])
+Write an executive summary.""",
+                ),
+            ]
+        )
 
         chain = prompt | llm
 
         try:
-            response = await chain.ainvoke({
-                "query": query,
-                "findings": findings_text,
-                "sources": sources_text,
-            })
+            response = await chain.ainvoke(
+                {
+                    "query": query,
+                    "findings": findings_text,
+                    "sources": sources_text,
+                }
+            )
 
             return response.content if hasattr(response, "content") else str(response)
 
@@ -503,17 +524,90 @@ Write an executive summary."""),
 
         # Remove common words
         stop_words = {
-            "the", "a", "an", "is", "are", "was", "were", "be", "been",
-            "being", "have", "has", "had", "do", "does", "did", "will",
-            "would", "could", "should", "may", "might", "must", "shall",
-            "can", "of", "to", "in", "for", "on", "with", "at", "by",
-            "from", "as", "into", "through", "during", "before", "after",
-            "above", "below", "between", "under", "again", "further",
-            "then", "once", "here", "there", "when", "where", "why",
-            "how", "all", "each", "few", "more", "most", "other", "some",
-            "such", "no", "nor", "not", "only", "own", "same", "so",
-            "than", "too", "very", "just", "and", "but", "if", "or",
-            "because", "until", "while", "this", "that", "these", "those",
+            "the",
+            "a",
+            "an",
+            "is",
+            "are",
+            "was",
+            "were",
+            "be",
+            "been",
+            "being",
+            "have",
+            "has",
+            "had",
+            "do",
+            "does",
+            "did",
+            "will",
+            "would",
+            "could",
+            "should",
+            "may",
+            "might",
+            "must",
+            "shall",
+            "can",
+            "of",
+            "to",
+            "in",
+            "for",
+            "on",
+            "with",
+            "at",
+            "by",
+            "from",
+            "as",
+            "into",
+            "through",
+            "during",
+            "before",
+            "after",
+            "above",
+            "below",
+            "between",
+            "under",
+            "again",
+            "further",
+            "then",
+            "once",
+            "here",
+            "there",
+            "when",
+            "where",
+            "why",
+            "how",
+            "all",
+            "each",
+            "few",
+            "more",
+            "most",
+            "other",
+            "some",
+            "such",
+            "no",
+            "nor",
+            "not",
+            "only",
+            "own",
+            "same",
+            "so",
+            "than",
+            "too",
+            "very",
+            "just",
+            "and",
+            "but",
+            "if",
+            "or",
+            "because",
+            "until",
+            "while",
+            "this",
+            "that",
+            "these",
+            "those",
         }
 
         # Extract words
@@ -578,12 +672,13 @@ Write an executive summary."""),
         # Analyze results with LLM
         llm = self._get_llm()
 
-        results_text = "\n".join(
-            f"- {r.title}: {r.snippet}" for r in response.results[:num_sources]
-        )
+        results_text = "\n".join(f"- {r.title}: {r.snippet}" for r in response.results[:num_sources])
 
-        prompt = ChatPromptTemplate.from_messages([
-            ("system", """You are a fact-checker. Analyze the search results to verify the claim.
+        prompt = ChatPromptTemplate.from_messages(
+            [
+                (
+                    "system",
+                    """You are a fact-checker. Analyze the search results to verify the claim.
 
 Determine:
 1. Whether the claim is supported, contradicted, or unverified
@@ -591,29 +686,38 @@ Determine:
 3. Key supporting or contradicting evidence
 
 Respond with JSON:
-{{"status": "supported|contradicted|unverified", "confidence": 0.0-1.0, "evidence": "brief summary"}}"""),
-            ("human", """Claim: {claim}
+{{"status": "supported|contradicted|unverified", "confidence": 0.0-1.0, "evidence": "brief summary"}}""",
+                ),
+                (
+                    "human",
+                    """Claim: {claim}
 
 Search Results:
 {results}
 
-Analyze and verify this claim."""),
-        ])
+Analyze and verify this claim.""",
+                ),
+            ]
+        )
 
         chain = prompt | llm
 
         try:
-            response = await chain.ainvoke({
-                "claim": claim,
-                "results": results_text,
-            })
+            response = await chain.ainvoke(
+                {
+                    "claim": claim,
+                    "results": results_text,
+                }
+            )
 
             # Parse response
             import json
+
             content = response.content if hasattr(response, "content") else str(response)
 
             # Extract JSON from response
             import re
+
             json_match = re.search(r"\{[^}]+\}", content)
             if json_match:
                 result = json.loads(json_match.group())

@@ -11,7 +11,6 @@ from datetime import datetime
 from langchain_core.tools import tool
 from langsmith import traceable
 
-
 # Session storage
 _architecture_store: dict[str, dict] = {}
 _api_store: dict[str, dict] = {}
@@ -340,29 +339,37 @@ def design_data_model(
 
         # Add entity-specific attributes (simplified)
         if entity.lower() == "user":
-            attributes.extend([
-                {"name": "email", "type": "string", "unique": True, "required": True},
-                {"name": "name", "type": "string", "required": True},
-                {"name": "password_hash", "type": "string", "required": True},
-                {"name": "is_active", "type": "boolean", "default": True},
-            ])
+            attributes.extend(
+                [
+                    {"name": "email", "type": "string", "unique": True, "required": True},
+                    {"name": "name", "type": "string", "required": True},
+                    {"name": "password_hash", "type": "string", "required": True},
+                    {"name": "is_active", "type": "boolean", "default": True},
+                ]
+            )
         elif entity.lower() == "order":
-            attributes.extend([
-                {"name": "user_id", "type": "uuid", "foreign_key": "users.id"},
-                {"name": "status", "type": "enum", "values": ["pending", "processing", "completed", "cancelled"]},
-                {"name": "total_amount", "type": "decimal", "precision": 10, "scale": 2},
-            ])
+            attributes.extend(
+                [
+                    {"name": "user_id", "type": "uuid", "foreign_key": "users.id"},
+                    {"name": "status", "type": "enum", "values": ["pending", "processing", "completed", "cancelled"]},
+                    {"name": "total_amount", "type": "decimal", "precision": 10, "scale": 2},
+                ]
+            )
         else:
-            attributes.extend([
-                {"name": "name", "type": "string", "required": True},
-                {"name": "description", "type": "text"},
-            ])
+            attributes.extend(
+                [
+                    {"name": "name", "type": "string", "required": True},
+                    {"name": "description", "type": "text"},
+                ]
+            )
 
-        entity_models.append({
-            "name": entity,
-            "table_name": f"{entity.lower()}s",
-            "attributes": attributes,
-        })
+        entity_models.append(
+            {
+                "name": entity,
+                "table_name": f"{entity.lower()}s",
+                "attributes": attributes,
+            }
+        )
 
     data_model = {
         "id": f"DM-{str(uuid.uuid4())[:8].upper()}",
@@ -445,9 +452,9 @@ def create_component_diagram(
     elif format == "plantuml":
         diagram_lines = ["@startuml"]
         for comp in components:
-            diagram_lines.append(f"component \"{comp['name']}\" as {comp['name'].replace(' ', '_')}")
+            diagram_lines.append(f'component "{comp["name"]}" as {comp["name"].replace(" ", "_")}')
         for comp in components:
-            name = comp['name'].replace(' ', '_')
+            name = comp["name"].replace(" ", "_")
             for dep in comp.get("dependencies", []):
                 dep_name = dep.replace(" ", "_") if isinstance(dep, str) else dep
                 diagram_lines.append(f"{name} --> {dep_name}")
@@ -535,10 +542,12 @@ def analyze_dependencies(
         for dep_id in comp.get("dependencies", []):
             dep_comp = next((c for c in components if c["id"] == dep_id), None)
             if dep_comp and comp["id"] in dep_comp.get("dependencies", []):
-                circular_deps.append({
-                    "component1": comp["name"],
-                    "component2": dep_comp["name"],
-                })
+                circular_deps.append(
+                    {
+                        "component1": comp["name"],
+                        "component2": dep_comp["name"],
+                    }
+                )
 
     result = {
         "total_components": len(components),
@@ -550,7 +559,9 @@ def analyze_dependencies(
             "Minimize coupling between components",
             "Avoid circular dependencies",
             "Consider dependency injection for loose coupling",
-        ] if circular_deps else ["Architecture has no circular dependencies - good!"],
+        ]
+        if circular_deps
+        else ["Architecture has no circular dependencies - good!"],
     }
 
     return json.dumps(result, indent=2)

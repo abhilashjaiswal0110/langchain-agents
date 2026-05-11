@@ -23,8 +23,8 @@ from app.auth.azure_ad import AzureADAuth, get_auth_url, get_token_from_code
 from app.auth.dependencies import (
     get_current_user,
     get_current_user_optional,
-    require_role,
     require_any_role,
+    require_role,
 )
 from app.auth.jwt_handler import JWTHandler, TokenValidationError
 from app.auth.user_context import UserContext, UserRole

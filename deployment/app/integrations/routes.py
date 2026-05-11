@@ -6,17 +6,18 @@ Provides webhook endpoints for Microsoft Teams and Slack integrations.
 import logging
 from typing import Any
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
+from fastapi import APIRouter, Header, HTTPException, Request, Response
 from pydantic import BaseModel, ConfigDict
 
-from app.integrations.teams_webhook import (
-    TeamsWebhookHandler,
-    process_teams_webhook,
-)
+from app.integrations.retry_handler import get_retry_handler
 from app.integrations.slack_webhook import (
     SlackWebhookHandler,
     process_slack_webhook,
     verify_slack_signature,
+)
+from app.integrations.teams_webhook import (
+    TeamsWebhookHandler,
+    process_teams_webhook,
 )
 
 logger = logging.getLogger(__name__)
@@ -290,6 +291,7 @@ async def slack_interactive(request: Request) -> dict[str, Any]:
         payload = form.get("payload", "{}")
 
         import json
+
         data = json.loads(payload) if isinstance(payload, str) else payload
 
         action_type = data.get("type", "")
@@ -330,6 +332,28 @@ async def integrations_health() -> dict[str, Any]:
             "slack": "available",
         },
     }
+
+
+@router.get("/dlq", tags=["integrations"])
+async def get_dlq() -> dict:
+    """Return all entries currently in the webhook Dead Letter Queue.
+
+    Returns:
+        Dict with ``count`` and ``entries`` list.
+    """
+    entries = get_retry_handler().get_dlq()
+    return {"count": len(entries), "entries": entries}
+
+
+@router.delete("/dlq", tags=["integrations"])
+async def clear_dlq() -> dict:
+    """Clear all entries from the webhook Dead Letter Queue.
+
+    Returns:
+        Dict with ``cleared`` count.
+    """
+    cleared = get_retry_handler().clear_dlq()
+    return {"cleared": cleared}
 
 
 def setup_integration_routes(app: Any) -> None:

@@ -15,13 +15,14 @@ Configuration placeholders are included for user-provided Azure resources.
 """
 
 from typing import Any, Literal
+
 from langchain_core.tools import tool
 from langsmith import traceable
-
 
 # =============================================================================
 # Azure Configuration (PLACEHOLDERS - User to provide actual values)
 # =============================================================================
+
 
 class AzureConfig:
     """
@@ -59,7 +60,7 @@ class AzureConfig:
 
     # Azure Key Vault (for secure credential storage)
     KEY_VAULT_NAME: str = "PLACEHOLDER_KEY_VAULT_NAME"
-    KEY_VAULT_URL: str = f"https://PLACEHOLDER_KEY_VAULT_NAME.vault.azure.net/"
+    KEY_VAULT_URL: str = "https://PLACEHOLDER_KEY_VAULT_NAME.vault.azure.net/"
 
     # Execution Modes
     EXECUTION_MODE: Literal["local", "aci", "functions", "aks", "app_service"] = "local"
@@ -94,6 +95,7 @@ class AzureConfig:
 # =============================================================================
 # Azure-Specific Bash Execution
 # =============================================================================
+
 
 @tool
 @traceable(name="execute_bash_command_azure", tags=["bash", "azure", "execution"])
@@ -151,16 +153,14 @@ def execute_bash_command_azure(
             "command": command,
             "execution_mode": execution_mode,
             "azure_configured": False,
-            "warning": "Requested Azure execution mode but Azure is not configured; command was not executed"
+            "warning": "Requested Azure execution mode but Azure is not configured; command was not executed",
         }
 
     # Route to appropriate execution backend
     if execution_mode == "local":
-        result = execute_bash_command.invoke({
-            "command": command,
-            "timeout": timeout,
-            "working_directory": working_directory
-        })
+        result = execute_bash_command.invoke(
+            {"command": command, "timeout": timeout, "working_directory": working_directory}
+        )
         result["execution_mode"] = "local"
         result["azure_configured"] = AzureConfig.is_azure_configured()
         return result
@@ -176,11 +176,9 @@ def execute_bash_command_azure(
 
     else:
         # Fallback to local
-        result = execute_bash_command.invoke({
-            "command": command,
-            "timeout": timeout,
-            "working_directory": working_directory
-        })
+        result = execute_bash_command.invoke(
+            {"command": command, "timeout": timeout, "working_directory": working_directory}
+        )
         result["execution_mode"] = "local"
         result["warning"] = f"Unknown execution mode '{execution_mode}', using local"
         return result
@@ -190,11 +188,8 @@ def execute_bash_command_azure(
 # Azure Execution Backends (Implementation placeholders)
 # =============================================================================
 
-def _execute_on_aci(
-    command: str,
-    timeout: int,
-    working_directory: str | None
-) -> dict[str, Any]:
+
+def _execute_on_aci(command: str, timeout: int, working_directory: str | None) -> dict[str, Any]:
     """
     Execute command on Azure Container Instances.
 
@@ -206,11 +201,9 @@ def _execute_on_aci(
     from app.deepagents.software_dev.tools.bash_execution_tools import execute_bash_command
 
     # PLACEHOLDER: Would create ACI container, execute command, retrieve output
-    result = execute_bash_command.invoke({
-        "command": command,
-        "timeout": timeout,
-        "working_directory": working_directory
-    })
+    result = execute_bash_command.invoke(
+        {"command": command, "timeout": timeout, "working_directory": working_directory}
+    )
 
     # Add ACI-specific metadata
     result["execution_mode"] = "aci"
@@ -222,11 +215,7 @@ def _execute_on_aci(
     return result
 
 
-def _execute_on_functions(
-    command: str,
-    timeout: int,
-    working_directory: str | None
-) -> dict[str, Any]:
+def _execute_on_functions(command: str, timeout: int, working_directory: str | None) -> dict[str, Any]:
     """
     Execute command via Azure Functions.
 
@@ -238,11 +227,9 @@ def _execute_on_functions(
     from app.deepagents.software_dev.tools.bash_execution_tools import execute_bash_command
 
     # PLACEHOLDER: Would invoke Azure Function with command, retrieve response
-    result = execute_bash_command.invoke({
-        "command": command,
-        "timeout": timeout,
-        "working_directory": working_directory
-    })
+    result = execute_bash_command.invoke(
+        {"command": command, "timeout": timeout, "working_directory": working_directory}
+    )
 
     # Add Functions-specific metadata
     result["execution_mode"] = "functions"
@@ -253,11 +240,7 @@ def _execute_on_functions(
     return result
 
 
-def _execute_on_aks(
-    command: str,
-    timeout: int,
-    working_directory: str | None
-) -> dict[str, Any]:
+def _execute_on_aks(command: str, timeout: int, working_directory: str | None) -> dict[str, Any]:
     """
     Execute command on Azure Kubernetes Service.
 
@@ -269,11 +252,9 @@ def _execute_on_aks(
     from app.deepagents.software_dev.tools.bash_execution_tools import execute_bash_command
 
     # PLACEHOLDER: Would create Kubernetes Job, execute command, retrieve logs
-    result = execute_bash_command.invoke({
-        "command": command,
-        "timeout": timeout,
-        "working_directory": working_directory
-    })
+    result = execute_bash_command.invoke(
+        {"command": command, "timeout": timeout, "working_directory": working_directory}
+    )
 
     # Add AKS-specific metadata
     result["execution_mode"] = "aks"
@@ -287,6 +268,7 @@ def _execute_on_aks(
 # =============================================================================
 # Azure Deployment Helpers
 # =============================================================================
+
 
 @tool
 @traceable(name="deploy_to_azure", tags=["azure", "deployment", "devops"])
@@ -329,7 +311,7 @@ def deploy_to_azure(
             "success": False,
             "deployment_type": deployment_type,
             "error": f"Azure not configured. Missing: {', '.join(missing)}",
-            "message": "Please provide Azure resource details before deploying"
+            "message": "Please provide Azure resource details before deploying",
         }
 
     # PLACEHOLDER: Actual deployment logic
@@ -341,14 +323,15 @@ def deploy_to_azure(
         "required_resources": {
             "subscription_id": AzureConfig.SUBSCRIPTION_ID,
             "resource_group": AzureConfig.RESOURCE_GROUP,
-            "location": AzureConfig.LOCATION
-        }
+            "location": AzureConfig.LOCATION,
+        },
     }
 
 
 # =============================================================================
 # Azure Key Vault Integration (for secure credential storage)
 # =============================================================================
+
 
 @tool
 @traceable(name="get_azure_secret", tags=["azure", "security", "keyvault"])
@@ -375,7 +358,7 @@ def get_azure_secret(secret_name: str) -> dict[str, Any]:
             "success": False,
             "secret_name": secret_name,
             "error": "Azure Key Vault not configured",
-            "placeholder": "Key Vault URL not set"
+            "placeholder": "Key Vault URL not set",
         }
 
     # PLACEHOLDER: Actual Key Vault implementation
@@ -387,13 +370,14 @@ def get_azure_secret(secret_name: str) -> dict[str, Any]:
         "secret_name": secret_name,
         "placeholder": "Azure Key Vault integration not yet implemented",
         "message": "Requires azure-keyvault-secrets and azure-identity packages",
-        "key_vault_url": AzureConfig.KEY_VAULT_URL
+        "key_vault_url": AzureConfig.KEY_VAULT_URL,
     }
 
 
 # =============================================================================
 # Utility Functions
 # =============================================================================
+
 
 def get_azure_config_status() -> dict[str, Any]:
     """

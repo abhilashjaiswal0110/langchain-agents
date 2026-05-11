@@ -13,8 +13,8 @@ import os
 from typing import Any
 
 from langchain_core.language_models import BaseChatModel
-from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
+from langchain_core.prompts import ChatPromptTemplate
 
 from app.agents.base.llm_factory import get_llm
 
@@ -67,8 +67,11 @@ class LLMTranslator:
         self._llm = llm
         self._default_target = os.getenv("DEFAULT_TARGET_LANGUAGE", "en")
 
-        self._translation_prompt = ChatPromptTemplate.from_messages([
-            ("system", """You are a professional translator with expertise in multiple languages.
+        self._translation_prompt = ChatPromptTemplate.from_messages(
+            [
+                (
+                    "system",
+                    """You are a professional translator with expertise in multiple languages.
 
 Your task is to translate text accurately while:
 1. Preserving the original meaning and tone
@@ -76,22 +79,32 @@ Your task is to translate text accurately while:
 3. Keeping technical terms consistent
 4. Adapting idioms appropriately for the target language
 
-IMPORTANT: Output ONLY the translated text, nothing else. No explanations, no notes."""),
-            ("human", """Translate the following text from {source_language} to {target_language}:
+IMPORTANT: Output ONLY the translated text, nothing else. No explanations, no notes.""",
+                ),
+                (
+                    "human",
+                    """Translate the following text from {source_language} to {target_language}:
 
 ---
 {text}
 ---
 
-Translation:"""),
-        ])
+Translation:""",
+                ),
+            ]
+        )
 
-        self._detection_prompt = ChatPromptTemplate.from_messages([
-            ("system", """You are a language identification expert.
+        self._detection_prompt = ChatPromptTemplate.from_messages(
+            [
+                (
+                    "system",
+                    """You are a language identification expert.
 Identify the language of the given text and respond with ONLY the ISO 639-1 language code (e.g., 'en', 'es', 'fr', 'de', 'zh', 'ja').
-If uncertain, respond with your best guess."""),
-            ("human", "Identify the language of this text:\n\n{text}"),
-        ])
+If uncertain, respond with your best guess.""",
+                ),
+                ("human", "Identify the language of this text:\n\n{text}"),
+            ]
+        )
 
     def _get_llm(self) -> BaseChatModel:
         """Get or create the LLM instance.
@@ -157,11 +170,13 @@ If uncertain, respond with your best guess."""),
             llm = self._get_llm()
             chain = self._translation_prompt | llm | StrOutputParser()
 
-            translated = chain.invoke({
-                "text": text,
-                "target_language": target_name,
-                "source_language": source_name,
-            })
+            translated = chain.invoke(
+                {
+                    "text": text,
+                    "target_language": target_name,
+                    "source_language": source_name,
+                }
+            )
 
             return {
                 "success": True,
@@ -196,6 +211,7 @@ If uncertain, respond with your best guess."""),
         # First try langdetect (faster, no API call)
         try:
             from langdetect import detect
+
             return detect(text[:1000])  # Sample first 1000 chars
         except ImportError:
             pass

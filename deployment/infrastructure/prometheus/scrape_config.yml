@@ -1,0 +1,15 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    environment: production
+    service: langchain-agents
+
+scrape_configs:
+  - job_name: langchain-agents
+    static_configs:
+      - targets:
+          - langchain-platform:8000
+    metrics_path: /metrics
+    scrape_interval: 15s
+    scrape_timeout: 10s

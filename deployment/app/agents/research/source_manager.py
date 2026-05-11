@@ -90,9 +90,7 @@ class Source:
     credibility_score: float = 0.5
     author: str | None = None
     publication_date: str | None = None
-    accessed_date: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
+    accessed_date: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     domain: str = ""
     keywords: list[str] = field(default_factory=list)
     citations_count: int = 0
@@ -124,9 +122,7 @@ class SourceCollection:
     id: str = field(default_factory=lambda: str(uuid4())[:8])
     query: str = ""
     sources: list[Source] = field(default_factory=list)
-    created_at: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
+    created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     updated_at: str = ""
 
     def __post_init__(self) -> None:
@@ -268,9 +264,7 @@ class CredibilityScorer:
 
         try:
             # Try to parse date
-            pub_date = datetime.fromisoformat(
-                publication_date.replace("Z", "+00:00")
-            )
+            pub_date = datetime.fromisoformat(publication_date.replace("Z", "+00:00"))
             now = datetime.now(timezone.utc)
             age_days = (now - pub_date).days
 
@@ -530,10 +524,7 @@ class SourceManager:
 
         min_order = level_order.get(min_level, 1)
 
-        return [
-            s for s in self._sources.values()
-            if level_order.get(s.credibility, 0) >= min_order
-        ]
+        return [s for s in self._sources.values() if level_order.get(s.credibility, 0) >= min_order]
 
     def cite_source(self, source_id: str) -> None:
         """Increment citation count for a source.
@@ -556,9 +547,7 @@ class SourceManager:
             source.verified = True
             # Boost credibility slightly for verification
             source.credibility_score = min(1.0, source.credibility_score + 0.1)
-            source.credibility = self._scorer.get_credibility_level(
-                source.credibility_score
-            )
+            source.credibility = self._scorer.get_credibility_level(source.credibility_score)
 
     def export_citations(
         self,

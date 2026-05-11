@@ -8,6 +8,7 @@ This module provides FastAPI routes for:
 - Phase transitions
 """
 
+import json
 import logging
 from datetime import datetime
 from typing import Any
@@ -15,13 +16,12 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
-import json
 
+from app.deepagents.config.software_dev_config import SDLCPhase
 from app.deepagents.software_dev.software_dev_agent import (
     SoftwareDevDeepAgent,
     create_software_dev_agent,
 )
-from app.deepagents.config.software_dev_config import SDLCPhase
 
 logger = logging.getLogger(__name__)
 

@@ -10,20 +10,19 @@ Provides:
 import asyncio
 import json
 import os
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Literal
+from typing import Any, Literal
 
 from app.agents.evals.datasets import (
-    ALL_DATASETS,
     EvalDataset,
     TestCase,
     get_dataset,
 )
 from app.agents.evals.evaluators import (
     BaseEvaluator,
-    EvaluationResult,
     ResponseQualityEvaluator,
     TaskCompletionEvaluator,
     evaluate_agent_response,
@@ -416,17 +415,17 @@ class RegressionRunner:
     def _save_markdown(self, report: RegressionReport, path: Path) -> None:
         """Save report as Markdown."""
         lines = [
-            f"# Regression Test Report",
-            f"",
+            "# Regression Test Report",
+            "",
             f"**Run ID:** {report.run_id}",
             f"**Timestamp:** {report.timestamp}",
             f"**Dataset:** {report.dataset_name}",
             f"**Agent Type:** {report.agent_type}",
-            f"",
-            f"## Summary",
-            f"",
-            f"| Metric | Value |",
-            f"|--------|-------|",
+            "",
+            "## Summary",
+            "",
+            "| Metric | Value |",
+            "|--------|-------|",
             f"| Total Tests | {report.total_tests} |",
             f"| Passed | {report.passed_tests} |",
             f"| Failed | {report.failed_tests} |",
@@ -435,11 +434,11 @@ class RegressionRunner:
             f"| Average Score | {report.average_score:.2f} |",
             f"| Duration | {report.duration_seconds:.2f}s |",
             f"| **Overall** | {'PASSED' if report.overall_passed else 'FAILED'} |",
-            f"",
-            f"## Test Results",
-            f"",
-            f"| Test Case | Status | Score | Time (ms) |",
-            f"|-----------|--------|-------|-----------|",
+            "",
+            "## Test Results",
+            "",
+            "| Test Case | Status | Score | Time (ms) |",
+            "|-----------|--------|-------|-----------|",
         ]
 
         for r in report.results:
@@ -455,7 +454,7 @@ class RegressionRunner:
             lines.append("")
             for r in failed:
                 lines.append(f"### {r.test_case_id}")
-                lines.append(f"")
+                lines.append("")
                 if r.error:
                     lines.append(f"**Error:** {r.error}")
                 else:
@@ -493,9 +492,7 @@ class RegressionRunner:
                 error.set("message", r.error)
             elif not r.passed:
                 failure = SubElement(testcase, "failure")
-                feedback = "; ".join(
-                    e.get("feedback", "") for e in r.evaluations.values()
-                )
+                feedback = "; ".join(e.get("feedback", "") for e in r.evaluations.values())
                 failure.set("message", f"Score: {r.score:.2f} - {feedback}")
 
         xml_str = tostring(testsuite, encoding="unicode")

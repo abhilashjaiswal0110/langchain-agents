@@ -54,6 +54,7 @@ def get_current_session() -> str:
     """
     return _current_session_id.get()
 
+
 # =============================================================================
 # Module-Level Storage (Session-Isolated)
 # =============================================================================
@@ -71,10 +72,7 @@ _current_document: dict[str, str] = {}
 _document_order: dict[str, list[str]] = {}
 
 # Storage base path for persistent attachment storage
-ATTACHMENTS_BASE_PATH = Path(os.getenv(
-    "DEEPAGENT_ATTACHMENTS_PATH",
-    "/data/deepagent_attachments"
-))
+ATTACHMENTS_BASE_PATH = Path(os.getenv("DEEPAGENT_ATTACHMENTS_PATH", "/data/deepagent_attachments"))
 
 
 def _ensure_storage_path(session_id: str) -> Path:
@@ -132,6 +130,7 @@ def process_and_store_document(
         Document metadata including doc_id, chunk_count, etc.
     """
     from langchain_community.vectorstores import FAISS
+
     from app.agents.document_intelligence.document_processor import DocumentProcessor
 
     # Initialize processor
@@ -191,10 +190,7 @@ def process_and_store_document(
     except Exception as e:
         logger.warning(f"Failed to persist attachment: {e}")
 
-    logger.info(
-        f"Processed {filename} for session {session_id}: "
-        f"{result['chunk_count']} chunks, doc_id={doc_id}"
-    )
+    logger.info(f"Processed {filename} for session {session_id}: {result['chunk_count']} chunks, doc_id={doc_id}")
 
     return metadata
 
@@ -233,7 +229,7 @@ def get_document_context(session_id: str) -> str:
                 context += f"- {meta['filename']} (ID: {doc_id}, {meta['chunk_count']} chunks)\n"
 
     context += "\n**ACTION REQUIRED**: When the user asks about document content, you MUST use:\n"
-    context += "- `search_attachments(query=\"your search query\")` to find information\n"
+    context += '- `search_attachments(query="your search query")` to find information\n'
     context += "- `list_attachments()` to see all documents\n"
     context += "- `get_attachment_summary()` for document overview\n"
     context += "\nDo NOT answer from your training data - always search the uploaded documents!\n"
@@ -244,6 +240,7 @@ def get_document_context(session_id: str) -> str:
 # =============================================================================
 # Tool Functions
 # =============================================================================
+
 
 @tool
 def search_attachments(
@@ -409,9 +406,7 @@ def get_attachment_summary(
         try:
             # Get sample content from first chunks
             results = vector_store.similarity_search(
-                "document overview summary introduction",
-                k=3,
-                filter={"doc_id": doc_id}
+                "document overview summary introduction", k=3, filter={"doc_id": doc_id}
             )
             if results:
                 output += "\n### Sample Content (first 500 chars per chunk):\n\n"

@@ -6,7 +6,6 @@ Provides cross-session memory capabilities:
 - User preference learning across sessions
 """
 
-import json
 import os
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -94,9 +93,7 @@ class SemanticMemory:
             persist_directory: Directory for FAISS index persistence.
                               If None, uses in-memory storage.
         """
-        self.persist_directory = persist_directory or os.getenv(
-            "SEMANTIC_MEMORY_PATH", "./data/semantic_memory"
-        )
+        self.persist_directory = persist_directory or os.getenv("SEMANTIC_MEMORY_PATH", "./data/semantic_memory")
         self._embeddings = embeddings
         self._vector_store = None
         self._initialized = False
@@ -130,10 +127,7 @@ class SemanticMemory:
         try:
             from langchain_community.vectorstores import FAISS
         except ImportError:
-            raise ImportError(
-                "FAISS vector store requires 'faiss-cpu' package. "
-                "Install with: pip install faiss-cpu"
-            )
+            raise ImportError("FAISS vector store requires 'faiss-cpu' package. Install with: pip install faiss-cpu")
 
         import pathlib
 
@@ -243,7 +237,9 @@ class SemanticMemory:
         try:
             if filter_dict:
                 results = self.vector_store.similarity_search_with_score(
-                    query, k=k * 2, filter=filter_dict  # Get more to filter by score
+                    query,
+                    k=k * 2,
+                    filter=filter_dict,  # Get more to filter by score
                 )
             else:
                 results = self.vector_store.similarity_search_with_score(query, k=k * 2)
@@ -369,7 +365,7 @@ class SemanticMemory:
             return -1  # Unknown count
 
         # User-specific clearing requires rebuild
-        print(f"Warning: User-specific clearing not fully supported with FAISS")
+        print("Warning: User-specific clearing not fully supported with FAISS")
         return 0
 
 

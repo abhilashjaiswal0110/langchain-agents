@@ -291,34 +291,34 @@ def get_competitive_analysis(competitor_name: str) -> str:
         return f"Competitor '{competitor_name}' not found. Available: {available}"
 
     return f"""
-**Competitive Analysis: {competitor['name']}**
+**Competitive Analysis: {competitor["name"]}**
 
 **Overview**
-{competitor['overview']}
+{competitor["overview"]}
 
-**Pricing Position:** {competitor['pricing_position']}
-**Typical Clients:** {competitor['typical_clients']}
+**Pricing Position:** {competitor["pricing_position"]}
+**Typical Clients:** {competitor["typical_clients"]}
 
 **Strengths**
-{chr(10).join('✓ ' + s for s in competitor['strengths'])}
+{chr(10).join("✓ " + s for s in competitor["strengths"])}
 
 **Weaknesses**
-{chr(10).join('✗ ' + w for w in competitor['weaknesses'])}
+{chr(10).join("✗ " + w for w in competitor["weaknesses"])}
 
 **Key Differentiators**
-{chr(10).join('• ' + d for d in competitor['key_differentiators'])}
+{chr(10).join("• " + d for d in competitor["key_differentiators"])}
 
-**Service Areas:** {', '.join(competitor['service_areas'])}
+**Service Areas:** {", ".join(competitor["service_areas"])}
 
 ---
 
-**How to Win Against {competitor['name']}**
+**How to Win Against {competitor["name"]}**
 
 **Common Objections We Hear:**
-{chr(10).join('• "' + o + '"' for o in competitor['common_objections'])}
+{chr(10).join('• "' + o + '"' for o in competitor["common_objections"])}
 
 **Win Strategies:**
-{chr(10).join('→ ' + s for s in competitor['win_against_strategy'])}
+{chr(10).join("→ " + s for s in competitor["win_against_strategy"])}
 """
 
 
@@ -357,7 +357,7 @@ def compare_solutions(
             "Risk Mitigation",
         ]
 
-    output = [f"**Solution Comparison Matrix**\n"]
+    output = ["**Solution Comparison Matrix**\n"]
     output.append(f"*Our Solution: {our_solution}*\n")
 
     # Create comparison table header
@@ -421,46 +421,62 @@ def suggest_differentiators(
 
     # Context-based differentiator selection
     if any(kw in context_lower for kw in ["cloud", "migration", "azure", "aws"]):
-        differentiators.append({
-            "theme": "Cloud Expertise",
-            "message": "Multi-cloud expertise with 1000+ successful migrations",
-            "proof_points": ["Strategic partnerships with AWS, Azure, GCP", "Certified architects across platforms"],
-        })
+        differentiators.append(
+            {
+                "theme": "Cloud Expertise",
+                "message": "Multi-cloud expertise with 1000+ successful migrations",
+                "proof_points": [
+                    "Strategic partnerships with AWS, Azure, GCP",
+                    "Certified architects across platforms",
+                ],
+            }
+        )
 
     if any(kw in context_lower for kw in ["security", "compliance", "regulated", "hipaa", "pci"]):
-        differentiators.append({
-            "theme": "Security & Compliance",
-            "message": "Deep expertise in regulated industries with proven compliance frameworks",
-            "proof_points": ["SOC2, ISO27001 certified delivery centers", "Industry-specific compliance accelerators"],
-        })
+        differentiators.append(
+            {
+                "theme": "Security & Compliance",
+                "message": "Deep expertise in regulated industries with proven compliance frameworks",
+                "proof_points": [
+                    "SOC2, ISO27001 certified delivery centers",
+                    "Industry-specific compliance accelerators",
+                ],
+            }
+        )
 
     if any(kw in context_lower for kw in ["support", "managed", "24/7", "sla"]):
-        differentiators.append({
-            "theme": "Managed Services Excellence",
-            "message": "ITIL-certified delivery with industry-leading SLAs",
-            "proof_points": ["99.9% SLA achievement", "Follow-the-sun support model"],
-        })
+        differentiators.append(
+            {
+                "theme": "Managed Services Excellence",
+                "message": "ITIL-certified delivery with industry-leading SLAs",
+                "proof_points": ["99.9% SLA achievement", "Follow-the-sun support model"],
+            }
+        )
 
     if any(kw in context_lower for kw in ["ai", "ml", "data", "analytics"]):
-        differentiators.append({
-            "theme": "AI & Innovation",
-            "message": "Practical AI implementation with measurable business outcomes",
-            "proof_points": ["AI Center of Excellence", "Industry-specific AI solutions"],
-        })
+        differentiators.append(
+            {
+                "theme": "AI & Innovation",
+                "message": "Practical AI implementation with measurable business outcomes",
+                "proof_points": ["AI Center of Excellence", "Industry-specific AI solutions"],
+            }
+        )
 
     # Always add these core differentiators
-    differentiators.extend([
-        {
-            "theme": "Senior Team Commitment",
-            "message": "Named senior resources committed throughout the engagement",
-            "proof_points": ["Contract commitment to team continuity", "Interview rights for key roles"],
-        },
-        {
-            "theme": "Proven Delivery",
-            "message": "Track record of on-time, on-budget delivery",
-            "proof_points": ["95% project success rate", "Industry references available"],
-        },
-    ])
+    differentiators.extend(
+        [
+            {
+                "theme": "Senior Team Commitment",
+                "message": "Named senior resources committed throughout the engagement",
+                "proof_points": ["Contract commitment to team continuity", "Interview rights for key roles"],
+            },
+            {
+                "theme": "Proven Delivery",
+                "message": "Track record of on-time, on-budget delivery",
+                "proof_points": ["95% project success rate", "Industry references available"],
+            },
+        ]
+    )
 
     output = ["**Recommended Differentiators**\n"]
     output.append(f"*Based on: {opportunity_context[:100]}...*\n")
@@ -469,7 +485,7 @@ def suggest_differentiators(
         output.append(f"\n**{i}. {diff['theme']}**")
         output.append(f"*Key Message:* {diff['message']}")
         output.append("*Proof Points:*")
-        for point in diff['proof_points']:
+        for point in diff["proof_points"]:
             output.append(f"  • {point}")
 
     if competitors:
@@ -523,15 +539,15 @@ def get_objection_handler(objection_type: str) -> str:
         available = list(set(objection_map.values()))
         return f"Objection type '{objection_type}' not found. Try: price, timing, competition, references, or team"
 
-    output = [f"**Handling Objection: \"{handler['objection']}\"**\n"]
+    output = [f'**Handling Objection: "{handler["objection"]}"**\n']
     output.append(f"*Category: {handler['category']}*\n")
 
     output.append("**Recommended Responses:**")
-    for i, response in enumerate(handler['responses'], 1):
+    for i, response in enumerate(handler["responses"], 1):
         output.append(f"\n{i}. {response}")
 
     output.append("\n**Evidence Points to Support:**")
-    for point in handler['evidence_points']:
+    for point in handler["evidence_points"]:
         output.append(f"• {point}")
 
     output.append("\n---")

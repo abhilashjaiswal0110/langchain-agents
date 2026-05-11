@@ -34,10 +34,7 @@ class DocumentProcessor:
     - Images (.png, .jpg, .jpeg) - via pytesseract OCR
     """
 
-    SUPPORTED_EXTENSIONS = {
-        ".pdf", ".txt", ".docx", ".doc", ".pptx", ".ppt",
-        ".png", ".jpg", ".jpeg"
-    }
+    SUPPORTED_EXTENSIONS = {".pdf", ".txt", ".docx", ".doc", ".pptx", ".ppt", ".png", ".jpg", ".jpeg"}
 
     def __init__(
         self,
@@ -68,6 +65,7 @@ class DocumentProcessor:
         if tesseract_cmd:
             try:
                 import pytesseract
+
                 pytesseract.pytesseract.tesseract_cmd = tesseract_cmd
                 logger.info(f"Tesseract path set to: {tesseract_cmd}")
             except ImportError:
@@ -189,10 +187,7 @@ class DocumentProcessor:
             Processed document data with chunks
         """
         text = content.decode("utf-8", errors="replace")
-        documents = [Document(
-            page_content=text,
-            metadata={"source_file": filename}
-        )]
+        documents = [Document(page_content=text, metadata={"source_file": filename})]
         chunks = self.text_splitter.split_documents(documents)
         return self._build_result(chunks, filename, "text")
 
@@ -219,10 +214,7 @@ class DocumentProcessor:
             msg = "No text content found in Word document"
             raise ValueError(msg)
 
-        documents = [Document(
-            page_content=text_content,
-            metadata={"source_file": filename}
-        )]
+        documents = [Document(page_content=text_content, metadata={"source_file": filename})]
         chunks = self.text_splitter.split_documents(documents)
         return self._build_result(chunks, filename, "docx")
 
@@ -259,10 +251,9 @@ class DocumentProcessor:
             msg = "No text content found in PowerPoint presentation"
             raise ValueError(msg)
 
-        documents = [Document(
-            page_content=full_text,
-            metadata={"source_file": filename, "total_slides": len(prs.slides)}
-        )]
+        documents = [
+            Document(page_content=full_text, metadata={"source_file": filename, "total_slides": len(prs.slides)})
+        ]
         chunks = self.text_splitter.split_documents(documents)
         return self._build_result(chunks, filename, "pptx")
 
@@ -307,15 +298,17 @@ class DocumentProcessor:
             char_count = len(text)
             logger.info(f"OCR extracted {char_count} characters from {filename}")
 
-        documents = [Document(
-            page_content=text,
-            metadata={
-                "source_file": filename,
-                "image_size": f"{image.width}x{image.height}",
-                "image_mode": image.mode,
-                "ocr_note": ocr_note,
-            }
-        )]
+        documents = [
+            Document(
+                page_content=text,
+                metadata={
+                    "source_file": filename,
+                    "image_size": f"{image.width}x{image.height}",
+                    "image_mode": image.mode,
+                    "ocr_note": ocr_note,
+                },
+            )
+        ]
         chunks = self.text_splitter.split_documents(documents)
         result = self._build_result(chunks, filename, "image")
 
@@ -373,6 +366,7 @@ class DocumentProcessor:
 
         try:
             from langdetect import detect
+
             return detect(text)
         except ImportError:
             logger.warning("langdetect not installed, defaulting to 'en'")

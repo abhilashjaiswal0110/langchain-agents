@@ -32,12 +32,6 @@ Usage:
 """
 
 # Server exports
-from app.mcp.server import (
-    get_mcp_server,
-    mcp,
-    run_mcp_server,
-)
-
 # Gateway exports
 from app.mcp.gateway import (
     MCPClientInfo,
@@ -47,6 +41,11 @@ from app.mcp.gateway import (
     check_mcp_permission,
     get_mcp_gateway,
     reset_mcp_gateway,
+)
+from app.mcp.server import (
+    get_mcp_server,
+    mcp,
+    run_mcp_server,
 )
 
 # ServiceNow exports

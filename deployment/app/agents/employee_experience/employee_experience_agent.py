@@ -14,55 +14,54 @@ from typing import Annotated, Any, Literal
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langgraph.checkpoint.memory import MemorySaver
-from langgraph.graph import StateGraph, START, END
+from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode
 from langsmith import traceable
 from pydantic import BaseModel, Field
 
 from app.agents.base.llm_factory import get_llm
-from app.agents.employee_experience.tools import (
-    # HR Policy & Information
-    search_hr_policy,
-    get_benefits_information,
-    check_pto_balance,
-    explain_compliance_rules,
-    # Career Development
-    explore_career_paths,
-    get_skills_gap_analysis,
-    find_learning_resources,
-    request_career_coaching,
-    # Performance & Growth
-    prepare_performance_review,
-    get_goal_setting_framework,
-    request_feedback_survey,
-    # Sentiment & Wellbeing
-    get_wellbeing_resources,
-    schedule_wellbeing_check,
-    # HR Operations
-    submit_hr_request,
-    check_request_status,
-    get_onboarding_checklist,
-    initiate_exit_process,
-    # Engagement & Surveys
-    send_pulse_survey,
-    get_engagement_insights,
-    # Compensation
-    get_compensation_insights,
-    request_compensation_review,
-    # Learning & Development
-    get_learning_path,
-    enroll_in_course,
-    # Escalation
-    escalate_to_hr_business_partner,
-    schedule_hr_meeting,
-)
 from app.agents.employee_experience.sentiment_analyzer import (
     analyze_employee_sentiment,
     assess_burnout_risk,
     detect_escalation_triggers,
 )
-
+from app.agents.employee_experience.tools import (
+    check_pto_balance,
+    check_request_status,
+    enroll_in_course,
+    # Escalation
+    escalate_to_hr_business_partner,
+    explain_compliance_rules,
+    # Career Development
+    explore_career_paths,
+    find_learning_resources,
+    get_benefits_information,
+    # Compensation
+    get_compensation_insights,
+    get_engagement_insights,
+    get_goal_setting_framework,
+    # Learning & Development
+    get_learning_path,
+    get_onboarding_checklist,
+    get_skills_gap_analysis,
+    # Sentiment & Wellbeing
+    get_wellbeing_resources,
+    initiate_exit_process,
+    # Performance & Growth
+    prepare_performance_review,
+    request_career_coaching,
+    request_compensation_review,
+    request_feedback_survey,
+    schedule_hr_meeting,
+    schedule_wellbeing_check,
+    # HR Policy & Information
+    search_hr_policy,
+    # Engagement & Surveys
+    send_pulse_survey,
+    # HR Operations
+    submit_hr_request,
+)
 
 # =============================================================================
 # Agent State
@@ -332,9 +331,7 @@ class EmployeeExperienceAgent:
         # Add sentiment context if available
         if state.sentiment_score is not None:
             sentiment_label = (
-                "positive" if state.sentiment_score > 0.3
-                else "negative" if state.sentiment_score < -0.3
-                else "neutral"
+                "positive" if state.sentiment_score > 0.3 else "negative" if state.sentiment_score < -0.3 else "neutral"
             )
             system_message_content += f"\n\n**Current Conversation Context:**\n- Employee sentiment: {sentiment_label} (score: {state.sentiment_score:.2f})\n- Burnout risk: {state.burnout_risk or 'unknown'}"
 
@@ -344,7 +341,9 @@ class EmployeeExperienceAgent:
 
             # Add proactive support for high burnout risk
             if state.burnout_risk == "high":
-                system_message_content += "\n- 🚨 HIGH BURNOUT RISK DETECTED. Prioritize wellbeing check-in and consider escalation to HRBP."
+                system_message_content += (
+                    "\n- 🚨 HIGH BURNOUT RISK DETECTED. Prioritize wellbeing check-in and consider escalation to HRBP."
+                )
 
         # Add system message if not present
         if not messages or not isinstance(messages[0], SystemMessage):
@@ -477,8 +476,10 @@ class EmployeeExperienceAgent:
                 return [
                     {
                         "role": (
-                            "assistant" if isinstance(m, AIMessage)
-                            else "user" if isinstance(m, HumanMessage)
+                            "assistant"
+                            if isinstance(m, AIMessage)
+                            else "user"
+                            if isinstance(m, HumanMessage)
                             else "system"
                         ),
                         "content": m.content,

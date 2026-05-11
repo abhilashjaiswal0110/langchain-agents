@@ -10,7 +10,6 @@ from datetime import datetime
 from langchain_core.tools import tool
 from langsmith import traceable
 
-
 # Session storage
 _doc_store: dict[str, dict] = {}
 
@@ -86,11 +85,7 @@ def generate_api_docs(
             if endpoint.get("request_body"):
                 doc["paths"][path][method]["requestBody"] = {
                     "required": True,
-                    "content": {
-                        "application/json": {
-                            "schema": endpoint["request_body"]
-                        }
-                    }
+                    "content": {"application/json": {"schema": endpoint["request_body"]}},
                 }
 
         content = json.dumps(doc, indent=2)
@@ -113,7 +108,9 @@ def generate_api_docs(
             if endpoint.get("parameters"):
                 lines.append("**Parameters:**\n")
                 for param in endpoint["parameters"]:
-                    lines.append(f"- `{param.get('name')}` ({param.get('type', 'string')}): {param.get('description', '')}")
+                    lines.append(
+                        f"- `{param.get('name')}` ({param.get('type', 'string')}): {param.get('description', '')}"
+                    )
                 lines.append("")
 
             if endpoint.get("request_body"):
@@ -183,7 +180,7 @@ def create_readme(
     usage_examples = usage_examples or ["Example usage coming soon"]
     tech_stack = tech_stack or ["Python 3.11+", "FastAPI", "PostgreSQL"]
 
-    readme = f'''# {project_name}
+    readme = f"""# {project_name}
 
 {description}
 
@@ -197,7 +194,7 @@ def create_readme(
 
 ## Installation
 
-{chr(10).join(f"{i+1}. {step}" for i, step in enumerate(installation_steps))}
+{chr(10).join(f"{i + 1}. {step}" for i, step in enumerate(installation_steps))}
 
 ## Usage
 
@@ -250,7 +247,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## Support
 
 For support, please open an issue on GitHub.
-'''
+"""
 
     result = {
         "project_name": project_name,
@@ -299,7 +296,7 @@ def document_architecture(
     description = description or "System architecture overview"
 
     if format == "markdown":
-        doc = f'''# Architecture Documentation
+        doc = f"""# Architecture Documentation
 
 ## Overview
 
@@ -307,9 +304,9 @@ def document_architecture(
 
 ## Components
 
-'''
+"""
         for comp in components:
-            doc += f'''### {comp.get("name", "Component")}
+            doc += f"""### {comp.get("name", "Component")}
 
 **Type:** {comp.get("type", "service")}
 
@@ -321,14 +318,14 @@ def document_architecture(
 
 ---
 
-'''
+"""
 
         # Add Mermaid diagram
-        doc += '''## System Diagram
+        doc += """## System Diagram
 
 ```mermaid
 graph TB
-'''
+"""
         for comp in components:
             name = comp.get("name", "Component").replace(" ", "_")
             doc += f"    {name}[{comp.get('name', 'Component')}]\n"
@@ -396,7 +393,7 @@ def generate_changelog(
     """
     date = date or datetime.now().strftime("%Y-%m-%d")
 
-    changelog = f'''# Changelog
+    changelog = f"""# Changelog
 
 All notable changes to this project will be documented in this file.
 
@@ -405,7 +402,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [{version}] - {date}
 
-'''
+"""
     sections = ["Added", "Changed", "Deprecated", "Removed", "Fixed", "Security"]
 
     for section in sections:
@@ -456,10 +453,10 @@ def add_inline_comments(
 
     for i, line in enumerate(lines):
         stripped = line.strip()
-        indent = line[:len(line) - len(line.lstrip())]
+        indent = line[: len(line) - len(line.lstrip())]
 
         # Add comments based on code patterns
-        if stripped.startswith("def ") and '"""' not in lines[i+1] if i+1 < len(lines) else True:
+        if stripped.startswith("def ") and '"""' not in lines[i + 1] if i + 1 < len(lines) else True:
             # Function definition without docstring
             func_name = stripped.split("(")[0].replace("def ", "")
             comment = f"{indent}# {func_name}: Handles {func_name.replace('_', ' ')}"
@@ -539,7 +536,7 @@ def create_user_guide(
     """
     getting_started = getting_started or f"Welcome to {product_name}! This guide will help you get started."
 
-    guide = f'''# {product_name} User Guide
+    guide = f"""# {product_name} User Guide
 
 ## Table of Contents
 
@@ -566,22 +563,23 @@ def create_user_guide(
 
 ## Features
 
-'''
+"""
 
     for feature in features:
-        guide += f'''### {feature.get("name", "Feature")}
+        usage_text = feature.get("usage", "1. Navigate to the feature\n2. Follow the prompts")
+        guide += f"""### {feature.get("name", "Feature")}
 
 {feature.get("description", "Description coming soon.")}
 
 **How to use:**
 
-{feature.get("usage", "1. Navigate to the feature\\n2. Follow the prompts")}
+{usage_text}
 
 ---
 
-'''
+"""
 
-    guide += '''## Tutorials
+    guide += """## Tutorials
 
 ### Tutorial 1: Basic Workflow
 
@@ -612,7 +610,7 @@ A: Contact support or check our documentation.
 If you need additional help:
 - Email: support@example.com
 - Phone: 1-800-EXAMPLE
-'''
+"""
 
     result = {
         "product_name": product_name,

@@ -12,14 +12,12 @@ Usage:
     from app.mcp.server import get_mcp_server, mount_mcp_routes
 """
 
-import asyncio
 import os
 from typing import Any
 
 from mcp.server.fastmcp import Context, FastMCP
 
-from app.mcp.gateway import MCPGateway, get_mcp_gateway
-
+from app.mcp.gateway import get_mcp_gateway
 
 # Create MCP server instance
 mcp = FastMCP(
@@ -69,13 +67,15 @@ async def research_topic(
         if not agent:
             return "Research agent is not available. Please check configuration."
 
-        result = await agent.ainvoke({
-            "input": query,
-            "config": {
-                "depth": depth,
-                "max_sources": max_sources,
-            },
-        })
+        result = await agent.ainvoke(
+            {
+                "input": query,
+                "config": {
+                    "depth": depth,
+                    "max_sources": max_sources,
+                },
+            }
+        )
 
         # Extract response from LangGraph state
         return _extract_response(result)
@@ -311,12 +311,14 @@ async def generate_document(
         if not agent:
             return "Document agent is not available."
 
-        result = await agent.ainvoke({
-            "input": content_brief,
-            "document_type": document_type,
-            "title": title,
-            "sections": sections or [],
-        })
+        result = await agent.ainvoke(
+            {
+                "input": content_brief,
+                "document_type": document_type,
+                "title": title,
+                "sections": sections or [],
+            }
+        )
 
         return _extract_response(result)
 

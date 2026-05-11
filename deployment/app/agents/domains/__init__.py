@@ -24,14 +24,15 @@ from app.agents.domains.base_domain_agent import (
     DomainType,
     create_domain_agent,
 )
-from app.agents.domains.marcom_agent import MarComAgent
-from app.agents.domains.hr_agent import HRAgent
-from app.agents.domains.lnd_agent import LnDAgent
-from app.agents.domains.presales_agent import PresalesAgent
-from app.agents.domains.datacenter_agent import DatacenterAgent
 from app.agents.domains.cloud_agent import CloudAgent
 from app.agents.domains.cybersecurity_agent import CybersecurityAgent
 from app.agents.domains.data_ai_agent import DataAIAgent
+from app.agents.domains.datacenter_agent import DatacenterAgent
+from app.agents.domains.finance_agent import FinanceAgent
+from app.agents.domains.hr_agent import HRAgent
+from app.agents.domains.lnd_agent import LnDAgent
+from app.agents.domains.marcom_agent import MarComAgent
+from app.agents.domains.presales_agent import PresalesAgent
 
 __all__ = [
     # Base class
@@ -48,6 +49,7 @@ __all__ = [
     "CloudAgent",
     "CybersecurityAgent",
     "DataAIAgent",
+    "FinanceAgent",
 ]
 
 
@@ -66,4 +68,5 @@ def get_all_domain_agents() -> dict[str, DomainAgent]:
         "cloud": CloudAgent(),
         "cybersecurity": CybersecurityAgent(),
         "data_ai": DataAIAgent(),
+        "finance": FinanceAgent(),
     }

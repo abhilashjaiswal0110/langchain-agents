@@ -6,9 +6,9 @@ Integrates with ServiceNow for change request operations.
 from langchain_core.tools import tool
 
 from app.agents.servicenow_agent import (
+    CHANGE_REQUESTS_DB,
     get_api_client,
     is_live_mode,
-    CHANGE_REQUESTS_DB,
 )
 
 
@@ -46,10 +46,10 @@ def search_changes(
             output = [f"**Found {len(changes)} change request(s) [LIVE]:**\n"]
             for chg in changes:
                 output.append(f"""
-**{chg.get('number', 'N/A')}** - {chg.get('short_description', 'No description')}
-- Type: {chg.get('type', 'N/A')} | Risk: {chg.get('risk', 'N/A')}
-- State: {chg.get('state', 'Unknown')}
-- Scheduled: {chg.get('start_date', 'TBD')} to {chg.get('end_date', 'TBD')}
+**{chg.get("number", "N/A")}** - {chg.get("short_description", "No description")}
+- Type: {chg.get("type", "N/A")} | Risk: {chg.get("risk", "N/A")}
+- State: {chg.get("state", "Unknown")}
+- Scheduled: {chg.get("start_date", "TBD")} to {chg.get("end_date", "TBD")}
 """)
             return "\n".join(output)
         except Exception as e:
@@ -74,10 +74,10 @@ def search_changes(
     output = [f"**Found {len(results)} change request(s) [SIMULATION]:**\n"]
     for chg in results:
         output.append(f"""
-**{chg['number']}** - {chg['short_description']}
-- Type: {chg['type']} | Risk: {chg['risk']}
-- State: {chg['state']}
-- Scheduled: {chg['planned_start']} to {chg['planned_end']}
+**{chg["number"]}** - {chg["short_description"]}
+- Type: {chg["type"]} | Risk: {chg["risk"]}
+- State: {chg["state"]}
+- Scheduled: {chg["planned_start"]} to {chg["planned_end"]}
 """)
     return "\n".join(output)
 
@@ -103,31 +103,31 @@ def get_change_details(change_number: str) -> str:
             if not change:
                 return f"Change request {change_number} not found."
 
-            return f"""**Change Request: {change.get('number')}** [LIVE]
+            return f"""**Change Request: {change.get("number")}** [LIVE]
 
-**Summary:** {change.get('short_description', 'N/A')}
-**Description:** {change.get('description', 'N/A')}
+**Summary:** {change.get("short_description", "N/A")}
+**Description:** {change.get("description", "N/A")}
 
 **Classification:**
-- Type: {change.get('type', 'N/A')}
-- Category: {change.get('category', 'N/A')}
-- Risk: {change.get('risk', 'N/A')}
-- Impact: {change.get('impact', 'N/A')}
+- Type: {change.get("type", "N/A")}
+- Category: {change.get("category", "N/A")}
+- Risk: {change.get("risk", "N/A")}
+- Impact: {change.get("impact", "N/A")}
 
 **Status:**
-- State: {change.get('state', 'Unknown')}
-- Phase: {change.get('phase', 'N/A')}
-- Approval: {change.get('approval', 'Unknown')}
+- State: {change.get("state", "Unknown")}
+- Phase: {change.get("phase", "N/A")}
+- Approval: {change.get("approval", "Unknown")}
 
 **Schedule:**
-- Planned Start: {change.get('start_date', 'TBD')}
-- Planned End: {change.get('end_date', 'TBD')}
+- Planned Start: {change.get("start_date", "TBD")}
+- Planned End: {change.get("end_date", "TBD")}
 
 **Assignment:**
-- Assignment Group: {change.get('assignment_group', 'N/A')}
-- Assigned To: {change.get('assigned_to', 'Unassigned')}
+- Assignment Group: {change.get("assignment_group", "N/A")}
+- Assigned To: {change.get("assigned_to", "Unassigned")}
 
-**Affected CIs:** {change.get('cmdb_ci', 'None specified')}"""
+**Affected CIs:** {change.get("cmdb_ci", "None specified")}"""
 
         except Exception as e:
             return f"Error getting change details: {e}"
@@ -137,24 +137,24 @@ def get_change_details(change_number: str) -> str:
     if not change:
         return f"Change request {change_number} not found."
 
-    return f"""**Change Request: {change['number']}** [SIMULATION]
+    return f"""**Change Request: {change["number"]}** [SIMULATION]
 
-**Summary:** {change['short_description']}
-**Description:** {change['description']}
+**Summary:** {change["short_description"]}
+**Description:** {change["description"]}
 
 **Classification:**
-- Type: {change['type']}
-- Risk: {change['risk']}
+- Type: {change["type"]}
+- Risk: {change["risk"]}
 
 **Status:**
-- State: {change['state']}
-- Approval: {change['approval_status']}
+- State: {change["state"]}
+- Approval: {change["approval_status"]}
 
 **Schedule:**
-- Planned Start: {change['planned_start']}
-- Planned End: {change['planned_end']}
+- Planned Start: {change["planned_start"]}
+- Planned End: {change["planned_end"]}
 
-**Impact:** {change['impact']}"""
+**Impact:** {change["impact"]}"""
 
 
 @tool
