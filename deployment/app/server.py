@@ -672,6 +672,14 @@ try:
 except ImportError as e:
     print(f"[--] Domain Agent routes not loaded: {e}")
 
+# Include Analytics routes
+try:
+    from app.analytics.metrics_api import router as analytics_router
+    app.include_router(analytics_router)
+    print("[OK] Analytics routes loaded")
+except ImportError as e:
+    print(f"[--] Analytics routes not loaded: {e}")
+
 
 # ============================================================================
 # Response Models
@@ -4335,6 +4343,25 @@ async def chat_ui() -> HTMLResponse:
 async def chatui_redirect() -> RedirectResponse:
     """Redirect legacy /chatui to /chat for backwards compatibility."""
     return RedirectResponse(url="/chat", status_code=301)
+
+
+@app.get("/analytics", response_class=HTMLResponse)
+async def analytics_ui() -> HTMLResponse:
+    """Serve the real-time analytics dashboard at /analytics."""
+    analytics_file = STATIC_DIR / "analytics.html"
+    if analytics_file.exists():
+        return HTMLResponse(
+            content=analytics_file.read_text(encoding="utf-8"),
+            headers={
+                "Cache-Control": "no-cache, no-store, must-revalidate, max-age=0",
+                "Pragma": "no-cache",
+                "Expires": "0",
+            },
+        )
+    return HTMLResponse(
+        content="<h1>Analytics UI not found</h1><p>Please ensure app/static/analytics.html exists.</p>",
+        status_code=404,
+    )
 
 
 @app.get("/software-dev-chat", response_class=HTMLResponse)
