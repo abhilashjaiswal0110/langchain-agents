@@ -9,8 +9,7 @@ Provides IT support-specific evaluation metrics:
 """
 
 import re
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from dataclasses import dataclass
 from typing import Any, Literal
 
 from app.agents.evals.evaluators import BaseEvaluator, EvaluationResult
@@ -95,14 +94,8 @@ class TicketResolutionEvaluator(BaseEvaluator):
         output_lower = output_text.lower()
 
         # Count indicators
-        resolution_count = sum(
-            1 for ind in self.resolution_indicators
-            if ind.lower() in output_lower
-        )
-        unresolved_count = sum(
-            1 for ind in self.unresolved_indicators
-            if ind.lower() in output_lower
-        )
+        resolution_count = sum(1 for ind in self.resolution_indicators if ind.lower() in output_lower)
+        unresolved_count = sum(1 for ind in self.unresolved_indicators if ind.lower() in output_lower)
 
         # Check for actionable steps
         has_actionable = False
@@ -118,9 +111,7 @@ class TicketResolutionEvaluator(BaseEvaluator):
                 r"click",
                 r"go to",
             ]
-            has_actionable = any(
-                re.search(p, output_lower) for p in actionable_patterns
-            )
+            has_actionable = any(re.search(p, output_lower) for p in actionable_patterns)
 
         # Calculate score
         if resolution_count > unresolved_count:
@@ -222,9 +213,7 @@ class EscalationEvaluator(BaseEvaluator):
         is_complex = any(issue in input_lower for issue in self.complex_issues)
 
         # Detect escalation in response
-        is_escalated = any(
-            trigger in output_lower for trigger in self.escalation_triggers
-        )
+        is_escalated = any(trigger in output_lower for trigger in self.escalation_triggers)
         is_l2 = any(trigger in output_lower for trigger in self.l2_triggers)
         is_l3 = any(trigger in output_lower for trigger in self.l3_triggers)
 
@@ -420,18 +409,9 @@ class UserSatisfactionEvaluator(BaseEvaluator):
         # Combine all text (user messages typically indicate satisfaction)
         combined_lower = (input_text + " " + output_text).lower()
 
-        positive_count = sum(
-            1 for signal in self.positive_signals
-            if signal in combined_lower
-        )
-        negative_count = sum(
-            1 for signal in self.negative_signals
-            if signal in combined_lower
-        )
-        confusion_count = sum(
-            1 for signal in self.confusion_signals
-            if signal in combined_lower
-        )
+        positive_count = sum(1 for signal in self.positive_signals if signal in combined_lower)
+        negative_count = sum(1 for signal in self.negative_signals if signal in combined_lower)
+        confusion_count = sum(1 for signal in self.confusion_signals if signal in combined_lower)
 
         # Calculate satisfaction score
         if negative_count > 0:

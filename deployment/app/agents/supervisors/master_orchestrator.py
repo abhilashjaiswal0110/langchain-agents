@@ -28,16 +28,33 @@ _CLUSTER_RESEARCH = "RESEARCH"
 
 # Domain intents that map to domain agents (not general IT)
 _DOMAIN_INTENTS = {
-    "marcom", "hr", "lnd", "presales", "datacenter",
-    "cloud", "cybersecurity", "data_ai", "finance",
+    "marcom",
+    "hr",
+    "lnd",
+    "presales",
+    "datacenter",
+    "cloud",
+    "cybersecurity",
+    "data_ai",
+    "finance",
 }
 
 # Deep-agent trigger keywords
 _DEEP_AGENT_KEYWORDS = {
-    "root cause analysis", "rca", "post-mortem", "incident report",
-    "capacity planning", "performance analysis", "architecture review",
-    "recruitment", "candidate", "shortlist", "job description",
-    "sales intelligence", "competitor analysis", "deal strategy",
+    "root cause analysis",
+    "rca",
+    "post-mortem",
+    "incident report",
+    "capacity planning",
+    "performance analysis",
+    "architecture review",
+    "recruitment",
+    "candidate",
+    "shortlist",
+    "job description",
+    "sales intelligence",
+    "competitor analysis",
+    "deal strategy",
 }
 
 
@@ -139,9 +156,7 @@ class MasterOrchestrator:
                 "error": str(exc),
             }
 
-    async def _route_it_support(
-        self, message: str, session_id: str | None, user_context: dict
-    ) -> dict[str, Any]:
+    async def _route_it_support(self, message: str, session_id: str | None, user_context: dict) -> dict[str, Any]:
         if self._cm is None:
             from app.agents.conversation_manager import ConversationManager
 
@@ -164,9 +179,7 @@ class MasterOrchestrator:
             "response": result.get("response", ""),
         }
 
-    async def _route_domain(
-        self, message: str, session_id: str | None, user_context: dict
-    ) -> dict[str, Any]:
+    async def _route_domain(self, message: str, session_id: str | None, user_context: dict) -> dict[str, Any]:
         router = self._get_domain_router()
         result = router.classify(message)
         domain = result.intent
@@ -187,9 +200,7 @@ class MasterOrchestrator:
             "routing_confidence": result.confidence,
         }
 
-    async def _route_deep(
-        self, message: str, session_id: str | None, user_context: dict
-    ) -> dict[str, Any]:
+    async def _route_deep(self, message: str, session_id: str | None, user_context: dict) -> dict[str, Any]:
         # Default deep agent: IT Operations
         try:
             from app.deepagents.it_operations_agent import ITOperationsDeepAgent  # type: ignore[import]
@@ -207,9 +218,7 @@ class MasterOrchestrator:
             "response": response,
         }
 
-    async def _route_research(
-        self, message: str, session_id: str | None
-    ) -> dict[str, Any]:
+    async def _route_research(self, message: str, session_id: str | None) -> dict[str, Any]:
         try:
             from app.agents.research.research_agent import ResearchAgent  # type: ignore[import]
 
@@ -222,7 +231,7 @@ class MasterOrchestrator:
                 response = str(result)
         except Exception as exc:
             logger.warning("Research agent unavailable: %s", exc)
-            response = f"I couldn't process your request automatically. Please try a more specific agent endpoint."
+            response = "I couldn't process your request automatically. Please try a more specific agent endpoint."
 
         return {
             "cluster": _CLUSTER_RESEARCH,

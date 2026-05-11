@@ -15,7 +15,17 @@ Example:
 """
 
 # Basic research agent
-from app.agents.research.research_agent import ResearchAgent, ResearchState
+# Deep search agent
+from app.agents.research.deep_search_agent import (
+    DeepSearchAgent,
+    ResearchDepth,
+    ResearchFinding,
+    ResearchReport,
+    deep_research,
+    get_deep_search_agent,
+    quick_search,
+    reset_deep_search_agent,
+)
 
 # Query planning
 from app.agents.research.planner import (
@@ -26,20 +36,7 @@ from app.agents.research.planner import (
     SubQuery,
     create_research_plan,
 )
-
-# Source management
-from app.agents.research.source_manager import (
-    CitationFormat,
-    CitationFormatter,
-    CredibilityLevel,
-    CredibilityScorer,
-    Source,
-    SourceCollection,
-    SourceManager,
-    SourceType,
-    get_source_manager,
-    reset_source_manager,
-)
+from app.agents.research.research_agent import ResearchAgent, ResearchState
 
 # Search providers
 from app.agents.research.search_providers import (
@@ -56,16 +53,18 @@ from app.agents.research.search_providers import (
     search,
 )
 
-# Deep search agent
-from app.agents.research.deep_search_agent import (
-    DeepSearchAgent,
-    ResearchDepth,
-    ResearchFinding,
-    ResearchReport,
-    deep_research,
-    get_deep_search_agent,
-    quick_search,
-    reset_deep_search_agent,
+# Source management
+from app.agents.research.source_manager import (
+    CitationFormat,
+    CitationFormatter,
+    CredibilityLevel,
+    CredibilityScorer,
+    Source,
+    SourceCollection,
+    SourceManager,
+    SourceType,
+    get_source_manager,
+    reset_source_manager,
 )
 
 __all__ = [

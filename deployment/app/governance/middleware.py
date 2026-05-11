@@ -12,8 +12,8 @@ Provides:
 
 import logging
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, Callable
 
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
@@ -134,6 +134,7 @@ class RBACMiddleware(BaseHTTPMiddleware):
 
         # Create governance context
         import uuid
+
         request_id = request.headers.get("X-Request-ID", str(uuid.uuid4()))
 
         gov_context = GovernanceContext(
@@ -223,6 +224,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         except Exception as e:
             # Log but don't block on rate limiter errors
             import logging
+
             logging.getLogger(__name__).warning(f"Rate limiter error: {e}")
             return await call_next(request)
 
@@ -437,8 +439,6 @@ class PIIMiddleware(BaseHTTPMiddleware):
             from app.governance.pii_detector import (
                 PIIBlockedError,
                 PIISeverity,
-                PIIType,
-                check_for_pii,
                 get_pii_detector,
             )
 
@@ -454,10 +454,7 @@ class PIIMiddleware(BaseHTTPMiddleware):
 
                         # Block on critical PII
                         if result.severity == PIISeverity.CRITICAL:
-                            critical_types = {
-                                m.pii_type for m in result.matches
-                                if m.severity == PIISeverity.CRITICAL
-                            }
+                            critical_types = {m.pii_type for m in result.matches if m.severity == PIISeverity.CRITICAL}
                             raise PIIBlockedError(
                                 "Request contains sensitive PII",
                                 pii_types=critical_types,
@@ -548,9 +545,7 @@ class InjectionMiddleware(BaseHTTPMiddleware):
                 request is allowed through (default 0.85).
         """
         super().__init__(app)
-        self.exclude_paths: list[str] = list(self._DEFAULT_EXCLUDE) + (
-            exclude_paths or []
-        )
+        self.exclude_paths: list[str] = list(self._DEFAULT_EXCLUDE) + (exclude_paths or [])
         self.block_score = block_score
         self.warn_score = warn_score
 
@@ -607,11 +602,7 @@ class InjectionMiddleware(BaseHTTPMiddleware):
                 if isinstance(body_json, dict):
                     detector = get_injection_detector()
                     gov_context = get_governance_context(request)
-                    user_id = (
-                        gov_context.user_context.user_id
-                        if gov_context
-                        else "anonymous"
-                    )
+                    user_id = gov_context.user_context.user_id if gov_context else "anonymous"
 
                     for field in self._INPUT_FIELDS:
                         value = body_json.get(field)
@@ -639,8 +630,7 @@ class InjectionMiddleware(BaseHTTPMiddleware):
                                     },
                                 )
                                 _inj_logger.warning(
-                                    "Prompt injection blocked: user=%s path=%s "
-                                    "field=%s score=%.2f pattern=%r",
+                                    "Prompt injection blocked: user=%s path=%s field=%s score=%.2f pattern=%r",
                                     user_id,
                                     request.url.path,
                                     field,
@@ -649,9 +639,7 @@ class InjectionMiddleware(BaseHTTPMiddleware):
                                 )
                                 return JSONResponse(
                                     status_code=400,
-                                    content={
-                                        "detail": "Request blocked: potential prompt injection detected"
-                                    },
+                                    content={"detail": "Request blocked: potential prompt injection detected"},
                                 )
                             elif result.score >= self.warn_score:
                                 _inj_logger.warning(
@@ -665,9 +653,7 @@ class InjectionMiddleware(BaseHTTPMiddleware):
                                 )
 
         except Exception as exc:
-            _inj_logger.warning(
-                "InjectionMiddleware error (non-blocking): %s", exc
-            )
+            _inj_logger.warning("InjectionMiddleware error (non-blocking): %s", exc)
 
         return await call_next(request)
 
@@ -1058,6 +1044,7 @@ def create_permission_dependency(permission: Permission) -> Callable:
     Returns:
         Dependency function.
     """
+
     async def dependency(request: Request) -> UserContext:
         return await require_permission(request, permission)
 
@@ -1073,6 +1060,7 @@ def create_role_dependency(role: Role) -> Callable:
     Returns:
         Dependency function.
     """
+
     async def dependency(request: Request) -> UserContext:
         return await require_role(request, role)
 

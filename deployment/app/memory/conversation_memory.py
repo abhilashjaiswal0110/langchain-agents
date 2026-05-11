@@ -347,15 +347,17 @@ class ConversationMemory:
 
         summaries = []
         for session in sessions:
-            summaries.append(ConversationSummary(
-                session_id=session.id,
-                agent_type=session.metadata.agent_type,
-                user_id=session.metadata.user_id,
-                message_count=session.message_count,
-                started_at=session.created_at,
-                last_message_at=session.updated_at,
-                topics=session.metadata.tags,
-            ))
+            summaries.append(
+                ConversationSummary(
+                    session_id=session.id,
+                    agent_type=session.metadata.agent_type,
+                    user_id=session.metadata.user_id,
+                    message_count=session.message_count,
+                    started_at=session.created_at,
+                    last_message_at=session.updated_at,
+                    topics=session.metadata.tags,
+                )
+            )
 
         return summaries
 
@@ -368,7 +370,7 @@ class ConversationMemory:
         """
         # Check if we need to trim messages
         if len(session.messages) > self._max_messages:
-            session.messages = session.messages[-self._max_messages:]
+            session.messages = session.messages[-self._max_messages :]
 
 
 # Singleton pattern

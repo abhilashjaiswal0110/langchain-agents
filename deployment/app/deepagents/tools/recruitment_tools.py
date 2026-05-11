@@ -15,7 +15,6 @@ import logging
 import re
 import uuid
 from datetime import datetime
-from typing import Any
 
 from langchain_core.tools import tool
 from pydantic import BaseModel, Field
@@ -174,6 +173,7 @@ def _extract_text_from_pdf(content: bytes) -> str:
     """Extract text from PDF content."""
     try:
         from PyPDF2 import PdfReader
+
         reader = PdfReader(io.BytesIO(content))
         text = ""
         for page in reader.pages:
@@ -191,6 +191,7 @@ def _extract_text_from_docx(content: bytes) -> str:
     """Extract text from DOCX content."""
     try:
         from docx import Document
+
         doc = Document(io.BytesIO(content))
         text = "\n".join([para.text for para in doc.paragraphs])
         return text
@@ -256,21 +257,77 @@ def _estimate_experience_years(text: str) -> float:
 
 # Common skill patterns for extraction
 TECHNICAL_SKILLS = [
-    "python", "java", "javascript", "typescript", "c++", "c#", "go", "rust", "ruby",
-    "sql", "nosql", "mongodb", "postgresql", "mysql", "oracle", "redis",
-    "aws", "azure", "gcp", "kubernetes", "docker", "terraform", "ansible",
-    "react", "angular", "vue", "nodejs", "django", "flask", "spring", "fastapi",
-    "machine learning", "deep learning", "nlp", "computer vision", "ai",
-    "tensorflow", "pytorch", "scikit-learn", "pandas", "numpy",
-    "git", "jenkins", "ci/cd", "agile", "scrum", "devops",
-    "linux", "windows server", "networking", "security",
-    "rest api", "graphql", "microservices", "serverless",
+    "python",
+    "java",
+    "javascript",
+    "typescript",
+    "c++",
+    "c#",
+    "go",
+    "rust",
+    "ruby",
+    "sql",
+    "nosql",
+    "mongodb",
+    "postgresql",
+    "mysql",
+    "oracle",
+    "redis",
+    "aws",
+    "azure",
+    "gcp",
+    "kubernetes",
+    "docker",
+    "terraform",
+    "ansible",
+    "react",
+    "angular",
+    "vue",
+    "nodejs",
+    "django",
+    "flask",
+    "spring",
+    "fastapi",
+    "machine learning",
+    "deep learning",
+    "nlp",
+    "computer vision",
+    "ai",
+    "tensorflow",
+    "pytorch",
+    "scikit-learn",
+    "pandas",
+    "numpy",
+    "git",
+    "jenkins",
+    "ci/cd",
+    "agile",
+    "scrum",
+    "devops",
+    "linux",
+    "windows server",
+    "networking",
+    "security",
+    "rest api",
+    "graphql",
+    "microservices",
+    "serverless",
 ]
 
 SOFT_SKILLS = [
-    "leadership", "communication", "teamwork", "problem solving", "analytical",
-    "project management", "time management", "mentoring", "collaboration",
-    "presentation", "negotiation", "critical thinking", "adaptability",
+    "leadership",
+    "communication",
+    "teamwork",
+    "problem solving",
+    "analytical",
+    "project management",
+    "time management",
+    "mentoring",
+    "collaboration",
+    "presentation",
+    "negotiation",
+    "critical thinking",
+    "adaptability",
 ]
 
 
@@ -282,22 +339,26 @@ def _extract_skills(text: str) -> list[ExtractedSkill]:
     # Technical skills
     for skill in TECHNICAL_SKILLS:
         if skill.lower() in text_lower:
-            found_skills.append(ExtractedSkill(
-                name=skill.title(),
-                category="technical",
-                proficiency="intermediate",
-                confidence=0.8,
-            ))
+            found_skills.append(
+                ExtractedSkill(
+                    name=skill.title(),
+                    category="technical",
+                    proficiency="intermediate",
+                    confidence=0.8,
+                )
+            )
 
     # Soft skills
     for skill in SOFT_SKILLS:
         if skill.lower() in text_lower:
-            found_skills.append(ExtractedSkill(
-                name=skill.title(),
-                category="soft",
-                proficiency="intermediate",
-                confidence=0.7,
-            ))
+            found_skills.append(
+                ExtractedSkill(
+                    name=skill.title(),
+                    category="soft",
+                    proficiency="intermediate",
+                    confidence=0.7,
+                )
+            )
 
     return found_skills
 
@@ -320,6 +381,7 @@ def _determine_screening_level(years: float, skills: list[ExtractedSkill]) -> Sc
 # =============================================================================
 # Tool Functions
 # =============================================================================
+
 
 @tool
 def parse_resume(
@@ -386,15 +448,15 @@ def parse_resume(
 **Recommended Level**: {level.value}
 
 ### Contact
-- Email: {email or 'Not found'}
-- Phone: {phone or 'Not found'}
+- Email: {email or "Not found"}
+- Phone: {phone or "Not found"}
 
 ### Experience
 - Total Years: {years}
 
 ### Skills ({len(skills)} found)
-**Technical**: {', '.join([s.name for s in skills if s.category == 'technical'][:10]) or 'None extracted'}
-**Soft Skills**: {', '.join([s.name for s in skills if s.category == 'soft'][:5]) or 'None extracted'}
+**Technical**: {", ".join([s.name for s in skills if s.category == "technical"][:10]) or "None extracted"}
+**Soft Skills**: {", ".join([s.name for s in skills if s.category == "soft"][:5]) or "None extracted"}
 
 ### Summary
 {profile.summary[:300]}...
@@ -484,13 +546,13 @@ def parse_job_description(
 
 ### Experience Required
 - Minimum: {min_years} years
-- Maximum: {max_years if max_years < 99 else 'Not specified'} years
+- Maximum: {max_years if max_years < 99 else "Not specified"} years
 
 ### Required Skills ({len(required_skills)})
-{', '.join(required_skills[:15]) or 'None extracted'}
+{", ".join(required_skills[:15]) or "None extracted"}
 
 ### Education
-{education or 'Not specified'}
+{education or "Not specified"}
 
 ---
 *JD stored. Use screening tools to match candidates.*
@@ -558,17 +620,17 @@ def screen_candidate(
 
     # Calculate overall score with all configured weights
     overall_score = (
-        skill_score * config.scoring.technical_weight +
-        exp_score * config.scoring.experience_weight +
-        edu_score * config.scoring.education_weight +
-        soft_skills_score * config.scoring.soft_skills_weight +
-        cert_score * config.scoring.certification_weight
+        skill_score * config.scoring.technical_weight
+        + exp_score * config.scoring.experience_weight
+        + edu_score * config.scoring.education_weight
+        + soft_skills_score * config.scoring.soft_skills_weight
+        + cert_score * config.scoring.certification_weight
     ) / (
-        config.scoring.technical_weight +
-        config.scoring.experience_weight +
-        config.scoring.education_weight +
-        config.scoring.soft_skills_weight +
-        config.scoring.certification_weight
+        config.scoring.technical_weight
+        + config.scoring.experience_weight
+        + config.scoring.education_weight
+        + config.scoring.soft_skills_weight
+        + config.scoring.certification_weight
     )
 
     # Determine pass/fail
@@ -589,7 +651,9 @@ def screen_candidate(
     if exp_score >= 80:
         strengths.append(f"Meets experience requirement ({candidate.total_experience_years} years)")
     else:
-        gaps.append(f"Below experience requirement ({candidate.total_experience_years} vs {jd.min_experience_years} required)")
+        gaps.append(
+            f"Below experience requirement ({candidate.total_experience_years} vs {jd.min_experience_years} required)"
+        )
 
     # Generate recommendation
     if shortlisted:
@@ -645,20 +709,20 @@ def screen_candidate(
 ### Assessment
 - **Recommended Level**: {level.value}
 - **Passing Score**: {passing_score}%
-- **Status**: {'PASSED' if passed else 'FAILED'}
-- **Shortlisted**: {'Yes' if shortlisted else 'No'}
+- **Status**: {"PASSED" if passed else "FAILED"}
+- **Shortlisted**: {"Yes" if shortlisted else "No"}
 
 ### Strengths
-{chr(10).join(['- ' + s for s in strengths]) or '- None identified'}
+{chr(10).join(["- " + s for s in strengths]) or "- None identified"}
 
 ### Gaps
-{chr(10).join(['- ' + g for g in gaps]) or '- None identified'}
+{chr(10).join(["- " + g for g in gaps]) or "- None identified"}
 
 ### Matched Skills ({len(matched_skills)})
-{', '.join(list(matched_skills)[:10]) or 'None'}
+{", ".join(list(matched_skills)[:10]) or "None"}
 
 ### Missing Skills ({len(missing_skills)})
-{', '.join(list(missing_skills)[:10]) or 'None'}
+{", ".join(list(missing_skills)[:10]) or "None"}
 
 ---
 
@@ -699,11 +763,13 @@ def batch_screen_resumes(
 
     for candidate_id in candidates:
         # Screen each candidate
-        result_text = screen_candidate.invoke({
-            "candidate_id": candidate_id,
-            "jd_id": jd_id,
-            "session_id": session_id,
-        })
+        result_text = screen_candidate.invoke(
+            {
+                "candidate_id": candidate_id,
+                "jd_id": jd_id,
+                "session_id": session_id,
+            }
+        )
         results.append(result_text)
 
     # Get stored results for ranking
@@ -742,7 +808,7 @@ def batch_screen_resumes(
         status = "✅ Shortlist" if r.shortlisted else ("⚠️ Pass" if r.passed else "❌ Fail")
         output += f"| {i} | {r.candidate_name} | {r.overall_score:.1f}% | {r.recommended_level.value} | {status} |\n"
 
-    output += f"""
+    output += """
 ---
 
 ### Shortlisted Candidates for Technical Interview
@@ -751,7 +817,9 @@ def batch_screen_resumes(
 
     if shortlisted:
         for r in shortlisted:
-            output += f"- **{r.candidate_name}** ({r.candidate_id}) - {r.overall_score:.1f}% - {r.recommended_level.value}\n"
+            output += (
+                f"- **{r.candidate_name}** ({r.candidate_id}) - {r.overall_score:.1f}% - {r.recommended_level.value}\n"
+            )
     else:
         output += "*No candidates shortlisted*\n"
 
@@ -785,13 +853,13 @@ def get_candidate_profile(
 **Source**: {c.resume_source}
 
 ### Contact
-- Email: {c.email or 'Not provided'}
-- Phone: {c.phone or 'Not provided'}
-- Location: {c.location or 'Not provided'}
+- Email: {c.email or "Not provided"}
+- Phone: {c.phone or "Not provided"}
+- Location: {c.location or "Not provided"}
 
 ### Experience
 - **Total Years**: {c.total_experience_years}
-- **Recommended Level**: {c.screening_level.value if c.screening_level else 'Not determined'}
+- **Recommended Level**: {c.screening_level.value if c.screening_level else "Not determined"}
 
 ### Skills ({len(c.skills)})
 """
@@ -920,6 +988,7 @@ def get_session_dashboard(session_id: str = "default") -> str:
         _get_question_sets,
         _get_scores,
     )
+
     question_sets = _get_question_sets(session_id)
     scores = _get_scores(session_id)
 
@@ -997,12 +1066,12 @@ def get_session_dashboard(session_id: str = "default") -> str:
 
 | Category | Count | Status |
 |----------|-------|--------|
-| Job Descriptions | {total_jds} | {'Ready' if total_jds > 0 else 'Pending'} |
-| Candidates Parsed | {total_candidates} | {'Ready' if total_candidates > 0 else 'Pending'} |
-| Screenings Completed | {total_screenings} | {'Done' if total_screenings > 0 else 'Pending'} |
-| Shortlisted | {len(shortlisted)} | {'Available' if shortlisted else 'N/A'} |
-| Question Sets | {total_question_sets} | {'Generated' if total_question_sets > 0 else 'Pending'} |
-| Evaluations Complete | {total_scores} | {'Done' if total_scores > 0 else 'Pending'} |
+| Job Descriptions | {total_jds} | {"Ready" if total_jds > 0 else "Pending"} |
+| Candidates Parsed | {total_candidates} | {"Ready" if total_candidates > 0 else "Pending"} |
+| Screenings Completed | {total_screenings} | {"Done" if total_screenings > 0 else "Pending"} |
+| Shortlisted | {len(shortlisted)} | {"Available" if shortlisted else "N/A"} |
+| Question Sets | {total_question_sets} | {"Generated" if total_question_sets > 0 else "Pending"} |
+| Evaluations Complete | {total_scores} | {"Done" if total_scores > 0 else "Pending"} |
 
 ---
 
@@ -1011,7 +1080,7 @@ def get_session_dashboard(session_id: str = "default") -> str:
 
     if total_screenings > 0:
         output += f"""
-- Shortlisted: {len(shortlisted)} ({len(shortlisted)/total_screenings*100:.0f}%)
+- Shortlisted: {len(shortlisted)} ({len(shortlisted) / total_screenings * 100:.0f}%)
 - Passed (not shortlisted): {len(passed) - len(shortlisted)}
 - Failed: {len(failed)}
 """
@@ -1035,7 +1104,7 @@ def get_session_dashboard(session_id: str = "default") -> str:
     output += f"""
 ---
 
-*Dashboard refreshed at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}*
+*Dashboard refreshed at {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}*
 """
 
     return output
@@ -1082,10 +1151,10 @@ def clear_session_data(
 
     # Also clear interview and scoring data
     from app.deepagents.tools.interview_tools import (
-        _question_sets,
         _candidate_answers,
-        _evaluations,
         _candidate_scores,
+        _evaluations,
+        _question_sets,
     )
 
     if session_id in _question_sets:
@@ -1110,6 +1179,7 @@ def clear_session_data(
 
     # Clear SharePoint document cache
     from app.deepagents.tools.sharepoint_tools import clear_session_cache
+
     clear_session_cache(session_id)
     cleared.append("SharePoint cache: cleared")
 

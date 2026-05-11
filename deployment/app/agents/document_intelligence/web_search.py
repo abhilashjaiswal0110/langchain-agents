@@ -51,12 +51,12 @@ class DomainRestrictedSearch:
         if self._manager is None:
             try:
                 from app.agents.research.search_providers import SearchProviderManager
+
                 self._manager = SearchProviderManager()
             except ImportError:
                 logger.error("SearchProviderManager not available")
                 raise ImportError(
-                    "SearchProviderManager not found. "
-                    "Ensure app.agents.research.search_providers is available."
+                    "SearchProviderManager not found. Ensure app.agents.research.search_providers is available."
                 )
         return self._manager
 
@@ -95,19 +95,21 @@ class DomainRestrictedSearch:
             # Format results
             results = []
             for result in response.results:
-                results.append({
-                    "title": result.title,
-                    "url": result.url,
-                    "snippet": result.snippet,
-                    "score": result.score,
-                })
+                results.append(
+                    {
+                        "title": result.title,
+                        "url": result.url,
+                        "snippet": result.snippet,
+                        "score": result.score,
+                    }
+                )
 
             return {
                 "query": query,
                 "results": results,
                 "total_results": len(results),
                 "allowed_domains": self._allowed_domains,
-                "provider": str(response.provider) if hasattr(response, 'provider') else "unknown",
+                "provider": str(response.provider) if hasattr(response, "provider") else "unknown",
             }
 
         except Exception as e:
@@ -164,12 +166,10 @@ class DomainRestrictedSearch:
             return False
 
         from urllib.parse import urlparse
+
         try:
             domain = urlparse(url).netloc.lower()
-            return any(
-                domain == allowed or domain.endswith(f".{allowed}")
-                for allowed in self._allowed_domains
-            )
+            return any(domain == allowed or domain.endswith(f".{allowed}") for allowed in self._allowed_domains)
         except Exception:
             return False
 

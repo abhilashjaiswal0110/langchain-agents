@@ -23,20 +23,20 @@ Usage:
     setup_integration_routes(app)
 """
 
-from app.integrations.teams_webhook import (
-    TeamsWebhookHandler,
-    TeamsMessageCard,
-    TeamsAdaptiveCard,
-    process_teams_webhook,
-)
+from app.integrations.routes import setup_integration_routes
 from app.integrations.slack_webhook import (
-    SlackWebhookHandler,
     SlackBlockBuilder,
     SlackMessage,
+    SlackWebhookHandler,
     process_slack_webhook,
     verify_slack_signature,
 )
-from app.integrations.routes import setup_integration_routes
+from app.integrations.teams_webhook import (
+    TeamsAdaptiveCard,
+    TeamsMessageCard,
+    TeamsWebhookHandler,
+    process_teams_webhook,
+)
 
 __all__ = [
     # Teams

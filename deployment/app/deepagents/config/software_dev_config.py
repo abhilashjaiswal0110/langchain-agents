@@ -5,7 +5,7 @@ including SDLC phases, quality gates, and agent-specific settings.
 """
 
 from enum import Enum
-from typing import Any
+
 from pydantic import BaseModel, Field
 
 
@@ -137,9 +137,7 @@ class CICDConfig(BaseModel):
     """CI/CD pipeline configuration."""
 
     platform: str = Field(default="github-actions", description="CI/CD platform")
-    build_stages: list[str] = Field(
-        default_factory=lambda: ["lint", "test", "build", "deploy"]
-    )
+    build_stages: list[str] = Field(default_factory=lambda: ["lint", "test", "build", "deploy"])
     enable_auto_deploy: bool = Field(default=False)
     require_approval_prod: bool = Field(default=True)
     enable_rollback: bool = Field(default=True)

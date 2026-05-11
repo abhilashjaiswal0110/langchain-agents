@@ -37,9 +37,7 @@ class WebhookRetryHandler:
             ``[0, 0, 0]`` in tests to avoid real sleeps.
     """
 
-    def __init__(
-        self, backoff_seconds: list[int] | None = None
-    ) -> None:
+    def __init__(self, backoff_seconds: list[int] | None = None) -> None:
         self._backoff = backoff_seconds if backoff_seconds is not None else _DEFAULT_BACKOFF
         self._dlq: list[dict[str, Any]] = []
 
@@ -68,9 +66,7 @@ class WebhookRetryHandler:
         for attempt in range(attempts):
             try:
                 async with httpx.AsyncClient() as client:
-                    response = await client.post(
-                        url, json=payload, headers=headers, timeout=10
-                    )
+                    response = await client.post(url, json=payload, headers=headers, timeout=10)
                     if response.status_code < 500:
                         if response.status_code < 400:
                             logger.debug("Webhook delivered to %s (attempt %d)", url, attempt + 1)

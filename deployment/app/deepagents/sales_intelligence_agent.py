@@ -5,76 +5,69 @@ It coordinates specialized subagents to handle complex sales workflows
 including deal qualification, RFP responses, pricing, and competitive strategy.
 """
 
-import os
 import uuid
+from collections.abc import AsyncGenerator
 from datetime import datetime
-from typing import Any, AsyncGenerator, Literal
+from typing import Any, Literal
 
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
+from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 from langchain_core.tools import tool
 from langgraph.checkpoint.memory import MemorySaver
-
-from app.agents.base.llm_factory import get_llm
-from langgraph.graph import StateGraph, START, END
+from langgraph.graph import END, START, StateGraph
 from langgraph.prebuilt import ToolNode
 from langsmith import traceable
 
+from app.agents.base.llm_factory import get_llm
+from app.deepagents.core.state import DeepAgentState
 from app.deepagents.core.types import (
     Todo,
     TodoStatus,
 )
-from app.deepagents.core.state import DeepAgentState
+from app.deepagents.storage.persistent_backend import PersistentStorage
 from app.deepagents.subagents.sales_subagents import (
     get_all_sales_subagents,
-    DEAL_QUALIFIER_AGENT,
-    SOLUTION_ARCHITECT_AGENT,
-    PROPOSAL_WRITER_AGENT,
-    PRICING_ANALYST_AGENT,
-    COMPETITIVE_STRATEGIST_AGENT,
 )
-from app.deepagents.tools.crm_tools import (
-    search_opportunities,
-    get_deal_details,
-    update_opportunity_stage,
-    get_customer_history,
-    get_pipeline_summary,
-)
-from app.deepagents.tools.proposal_tools import (
-    search_rfp_templates,
-    get_template_details,
-    extract_requirements,
-    draft_proposal_section,
-    generate_executive_summary,
-    search_past_proposals,
+from app.deepagents.tools.analytics_tools import (
+    assess_deal_risk,
+    calculate_win_probability,
+    get_sales_performance_summary,
+    get_similar_deals,
 )
 from app.deepagents.tools.competitor_tools import (
-    get_competitive_analysis,
     compare_solutions,
-    suggest_differentiators,
+    get_competitive_analysis,
     get_objection_handler,
+    suggest_differentiators,
+)
+from app.deepagents.tools.crm_tools import (
+    get_customer_history,
+    get_deal_details,
+    get_pipeline_summary,
+    search_opportunities,
+    update_opportunity_stage,
+)
+from app.deepagents.tools.document_tools import (
+    clear_attachments,
+    get_attachment_summary,
+    get_document_context,
+    list_attachments,
+    search_attachments,
+    set_current_session,
 )
 from app.deepagents.tools.pricing_tools import (
-    calculate_pricing,
     analyze_margin,
+    calculate_pricing,
     generate_pricing_options,
     get_pricing_model_recommendation,
 )
-from app.deepagents.tools.analytics_tools import (
-    calculate_win_probability,
-    assess_deal_risk,
-    get_similar_deals,
-    get_sales_performance_summary,
+from app.deepagents.tools.proposal_tools import (
+    draft_proposal_section,
+    extract_requirements,
+    generate_executive_summary,
+    get_template_details,
+    search_past_proposals,
+    search_rfp_templates,
 )
-from app.deepagents.tools.document_tools import (
-    search_attachments,
-    list_attachments,
-    get_attachment_summary,
-    clear_attachments,
-    get_document_context,
-    set_current_session,
-)
-from app.deepagents.storage.persistent_backend import PersistentStorage
-
 
 SALES_INTELLIGENCE_SYSTEM_PROMPT = """You are a Sales & Pre-Sales Intelligence Deep Agent — an advanced AI coordinator for sales operations.
 
@@ -540,9 +533,7 @@ class SalesIntelligenceDeepAgent:
             ]
 
             if context:
-                messages.append(
-                    HumanMessage(content=f"Context:\n{context}\n\nTask: {task_description}")
-                )
+                messages.append(HumanMessage(content=f"Context:\n{context}\n\nTask: {task_description}"))
             else:
                 messages.append(HumanMessage(content=task_description))
 
@@ -803,10 +794,18 @@ class SalesIntelligenceDeepAgent:
             if tool_name:
                 if tool_name in ("write_todos", "update_todo"):
                     return "planning"
-                elif tool_name in ("search_opportunities", "get_deal_details", "get_customer_history",
-                                   "search_rfp_templates", "extract_requirements", "search_attachments",
-                                   "list_attachments", "get_attachment_summary",
-                                   "get_competitive_analysis", "get_similar_deals"):
+                elif tool_name in (
+                    "search_opportunities",
+                    "get_deal_details",
+                    "get_customer_history",
+                    "search_rfp_templates",
+                    "extract_requirements",
+                    "search_attachments",
+                    "list_attachments",
+                    "get_attachment_summary",
+                    "get_competitive_analysis",
+                    "get_similar_deals",
+                ):
                     return "analyzing"
                 else:
                     return "executing"
@@ -826,7 +825,7 @@ class SalesIntelligenceDeepAgent:
                 "executing": "Executing actions...",
                 "summarizing": "Preparing response...",
             }
-            return phase_messages.get(phase, f"Processing...")
+            return phase_messages.get(phase, "Processing...")
 
         try:
             async for event in self.graph.astream_events(
@@ -877,7 +876,9 @@ class SalesIntelligenceDeepAgent:
                     if output and hasattr(output, "tool_calls") and output.tool_calls:
                         pending_tool_calls = output.tool_calls
                         # Emit thinking update about pending tool calls
-                        tool_names = [tc.get("name", tc.get("function", {}).get("name", "unknown")) for tc in pending_tool_calls]
+                        tool_names = [
+                            tc.get("name", tc.get("function", {}).get("name", "unknown")) for tc in pending_tool_calls
+                        ]
                         current_phase = "executing"
 
                         yield {
@@ -1003,9 +1004,7 @@ class SalesIntelligenceDeepAgent:
                                 else:
                                     safe_input[k] = (
                                         str(v)
-                                        if not isinstance(
-                                            v, (str, int, float, bool, list, dict, type(None))
-                                        )
+                                        if not isinstance(v, (str, int, float, bool, list, dict, type(None)))
                                         else v
                                     )
                             except Exception:
@@ -1176,7 +1175,7 @@ class SalesIntelligenceDeepAgent:
 
         # Truncate if still too long
         if len(content) > max_length:
-            content = content[:max_length - 3] + "..."
+            content = content[: max_length - 3] + "..."
 
         return content
 

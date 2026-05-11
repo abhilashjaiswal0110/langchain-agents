@@ -13,14 +13,14 @@ Key Components:
 - Context: File system for storing investigation notes and reports
 """
 
+from app.deepagents.core.deep_agent import DeepAgent, create_deep_agent
+from app.deepagents.core.state import DeepAgentState
 from app.deepagents.core.types import (
-    Todo,
-    TodoStatus,
     DeepAgentConfig,
     SubAgentDefinition,
+    Todo,
+    TodoStatus,
 )
-from app.deepagents.core.state import DeepAgentState
-from app.deepagents.core.deep_agent import create_deep_agent, DeepAgent
 from app.deepagents.it_operations_agent import (
     ITOperationsDeepAgent,
     create_it_operations_agent,

@@ -9,20 +9,20 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import (
+    Docx2txtLoader,
     PyPDFLoader,
     TextLoader,
-    Docx2txtLoader,
 )
 from langchain_community.vectorstores import FAISS
 from langchain_core.documents import Document
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnablePassthrough
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langsmith import traceable
 
-from app.agents.base.llm_factory import get_llm, get_embedding_model
+from app.agents.base.llm_factory import get_embedding_model, get_llm
 
 
 class DocumentRAGChain:
@@ -68,27 +68,29 @@ class DocumentRAGChain:
         self.document_metadata: dict[str, Any] = {}
 
         # RAG prompt template
-        self.prompt = ChatPromptTemplate.from_messages([
-            (
-                "system",
-                """You are a helpful assistant that answers questions based on the provided document context.
+        self.prompt = ChatPromptTemplate.from_messages(
+            [
+                (
+                    "system",
+                    """You are a helpful assistant that answers questions based on the provided document context.
 
 Instructions:
 - Answer questions accurately based ONLY on the provided context
 - If the answer is not in the context, say "I couldn't find this information in the document"
 - Cite specific parts of the document when possible
 - Be concise but thorough""",
-            ),
-            (
-                "human",
-                """Context from document:
+                ),
+                (
+                    "human",
+                    """Context from document:
 {context}
 
 Question: {question}
 
 Answer:""",
-            ),
-        ])
+                ),
+            ]
+        )
 
     def _get_loader(self, file_path: str) -> PyPDFLoader | TextLoader | Docx2txtLoader:
         """Get the appropriate document loader based on file extension.
@@ -111,9 +113,7 @@ Answer:""",
         elif ext in [".docx", ".doc"]:
             return Docx2txtLoader(file_path)
         else:
-            raise ValueError(
-                f"Unsupported file type: {ext}. Supported types: .pdf, .txt, .docx"
-            )
+            raise ValueError(f"Unsupported file type: {ext}. Supported types: .pdf, .txt, .docx")
 
     @traceable(name="load_document", tags=["doc-rag", "ingestion"])
     def load_document(self, file_path: str) -> dict[str, Any]:
@@ -169,9 +169,7 @@ Answer:""",
             }
 
     @traceable(name="load_from_bytes", tags=["doc-rag", "ingestion"])
-    def load_from_bytes(
-        self, content: bytes, filename: str
-    ) -> dict[str, Any]:
+    def load_from_bytes(self, content: bytes, filename: str) -> dict[str, Any]:
         """Load a document from bytes (for file uploads).
 
         Args:
@@ -254,9 +252,7 @@ Answer:""",
                 {
                     "source": doc.metadata.get("source_file", "unknown"),
                     "chunk_index": doc.metadata.get("chunk_index", -1),
-                    "preview": doc.page_content[:200] + "..."
-                    if len(doc.page_content) > 200
-                    else doc.page_content,
+                    "preview": doc.page_content[:200] + "..." if len(doc.page_content) > 200 else doc.page_content,
                 }
                 for doc in source_docs
             ]

@@ -10,7 +10,6 @@ Following Enterprise Development Standards:
 
 import base64
 import logging
-from typing import Any
 
 from langchain_core.tools import tool
 
@@ -114,9 +113,9 @@ def upload_document(
         response += f"\n**Content Preview**:\n{preview}\n"
 
     response += (
-        f"\n---\n"
-        f"This document is now the **current document**. "
-        f"Questions about 'the document' or 'it' will search this file."
+        "\n---\n"
+        "This document is now the **current document**. "
+        "Questions about 'the document' or 'it' will search this file."
     )
 
     return response
@@ -195,10 +194,7 @@ def search_documents(
 
     output = f"Found {len(results)} relevant chunks (searched {scope_info.get(scope, scope)}):\n\n"
     for i, r in enumerate(results, 1):
-        output += (
-            f"**Result {i}** (from {r['filename']}, chunk {r['chunk_index']}):\n"
-            f"{r['content'][:500]}...\n\n"
-        )
+        output += f"**Result {i}** (from {r['filename']}, chunk {r['chunk_index']}):\n{r['content'][:500]}...\n\n"
 
     return output
 
@@ -244,11 +240,7 @@ def web_search(
     output += f"(Searching in: {', '.join(allowed)})\n\n"
 
     for i, r in enumerate(result["results"], 1):
-        output += (
-            f"**{i}. {r['title']}**\n"
-            f"URL: {r['url']}\n"
-            f"{r['snippet']}\n\n"
-        )
+        output += f"**{i}. {r['title']}**\nURL: {r['url']}\n{r['snippet']}\n\n"
 
     return output
 
@@ -303,8 +295,8 @@ def summarize_document(
     Returns:
         Document summary in the specified language
     """
-    from app.agents.document_intelligence.vector_store import get_vector_store
     from app.agents.document_intelligence.translator import get_translator
+    from app.agents.document_intelligence.vector_store import get_vector_store
 
     session_id = get_active_session()
     vector_store = get_vector_store()
@@ -340,21 +332,20 @@ def summarize_document(
     else:  # detailed
         instruction = "Provide a detailed paragraph summary covering the main points, findings, and conclusions."
 
-    from langchain_core.prompts import ChatPromptTemplate
     from langchain_core.output_parsers import StrOutputParser
+    from langchain_core.prompts import ChatPromptTemplate
 
-    prompt = ChatPromptTemplate.from_messages([
-        ("system", f"{instruction}\nRespond in {target_language}."),
-        ("human", "Content to summarize:\n\n{content}"),
-    ])
+    prompt = ChatPromptTemplate.from_messages(
+        [
+            ("system", f"{instruction}\nRespond in {target_language}."),
+            ("human", "Content to summarize:\n\n{content}"),
+        ]
+    )
 
     chain = prompt | llm | StrOutputParser()
     summary = chain.invoke({"content": content})
 
-    return (
-        f"**Summary of {doc['filename']}** ({summary_type}):\n\n"
-        f"{summary}"
-    )
+    return f"**Summary of {doc['filename']}** ({summary_type}):\n\n{summary}"
 
 
 @tool
@@ -390,9 +381,9 @@ def list_documents() -> str:
     for doc in docs:
         # Mark current and recent documents
         status_markers = []
-        if doc['doc_id'] == current_doc_id:
+        if doc["doc_id"] == current_doc_id:
             status_markers.append("CURRENT")
-        elif doc['doc_id'] in recent_doc_ids:
+        elif doc["doc_id"] in recent_doc_ids:
             status_markers.append("recent")
 
         status_str = f" [{', '.join(status_markers)}]" if status_markers else ""
@@ -405,7 +396,7 @@ def list_documents() -> str:
             f"  - Uploaded: {doc['uploaded_at']}\n\n"
         )
 
-    output += f"\n**Session Statistics:**\n"
+    output += "\n**Session Statistics:**\n"
     output += f"- Total documents: {stats['total_documents']}\n"
     output += f"- Total chunks: {stats['total_chunks']}\n"
     output += f"- Current document: {current_doc_id or 'None'}\n"
@@ -460,7 +451,7 @@ def detect_language(text: str) -> str:
     Returns:
         Detected language code and name with confidence information
     """
-    from app.agents.document_intelligence.translator import get_translator, SUPPORTED_LANGUAGES
+    from app.agents.document_intelligence.translator import SUPPORTED_LANGUAGES, get_translator
 
     translator = get_translator()
     code = translator.detect_language(text)
@@ -470,7 +461,7 @@ def detect_language(text: str) -> str:
         f"**Detected Language:**\n"
         f"- Code: {code}\n"
         f"- Name: {name}\n\n"
-        f"Sample analyzed: \"{text[:100]}{'...' if len(text) > 100 else ''}\""
+        f'Sample analyzed: "{text[:100]}{"..." if len(text) > 100 else ""}"'
     )
 
 

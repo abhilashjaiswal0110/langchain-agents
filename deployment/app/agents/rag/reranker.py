@@ -10,9 +10,7 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-RERANKER_MODEL = os.getenv(
-    "RERANKER_MODEL", "cross-encoder/ms-marco-MiniLM-L-6-v2"
-)
+RERANKER_MODEL = os.getenv("RERANKER_MODEL", "cross-encoder/ms-marco-MiniLM-L-6-v2")
 RERANKER_TOP_K = int(os.getenv("RERANKER_TOP_K", "5"))
 
 
@@ -80,14 +78,10 @@ class CrossEncoderReranker:
         try:
             pairs = [(query, doc["content"]) for doc in documents]
             scores = model.predict(pairs)
-            ranked = sorted(
-                zip(scores, documents), key=lambda x: x[0], reverse=True
-            )
+            ranked = sorted(zip(scores, documents, strict=False), key=lambda x: x[0], reverse=True)
             return [doc for _, doc in ranked[:top_k]]
         except Exception as exc:
-            logger.warning(
-                "Reranking failed, returning original order: %s", exc
-            )
+            logger.warning("Reranking failed, returning original order: %s", exc)
             return documents[:top_k]
 
 

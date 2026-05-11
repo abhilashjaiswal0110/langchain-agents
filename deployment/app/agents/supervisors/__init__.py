@@ -20,21 +20,21 @@ Example:
     ... })
 """
 
-from app.agents.supervisors.it_supervisor import (
-    ITSupervisor,
-    SupervisorState,
-    get_it_supervisor,
-    create_it_supervisor,
-)
 from app.agents.supervisors.domain_router import (
-    DomainRouter,
     DomainIntent,
+    DomainRouter,
     get_domain_router,
 )
 from app.agents.supervisors.escalation_handler import (
     EscalationHandler,
     EscalationLevel,
     EscalationRequest,
+)
+from app.agents.supervisors.it_supervisor import (
+    ITSupervisor,
+    SupervisorState,
+    create_it_supervisor,
+    get_it_supervisor,
 )
 
 __all__ = [

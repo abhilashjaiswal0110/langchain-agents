@@ -11,11 +11,10 @@ Usage:
 import logging
 import os
 import random
-from typing import Any
 
 from fastapi import BackgroundTasks
 
-from app.agents.evals.langsmith_evaluator import LangSmithEvaluator, LangSmithConfig
+from app.agents.evals.langsmith_evaluator import LangSmithConfig, LangSmithEvaluator
 
 logger = logging.getLogger(__name__)
 

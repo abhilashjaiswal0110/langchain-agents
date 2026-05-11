@@ -408,6 +408,7 @@ class RecruitmentAgentConfig(BaseModel):
             elif path.suffix in [".yaml", ".yml"]:
                 try:
                     import yaml
+
                     data = yaml.safe_load(f)
                 except ImportError:
                     msg = "PyYAML required for YAML config files: pip install pyyaml"
@@ -435,6 +436,7 @@ class RecruitmentAgentConfig(BaseModel):
             elif path.suffix in [".yaml", ".yml"]:
                 try:
                     import yaml
+
                     yaml.dump(self.model_dump(), f, default_flow_style=False)
                 except ImportError:
                     msg = "PyYAML required for YAML config files: pip install pyyaml"

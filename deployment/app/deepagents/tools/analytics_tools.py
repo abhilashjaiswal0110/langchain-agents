@@ -3,7 +3,6 @@
 Tools for win probability, risk assessment, and deal analytics.
 """
 
-from datetime import datetime
 from typing import Literal
 
 from langchain_core.tools import tool
@@ -211,8 +210,8 @@ def calculate_win_probability(
 ## Win Probability: {prob_pct:.0f}% {rating}
 
 **Historical Baseline:**
-- Business Line Win Rate: {history['win_rate']}%
-- Stage Conversion: {history['stage_conversion'].get(stage, 50)*100:.0f}%
+- Business Line Win Rate: {history["win_rate"]}%
+- Stage Conversion: {history["stage_conversion"].get(stage, 50) * 100:.0f}%
 
 **Factors Applied:**
 {chr(10).join(adjustments)}
@@ -235,9 +234,9 @@ def calculate_win_probability(
     output += f"""
 
 **Benchmark Data ({business_line}):**
-- Average Deal Size: ${history['avg_deal_size']:,}
-- Average Sales Cycle: {history['avg_sales_cycle_days']} days
-- Top Win Factors: {', '.join(history['top_win_factors'])}
+- Average Deal Size: ${history["avg_deal_size"]:,}
+- Average Sales Cycle: {history["avg_sales_cycle_days"]} days
+- Top Win Factors: {", ".join(history["top_win_factors"])}
 """
 
     return output
@@ -272,100 +271,124 @@ def assess_deal_risk(
 
     # Deal size risk
     if deal_amount > 5000000:
-        risks.append({
-            "category": "Deal Size",
-            "level": "High",
-            "description": RISK_FACTORS["deal_size_risk"]["high"],
-            "mitigation": "Involve executive sponsors, prepare detailed business case, consider phased approach",
-        })
+        risks.append(
+            {
+                "category": "Deal Size",
+                "level": "High",
+                "description": RISK_FACTORS["deal_size_risk"]["high"],
+                "mitigation": "Involve executive sponsors, prepare detailed business case, consider phased approach",
+            }
+        )
         risk_score += 3
     elif deal_amount > 2000000:
-        risks.append({
-            "category": "Deal Size",
-            "level": "Medium",
-            "description": RISK_FACTORS["deal_size_risk"]["medium"],
-            "mitigation": "Standard approval process, competitive positioning",
-        })
+        risks.append(
+            {
+                "category": "Deal Size",
+                "level": "Medium",
+                "description": RISK_FACTORS["deal_size_risk"]["medium"],
+                "mitigation": "Standard approval process, competitive positioning",
+            }
+        )
         risk_score += 2
     else:
-        risks.append({
-            "category": "Deal Size",
-            "level": "Low",
-            "description": RISK_FACTORS["deal_size_risk"]["low"],
-            "mitigation": "Standard sales process",
-        })
+        risks.append(
+            {
+                "category": "Deal Size",
+                "level": "Low",
+                "description": RISK_FACTORS["deal_size_risk"]["low"],
+                "mitigation": "Standard sales process",
+            }
+        )
         risk_score += 1
 
     # Relationship risk
     if is_new_customer:
-        risks.append({
-            "category": "Relationship",
-            "level": "High",
-            "description": RISK_FACTORS["relationship_risk"]["high"],
-            "mitigation": "Invest in relationship building, provide strong references, consider pilot",
-        })
+        risks.append(
+            {
+                "category": "Relationship",
+                "level": "High",
+                "description": RISK_FACTORS["relationship_risk"]["high"],
+                "mitigation": "Invest in relationship building, provide strong references, consider pilot",
+            }
+        )
         risk_score += 3
     else:
-        risks.append({
-            "category": "Relationship",
-            "level": "Low",
-            "description": RISK_FACTORS["relationship_risk"]["low"],
-            "mitigation": "Leverage existing relationship",
-        })
+        risks.append(
+            {
+                "category": "Relationship",
+                "level": "Low",
+                "description": RISK_FACTORS["relationship_risk"]["low"],
+                "mitigation": "Leverage existing relationship",
+            }
+        )
         risk_score += 1
 
     # Technical risk
     if is_new_technology:
-        risks.append({
-            "category": "Technical",
-            "level": "High",
-            "description": RISK_FACTORS["technical_risk"]["high"],
-            "mitigation": "Include POC phase, technical advisors, risk contingency in pricing",
-        })
+        risks.append(
+            {
+                "category": "Technical",
+                "level": "High",
+                "description": RISK_FACTORS["technical_risk"]["high"],
+                "mitigation": "Include POC phase, technical advisors, risk contingency in pricing",
+            }
+        )
         risk_score += 3
     else:
-        risks.append({
-            "category": "Technical",
-            "level": "Low",
-            "description": RISK_FACTORS["technical_risk"]["low"],
-            "mitigation": "Use proven methodologies and templates",
-        })
+        risks.append(
+            {
+                "category": "Technical",
+                "level": "Low",
+                "description": RISK_FACTORS["technical_risk"]["low"],
+                "mitigation": "Use proven methodologies and templates",
+            }
+        )
         risk_score += 1
 
     # Competition risk
     comp_level = competitor_strength
-    risks.append({
-        "category": "Competition",
-        "level": comp_level.capitalize(),
-        "description": RISK_FACTORS["competition_risk"][comp_level],
-        "mitigation": "Sharp competitive positioning, clear differentiators" if comp_level == "high" else "Standard competitive approach",
-    })
+    risks.append(
+        {
+            "category": "Competition",
+            "level": comp_level.capitalize(),
+            "description": RISK_FACTORS["competition_risk"][comp_level],
+            "mitigation": "Sharp competitive positioning, clear differentiators"
+            if comp_level == "high"
+            else "Standard competitive approach",
+        }
+    )
     risk_score += {"low": 1, "medium": 2, "high": 3}[comp_level]
 
     # Timeline risk
     if timeline_weeks < 8:
-        risks.append({
-            "category": "Timeline",
-            "level": "High",
-            "description": RISK_FACTORS["timeline_risk"]["high"],
-            "mitigation": "Experienced team, clear scope boundaries, change control process",
-        })
+        risks.append(
+            {
+                "category": "Timeline",
+                "level": "High",
+                "description": RISK_FACTORS["timeline_risk"]["high"],
+                "mitigation": "Experienced team, clear scope boundaries, change control process",
+            }
+        )
         risk_score += 3
     elif timeline_weeks < 16:
-        risks.append({
-            "category": "Timeline",
-            "level": "Medium",
-            "description": RISK_FACTORS["timeline_risk"]["medium"],
-            "mitigation": "Standard project management rigor",
-        })
+        risks.append(
+            {
+                "category": "Timeline",
+                "level": "Medium",
+                "description": RISK_FACTORS["timeline_risk"]["medium"],
+                "mitigation": "Standard project management rigor",
+            }
+        )
         risk_score += 2
     else:
-        risks.append({
-            "category": "Timeline",
-            "level": "Low",
-            "description": RISK_FACTORS["timeline_risk"]["low"],
-            "mitigation": "Normal delivery planning",
-        })
+        risks.append(
+            {
+                "category": "Timeline",
+                "level": "Low",
+                "description": RISK_FACTORS["timeline_risk"]["low"],
+                "mitigation": "Normal delivery planning",
+            }
+        )
         risk_score += 1
 
     # Overall risk rating
@@ -398,9 +421,9 @@ def assess_deal_risk(
     for risk in risks:
         level_icon = "🔴" if risk["level"] == "High" else ("🟡" if risk["level"] == "Medium" else "🟢")
         output += f"""
-### {level_icon} {risk['category']} Risk: {risk['level']}
-*{risk['description']}*
-**Mitigation:** {risk['mitigation']}
+### {level_icon} {risk["category"]} Risk: {risk["level"]}
+*{risk["description"]}*
+**Mitigation:** {risk["mitigation"]}
 """
 
     output += f"""
@@ -485,7 +508,8 @@ def get_similar_deals(
 
     # Filter by business line and outcome
     filtered = [
-        d for d in similar_deals
+        d
+        for d in similar_deals
         if d["business_line"].lower() == business_line.lower()
         and (outcome_filter == "All" or d["outcome"] == outcome_filter)
     ][:limit]
@@ -495,18 +519,18 @@ def get_similar_deals(
 
     history = WIN_LOSS_DB.get(business_line, {})
 
-    output = [f"**Similar Deals Analysis**\n"]
+    output = ["**Similar Deals Analysis**\n"]
     output.append(f"*Business Line: {business_line} | Target Value: ${deal_amount:,.0f}*\n")
 
     for deal in filtered:
         outcome_icon = "✅" if deal["outcome"] == "Won" else "❌"
         output.append(f"""
-### {outcome_icon} {deal['name']}
-**Value:** ${deal['value']:,} | **Outcome:** {deal['outcome']}
+### {outcome_icon} {deal["name"]}
+**Value:** ${deal["value"]:,} | **Outcome:** {deal["outcome"]}
 
-**Key Factors:** {', '.join(deal['factors'])}
+**Key Factors:** {", ".join(deal["factors"])}
 
-**Lesson Learned:** {deal['lessons']}
+**Lesson Learned:** {deal["lessons"]}
 """)
 
     if history:
@@ -514,10 +538,10 @@ def get_similar_deals(
 ---
 
 **Business Line Insights ({business_line}):**
-- Overall Win Rate: {history.get('win_rate', 'N/A')}%
-- Avg Deal Size: ${history.get('avg_deal_size', 0):,}
-- Top Win Factors: {', '.join(history.get('top_win_factors', [])[:3])}
-- Top Loss Factors: {', '.join(history.get('top_loss_factors', [])[:3])}
+- Overall Win Rate: {history.get("win_rate", "N/A")}%
+- Avg Deal Size: ${history.get("avg_deal_size", 0):,}
+- Top Win Factors: {", ".join(history.get("top_win_factors", [])[:3])}
+- Top Loss Factors: {", ".join(history.get("top_loss_factors", [])[:3])}
 """)
 
     return "\n".join(output)
@@ -565,7 +589,7 @@ def get_sales_performance_summary(
 **Sales Performance Summary**
 
 **Period:** {time_period.capitalize()}
-**Scope:** {business_line or 'All Business Lines'}
+**Scope:** {business_line or "All Business Lines"}
 
 ---
 
@@ -573,10 +597,10 @@ def get_sales_performance_summary(
 
 | KPI | Value | Target | Status |
 |-----|-------|--------|--------|
-| Total Deals | {total_deals} | 120 | {'✅' if total_deals >= 100 else '⚠️'} |
-| Win Rate | {win_rate:.1f}% | 65% | {'✅' if win_rate >= 65 else '⚠️'} |
-| Total Revenue | ${total_revenue:,.0f} | $100M | {'✅' if total_revenue >= 90000000 else '⚠️'} |
-| Avg Sales Cycle | {avg_cycle:.0f} days | 100 days | {'✅' if avg_cycle <= 100 else '⚠️'} |
+| Total Deals | {total_deals} | 120 | {"✅" if total_deals >= 100 else "⚠️"} |
+| Win Rate | {win_rate:.1f}% | 65% | {"✅" if win_rate >= 65 else "⚠️"} |
+| Total Revenue | ${total_revenue:,.0f} | $100M | {"✅" if total_revenue >= 90000000 else "⚠️"} |
+| Avg Sales Cycle | {avg_cycle:.0f} days | 100 days | {"✅" if avg_cycle <= 100 else "⚠️"} |
 
 ---
 
@@ -589,10 +613,10 @@ def get_sales_performance_summary(
             continue
         output += f"""
 ### {line}
-- Deals: {data['total_deals']} (Won: {data['won']}, Lost: {data['lost']})
-- Win Rate: {data['win_rate']}%
-- Avg Deal: ${data['avg_deal_size']:,}
-- Avg Cycle: {data['avg_sales_cycle_days']} days
+- Deals: {data["total_deals"]} (Won: {data["won"]}, Lost: {data["lost"]})
+- Win Rate: {data["win_rate"]}%
+- Avg Deal: ${data["avg_deal_size"]:,}
+- Avg Cycle: {data["avg_sales_cycle_days"]} days
 """
 
     output += """

@@ -1,4 +1,5 @@
 """Data models for the agent-to-agent handoff protocol."""
+
 from pydantic import BaseModel, Field
 
 

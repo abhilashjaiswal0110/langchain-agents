@@ -36,10 +36,10 @@ Usage:
 import logging
 import time
 from collections import defaultdict
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime
 from enum import Enum
-from typing import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -392,9 +392,7 @@ class CostTracker:
         # Check budget alerts
         self._check_budget_alerts(user_id, agent_type)
 
-        logger.debug(
-            f"Tracked usage: model={model}, tokens={usage.total_tokens}, cost=${cost:.6f}"
-        )
+        logger.debug(f"Tracked usage: model={model}, tokens={usage.total_tokens}, cost=${cost:.6f}")
 
         return usage
 
@@ -457,10 +455,7 @@ class CostTracker:
             limit: Budget limit.
         """
         percentage = (current / limit) * 100
-        logger.warning(
-            f"Budget alert: {alert_type} at {percentage:.1f}% "
-            f"(${current:.4f} / ${limit:.2f})"
-        )
+        logger.warning(f"Budget alert: {alert_type} at {percentage:.1f}% (${current:.4f} / ${limit:.2f})")
 
         if self.config.alert_callback:
             try:

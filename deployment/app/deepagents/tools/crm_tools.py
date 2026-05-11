@@ -171,6 +171,7 @@ CUSTOMERS_DB = {
 def _is_live_mode() -> bool:
     """Check if running in live CRM mode."""
     import os
+
     return bool(os.getenv("CRM_API_KEY"))
 
 
@@ -229,12 +230,12 @@ def search_opportunities(
     output = [f"**Found {len(results)} opportunity(s):**\n"]
     for opp in results:
         output.append(f"""
-**{opp['id']}** - {opp['name']}
-- Customer: {opp['customer']} | Amount: ${opp['amount']:,}
-- Stage: {opp['stage']} | Probability: {opp['probability']}%
-- Business Line: {opp['business_line']} | Owner: {opp['owner']}
-- Close Date: {opp['close_date']}
-- Competitors: {', '.join(opp['competitors'])}
+**{opp["id"]}** - {opp["name"]}
+- Customer: {opp["customer"]} | Amount: ${opp["amount"]:,}
+- Stage: {opp["stage"]} | Probability: {opp["probability"]}%
+- Business Line: {opp["business_line"]} | Owner: {opp["owner"]}
+- Close Date: {opp["close_date"]}
+- Competitors: {", ".join(opp["competitors"])}
 """)
     return "\n".join(output)
 
@@ -260,35 +261,35 @@ def get_deal_details(opportunity_id: str) -> str:
         return f"Opportunity {opportunity_id} not found."
 
     return f"""
-**Opportunity Details: {opp['id']}**
+**Opportunity Details: {opp["id"]}**
 
 **Overview**
-- Name: {opp['name']}
-- Customer: {opp['customer']}
-- Amount: ${opp['amount']:,}
-- Stage: {opp['stage']} | Probability: {opp['probability']}%
-- Close Date: {opp['close_date']}
-- Owner: {opp['owner']}
-- Business Line: {opp['business_line']}
+- Name: {opp["name"]}
+- Customer: {opp["customer"]}
+- Amount: ${opp["amount"]:,}
+- Stage: {opp["stage"]} | Probability: {opp["probability"]}%
+- Close Date: {opp["close_date"]}
+- Owner: {opp["owner"]}
+- Business Line: {opp["business_line"]}
 
 **Description**
-{opp['description']}
+{opp["description"]}
 
 **Key Requirements**
-{chr(10).join('- ' + req for req in opp['requirements'])}
+{chr(10).join("- " + req for req in opp["requirements"])}
 
 **Key Contacts**
-{chr(10).join('- ' + contact for contact in opp['contacts'])}
+{chr(10).join("- " + contact for contact in opp["contacts"])}
 
 **Competition**
-{chr(10).join('- ' + comp for comp in opp['competitors'])}
+{chr(10).join("- " + comp for comp in opp["competitors"])}
 
 **Next Steps**
-{opp['next_steps']}
+{opp["next_steps"]}
 
 **Timeline**
-- Created: {opp['created_date']}
-- Last Activity: {opp['last_activity']}
+- Created: {opp["created_date"]}
+- Last Activity: {opp["last_activity"]}
 """
 
 
@@ -323,7 +324,7 @@ def update_opportunity_stage(
 
     result = f"""
 **Stage Updated Successfully**
-- Opportunity: {opp['id']} - {opp['name']}
+- Opportunity: {opp["id"]} - {opp["name"]}
 - Previous Stage: {old_stage}
 - New Stage: {new_stage}
 """
@@ -360,42 +361,41 @@ def get_customer_history(customer_id_or_name: str) -> str:
         return f"Customer '{customer_id_or_name}' not found."
 
     # Get active opportunities
-    active_opps = [
-        opp for opp in OPPORTUNITIES_DB.values()
-        if opp["customer_id"] == customer["id"]
-    ]
+    active_opps = [opp for opp in OPPORTUNITIES_DB.values() if opp["customer_id"] == customer["id"]]
 
-    past_deals_text = "\n".join(
-        f"- {d['name']} ({d['year']}): ${d['value']:,} - {d['outcome']}"
-        for d in customer["past_deals"]
-    ) if customer["past_deals"] else "No past deals on record."
+    past_deals_text = (
+        "\n".join(f"- {d['name']} ({d['year']}): ${d['value']:,} - {d['outcome']}" for d in customer["past_deals"])
+        if customer["past_deals"]
+        else "No past deals on record."
+    )
 
-    active_opps_text = "\n".join(
-        f"- {opp['id']}: {opp['name']} (${opp['amount']:,}) - {opp['stage']}"
-        for opp in active_opps
-    ) if active_opps else "No active opportunities."
+    active_opps_text = (
+        "\n".join(f"- {opp['id']}: {opp['name']} (${opp['amount']:,}) - {opp['stage']}" for opp in active_opps)
+        if active_opps
+        else "No active opportunities."
+    )
 
     satisfaction = f"{customer['satisfaction_score']}/5" if customer["satisfaction_score"] else "Not rated"
 
     return f"""
-**Customer Profile: {customer['name']}**
+**Customer Profile: {customer["name"]}**
 
 **Company Information**
-- ID: {customer['id']}
-- Industry: {customer['industry']}
-- Size: {customer['size']} ({customer['employees']:,} employees)
-- Revenue: {customer['revenue']}
-- Location: {customer['location']}
+- ID: {customer["id"]}
+- Industry: {customer["industry"]}
+- Size: {customer["size"]} ({customer["employees"]:,} employees)
+- Revenue: {customer["revenue"]}
+- Location: {customer["location"]}
 
 **Relationship Summary**
-- Account Manager: {customer['account_manager']}
-- Relationship Since: {customer['relationship_start']}
-- Total Contract Value: ${customer['total_contract_value']:,}
-- Active Contracts: {customer['active_contracts']}
+- Account Manager: {customer["account_manager"]}
+- Relationship Since: {customer["relationship_start"]}
+- Total Contract Value: ${customer["total_contract_value"]:,}
+- Active Contracts: {customer["active_contracts"]}
 - Satisfaction Score: {satisfaction}
 
 **Account Notes**
-{customer['notes']}
+{customer["notes"]}
 
 **Past Deals**
 {past_deals_text}
@@ -455,7 +455,7 @@ def get_pipeline_summary(
             s = stages[stage]
             output.append(f"**{stage}**: {s['count']} deals | ${s['value']:,.0f} | Weighted: ${s['weighted']:,.0f}")
 
-    output.append(f"\n**Totals**")
+    output.append("\n**Totals**")
     output.append(f"- Total Pipeline: ${total_value:,.0f}")
     output.append(f"- Weighted Forecast: ${total_weighted:,.0f}")
     output.append(f"- Total Deals: {len(opps)}")

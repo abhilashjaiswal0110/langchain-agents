@@ -3,6 +3,7 @@
 Exposes key observability signals at /metrics in OpenMetrics format,
 compatible with Prometheus scraping and Grafana dashboards.
 """
+
 import logging
 
 from fastapi import FastAPI
@@ -16,8 +17,9 @@ try:
     _PROMETHEUS_AVAILABLE = True
 except ImportError:
     _PROMETHEUS_AVAILABLE = False
-    logger.warning("prometheus-client or prometheus-fastapi-instrumentator not installed; "
-                   "metrics endpoint will be unavailable")
+    logger.warning(
+        "prometheus-client or prometheus-fastapi-instrumentator not installed; metrics endpoint will be unavailable"
+    )
 
 
 def _noop_counter(*args, **kwargs):  # type: ignore[no-untyped-def]

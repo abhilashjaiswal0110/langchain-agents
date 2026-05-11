@@ -14,20 +14,19 @@ Following Enterprise Development Standards:
 """
 
 import os
-from datetime import datetime
 from typing import Annotated, Any, Literal
 
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.tools import tool
 from langgraph.checkpoint.memory import MemorySaver
-from langgraph.graph import StateGraph, START, END
+from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode
 from langsmith import traceable
 from pydantic import BaseModel, Field
 
-from app.agents.base.agent_base import BaseAgent, AgentConfig
-from app.agents.base.tools import tool_error_handler, sanitize_output
+from app.agents.base.agent_base import AgentConfig, BaseAgent
+from app.agents.base.tools import tool_error_handler
 
 
 class ResearchState(BaseModel):
@@ -37,45 +36,21 @@ class ResearchState(BaseModel):
     findings, and synthesis.
     """
 
-    messages: Annotated[list, add_messages] = Field(
-        default_factory=list,
-        description="Conversation history"
-    )
-    session_id: str | None = Field(
-        default=None,
-        description="Session identifier"
-    )
-    user_id: str | None = Field(
-        default=None,
-        description="User identifier"
-    )
-    query: str = Field(
-        default="",
-        description="Current research query"
-    )
-    research_plan: list[str] = Field(
-        default_factory=list,
-        description="Planned research steps"
-    )
-    sources: list[dict[str, Any]] = Field(
-        default_factory=list,
-        description="Collected sources with metadata"
-    )
-    findings: list[str] = Field(
-        default_factory=list,
-        description="Key findings from research"
-    )
-    summary: str | None = Field(
-        default=None,
-        description="Final research summary"
-    )
+    messages: Annotated[list, add_messages] = Field(default_factory=list, description="Conversation history")
+    session_id: str | None = Field(default=None, description="Session identifier")
+    user_id: str | None = Field(default=None, description="User identifier")
+    query: str = Field(default="", description="Current research query")
+    research_plan: list[str] = Field(default_factory=list, description="Planned research steps")
+    sources: list[dict[str, Any]] = Field(default_factory=list, description="Collected sources with metadata")
+    findings: list[str] = Field(default_factory=list, description="Key findings from research")
+    summary: str | None = Field(default=None, description="Final research summary")
     status: Literal["planning", "researching", "analyzing", "complete"] = Field(
-        default="planning",
-        description="Current research status"
+        default="planning", description="Current research status"
     )
 
 
 # Research Tools
+
 
 @tool
 @tool_error_handler
@@ -95,6 +70,7 @@ def web_search(query: str, max_results: int = 5) -> str:
     if tavily_key:
         try:
             from tavily import TavilyClient
+
             client = TavilyClient(api_key=tavily_key)
             response = client.search(query, max_results=max_results)
 
@@ -192,9 +168,7 @@ def synthesize_findings(findings: list[str], format_type: str = "summary") -> st
     if format_type == "bullets":
         return "Key Findings:\n" + "\n".join(f"- {f}" for f in findings)
     elif format_type == "detailed":
-        return "Detailed Analysis:\n\n" + "\n\n".join(
-            f"Finding {i+1}:\n{f}" for i, f in enumerate(findings)
-        )
+        return "Detailed Analysis:\n\n" + "\n\n".join(f"Finding {i + 1}:\n{f}" for i, f in enumerate(findings))
     else:
         return "Research Summary:\n" + " ".join(findings)
 
@@ -219,12 +193,14 @@ class ResearchAgent(BaseAgent):
         super().__init__(config)
 
         # Register research tools
-        self.register_tools([
-            web_search,
-            extract_key_points,
-            add_source,
-            synthesize_findings,
-        ])
+        self.register_tools(
+            [
+                web_search,
+                extract_key_points,
+                add_source,
+                synthesize_findings,
+            ]
+        )
 
     def compile(self) -> None:
         """Compile the research agent's graph with increased recursion limit.
@@ -232,7 +208,6 @@ class ResearchAgent(BaseAgent):
         Overrides base compile to add recursion_limit configuration.
         Research workflows require more steps than the default 25.
         """
-        from langgraph.checkpoint.memory import MemorySaver
 
         self._graph = self._build_graph()
 
@@ -300,11 +275,7 @@ Be concise and efficient. Provide your answer quickly."""
 
         # Add edges
         graph.add_edge(START, "agent")
-        graph.add_conditional_edges(
-            "agent",
-            should_continue,
-            {"tools": "tools", "end": END}
-        )
+        graph.add_conditional_edges("agent", should_continue, {"tools": "tools", "end": END})
         graph.add_edge("tools", "agent")
 
         return graph
@@ -325,7 +296,6 @@ Be concise and efficient. Provide your answer quickly."""
             self.compile()
 
         # Build input state
-        from langchain_core.messages import HumanMessage
         input_state = {
             "messages": [HumanMessage(content=message)],
             "session_id": session_id,
@@ -334,7 +304,7 @@ Be concise and efficient. Provide your answer quickly."""
         }
 
         # Get recursion limit (default to 100 for research workflows)
-        recursion_limit = getattr(self, '_recursion_limit', 100)
+        recursion_limit = getattr(self, "_recursion_limit", 100)
 
         # Configure with thread for checkpointing and increased recursion limit
         config = {
@@ -368,13 +338,10 @@ Be concise and efficient. Provide your answer quickly."""
             "quick": "Provide a brief overview with 2-3 key points.",
             "standard": "Provide a thorough analysis with multiple sources.",
             "comprehensive": "Provide an exhaustive analysis covering all aspects, "
-                           "with detailed source citations and cross-referencing.",
+            "with detailed source citations and cross-referencing.",
         }
 
-        enhanced_query = (
-            f"{query}\n\n"
-            f"Research depth: {depth}. {depth_instructions[depth]}"
-        )
+        enhanced_query = f"{query}\n\nResearch depth: {depth}. {depth_instructions[depth]}"
 
         # Use our custom invoke with increased recursion limit
         return self.invoke(

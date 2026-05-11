@@ -6,7 +6,6 @@ supporting Block Kit and interactive components.
 
 import hashlib
 import hmac
-import json
 import logging
 import os
 import time
@@ -84,14 +83,16 @@ class SlackBlockBuilder:
         Returns:
             Self for chaining.
         """
-        self._blocks.append({
-            "type": "header",
-            "text": {
-                "type": "plain_text",
-                "text": text,
-                "emoji": True,
-            },
-        })
+        self._blocks.append(
+            {
+                "type": "header",
+                "text": {
+                    "type": "plain_text",
+                    "text": text,
+                    "emoji": True,
+                },
+            }
+        )
         return self
 
     def add_section(
@@ -137,16 +138,18 @@ class SlackBlockBuilder:
         Returns:
             Self for chaining.
         """
-        self._blocks.append({
-            "type": "section",
-            "fields": [
-                {
-                    "type": "mrkdwn" if markdown else "plain_text",
-                    "text": f"*{label}*\n{value}",
-                }
-                for label, value in fields
-            ],
-        })
+        self._blocks.append(
+            {
+                "type": "section",
+                "fields": [
+                    {
+                        "type": "mrkdwn" if markdown else "plain_text",
+                        "text": f"*{label}*\n{value}",
+                    }
+                    for label, value in fields
+                ],
+            }
+        )
         return self
 
     def add_divider(self) -> "SlackBlockBuilder":
@@ -167,13 +170,12 @@ class SlackBlockBuilder:
         Returns:
             Self for chaining.
         """
-        self._blocks.append({
-            "type": "context",
-            "elements": [
-                {"type": "mrkdwn", "text": text}
-                for text in elements
-            ],
-        })
+        self._blocks.append(
+            {
+                "type": "context",
+                "elements": [{"type": "mrkdwn", "text": text} for text in elements],
+            }
+        )
         return self
 
     def add_button(
@@ -213,10 +215,12 @@ class SlackBlockBuilder:
         if url:
             button["url"] = url
 
-        self._blocks.append({
-            "type": "actions",
-            "elements": [button],
-        })
+        self._blocks.append(
+            {
+                "type": "actions",
+                "elements": [button],
+            }
+        )
         return self
 
     def build(self) -> list[dict[str, Any]]:
@@ -317,8 +321,8 @@ class SlackWebhookHandler:
         # Compute signature
         sig_basestring = f"v0:{timestamp}:{body.decode('utf-8')}"
         computed_signature = (
-            "v0=" +
-            hmac.new(
+            "v0="
+            + hmac.new(
                 self._signing_secret.encode("utf-8"),
                 sig_basestring.encode("utf-8"),
                 hashlib.sha256,
@@ -412,11 +416,13 @@ class SlackWebhookHandler:
         # Add metadata context
         if session_id:
             builder.add_divider()
-            builder.add_context([
-                f":robot_face: *{agent_type}*",
-                f":id: `{session_id[:8]}...`",
-                f":clock1: {datetime.now().strftime('%H:%M:%S')}",
-            ])
+            builder.add_context(
+                [
+                    f":robot_face: *{agent_type}*",
+                    f":id: `{session_id[:8]}...`",
+                    f":clock1: {datetime.now().strftime('%H:%M:%S')}",
+                ]
+            )
 
         return SlackMessage(
             text=agent_response,
@@ -432,15 +438,14 @@ class SlackWebhookHandler:
         """
         builder = SlackBlockBuilder()
         builder.add_header("AI Agent Ready")
-        builder.add_section(
-            "Hello! :wave: I'm your AI assistant. "
-            "How can I help you today?"
-        )
+        builder.add_section("Hello! :wave: I'm your AI assistant. How can I help you today?")
         builder.add_divider()
-        builder.add_section_fields([
-            ("IT Helpdesk", "Password resets, software help"),
-            ("ServiceNow", "Tickets and change requests"),
-        ])
+        builder.add_section_fields(
+            [
+                ("IT Helpdesk", "Password resets, software help"),
+                ("ServiceNow", "Tickets and change requests"),
+            ]
+        )
 
         return SlackMessage(
             text="AI Agent is ready to help!",
@@ -476,8 +481,8 @@ def verify_slack_signature(
 
     sig_basestring = f"v0:{timestamp}:{body.decode('utf-8')}"
     computed = (
-        "v0=" +
-        hmac.new(
+        "v0="
+        + hmac.new(
             secret.encode("utf-8"),
             sig_basestring.encode("utf-8"),
             hashlib.sha256,
@@ -525,6 +530,7 @@ async def process_slack_webhook(
                 if event.type == "app_mention":
                     # Remove <@BOT_ID> mentions
                     import re
+
                     user_message = re.sub(r"<@[A-Z0-9]+>\s*", "", user_message).strip()
 
                 if not user_message:

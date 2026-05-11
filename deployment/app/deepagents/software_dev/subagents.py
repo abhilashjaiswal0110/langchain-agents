@@ -13,96 +13,80 @@ This module defines specialized subagents for different SDLC phases:
 """
 
 from app.deepagents.core.types import SubAgentDefinition
+from app.deepagents.software_dev.tools.architecture_tools import (
+    analyze_dependencies,
+    create_api_spec,
+    create_component_diagram,
+    design_architecture,
+    design_data_model,
+    suggest_tech_stack,
+)
+from app.deepagents.software_dev.tools.codegen_tools import (
+    apply_design_pattern,
+    format_code,
+    generate_boilerplate,
+    generate_code,
+    optimize_imports,
+    refactor_code,
+)
+from app.deepagents.software_dev.tools.debugging_tools import (
+    analyze_error,
+    analyze_performance,
+    detect_memory_issues,
+    identify_root_cause,
+    propose_fix,
+    trace_execution,
+)
+from app.deepagents.software_dev.tools.devops_tools import (
+    configure_deployment,
+    create_cd_pipeline,
+    create_ci_pipeline,
+    create_kubernetes_config,
+    generate_dockerfile,
+    setup_monitoring,
+)
+from app.deepagents.software_dev.tools.documentation_tools import (
+    add_inline_comments,
+    create_readme,
+    create_user_guide,
+    document_architecture,
+    generate_api_docs,
+    generate_changelog,
+)
 
 # Import all tools
 from app.deepagents.software_dev.tools.requirements_tools import (
     analyze_requirements,
-    extract_user_stories,
-    validate_requirements,
-    prioritize_requirements,
     detect_ambiguities,
+    extract_user_stories,
     generate_acceptance_criteria,
+    prioritize_requirements,
+    validate_requirements,
 )
-
-from app.deepagents.software_dev.tools.architecture_tools import (
-    design_architecture,
-    create_api_spec,
-    suggest_tech_stack,
-    design_data_model,
-    create_component_diagram,
-    analyze_dependencies,
-)
-
-from app.deepagents.software_dev.tools.codegen_tools import (
-    generate_code,
-    refactor_code,
-    apply_design_pattern,
-    generate_boilerplate,
-    optimize_imports,
-    format_code,
-)
-
 from app.deepagents.software_dev.tools.review_tools import (
-    review_code,
-    check_code_style,
     analyze_complexity,
-    detect_code_smells,
-    suggest_improvements,
     check_best_practices,
+    check_code_style,
+    detect_code_smells,
+    review_code,
+    suggest_improvements,
 )
-
-from app.deepagents.software_dev.tools.testing_tools import (
-    generate_unit_tests,
-    generate_integration_tests,
-    analyze_test_coverage,
-    run_tests,
-    generate_test_data,
-    create_test_plan,
-)
-
 from app.deepagents.software_dev.tools.security_tools import (
-    scan_security_issues,
+    analyze_dependencies_security,
     check_owasp_compliance,
     detect_secrets,
-    analyze_dependencies_security,
     generate_security_report,
+    scan_security_issues,
     suggest_security_fixes,
 )
-
-from app.deepagents.software_dev.tools.devops_tools import (
-    create_ci_pipeline,
-    create_cd_pipeline,
-    configure_deployment,
-    generate_dockerfile,
-    create_kubernetes_config,
-    setup_monitoring,
+from app.deepagents.software_dev.tools.testing_tools import (
+    analyze_test_coverage,
+    create_test_plan,
+    generate_integration_tests,
+    generate_test_data,
+    generate_unit_tests,
+    run_tests,
 )
-
-from app.deepagents.software_dev.tools.debugging_tools import (
-    analyze_error,
-    trace_execution,
-    identify_root_cause,
-    propose_fix,
-    analyze_performance,
-    detect_memory_issues,
-)
-
-from app.deepagents.software_dev.tools.documentation_tools import (
-    generate_api_docs,
-    create_readme,
-    document_architecture,
-    generate_changelog,
-    add_inline_comments,
-    create_user_guide,
-)
-
-from app.deepagents.software_dev.tools.bash_execution_tools import (
-    execute_bash_command,
-    execute_python_code,
-    execute_tests_real,
-    install_dependencies,
-)
-
 
 # =============================================================================
 # Requirements Intelligence Agent
@@ -571,6 +555,7 @@ When writing documentation:
 # =============================================================================
 # Helper Functions
 # =============================================================================
+
 
 def get_all_subagents() -> list[SubAgentDefinition]:
     """Get all available subagent definitions."""

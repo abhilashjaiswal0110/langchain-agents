@@ -20,8 +20,6 @@ from uuid import uuid4
 from langchain_core.messages import BaseMessage
 from langsmith import traceable
 
-from app.auth.user_context import UserContext
-
 
 class EscalationLevel(str, Enum):
     """Escalation priority levels."""
@@ -264,21 +262,13 @@ class EscalationHandler:
         """
         level_messages = {
             EscalationLevel.CRITICAL: (
-                "I've escalated this as a CRITICAL issue. "
-                "A specialist will contact you within 15 minutes."
+                "I've escalated this as a CRITICAL issue. A specialist will contact you within 15 minutes."
             ),
             EscalationLevel.HIGH: (
-                "I've escalated this as a HIGH priority issue. "
-                "A specialist will contact you within 1 hour."
+                "I've escalated this as a HIGH priority issue. A specialist will contact you within 1 hour."
             ),
-            EscalationLevel.MEDIUM: (
-                "I've escalated this to our support team. "
-                "You should hear back within 4 hours."
-            ),
-            EscalationLevel.LOW: (
-                "I've logged your request for follow-up. "
-                "Our team will respond within 24 hours."
-            ),
+            EscalationLevel.MEDIUM: ("I've escalated this to our support team. You should hear back within 4 hours."),
+            EscalationLevel.LOW: ("I've logged your request for follow-up. Our team will respond within 24 hours."),
         }
 
         base_message = level_messages.get(request.level, level_messages[EscalationLevel.MEDIUM])

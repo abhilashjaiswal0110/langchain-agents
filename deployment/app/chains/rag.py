@@ -1,11 +1,11 @@
 """RAG (Retrieval Augmented Generation) chain."""
 
-from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
-from langchain_core.runnables import RunnablePassthrough, RunnableParallel
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.runnables import RunnableParallel, RunnablePassthrough
 from langchain_core.vectorstores import InMemoryVectorStore
 
-from app.agents.base.llm_factory import get_llm, get_embedding_model
+from app.agents.base.llm_factory import get_embedding_model, get_llm
 
 # Initialize embeddings and vector store (uses factory with Azure OpenAI as primary)
 embeddings = get_embedding_model()
@@ -27,17 +27,19 @@ vectorstore.add_texts(sample_docs)
 retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
 
 # RAG prompt template
-rag_prompt = ChatPromptTemplate.from_messages([
-    (
-        "system",
-        """You are a helpful assistant. Answer the question based only on the following context:
+rag_prompt = ChatPromptTemplate.from_messages(
+    [
+        (
+            "system",
+            """You are a helpful assistant. Answer the question based only on the following context:
 
 {context}
 
 If you cannot answer the question based on the context, say so.""",
-    ),
-    ("human", "{question}"),
-])
+        ),
+        ("human", "{question}"),
+    ]
+)
 
 # Initialize LLM (uses factory with Azure OpenAI as primary)
 llm = get_llm(temperature=0)

@@ -13,28 +13,28 @@ Following Enterprise Development Standards:
 import os
 import uuid
 from abc import ABC, abstractmethod
+from collections.abc import AsyncGenerator
 from dataclasses import dataclass, field
-from typing import Annotated, Any, AsyncGenerator, Literal, TypeVar
+from typing import Annotated, Any, Literal, TypeVar
 
 from langchain_core.language_models import BaseChatModel
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
-from langgraph.checkpoint.memory import MemorySaver
 from langgraph.checkpoint.base import BaseCheckpointSaver
-from langgraph.graph import StateGraph, START, END
+from langgraph.checkpoint.memory import MemorySaver
+from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode
 from langsmith import traceable
 from pydantic import BaseModel, Field
 
+from app.agents.base.llm_factory import get_llm
+
 # Import memory module components
 from app.agents.memory.checkpointers import (
-    CheckpointerBackend,
     get_checkpointer,
 )
 from app.agents.memory.semantic_memory import get_semantic_memory
 from app.agents.memory.summarizer import get_summarizer
-from app.agents.base.llm_factory import get_llm
-
 
 # Type variable for state
 StateT = TypeVar("StateT", bound=BaseModel)
@@ -70,9 +70,7 @@ class AgentConfig:
     conversation_summarization: bool = False
     tracing_enabled: bool = True
     project_name: str = "enterprise-it-agents"
-    max_history: int = field(
-        default_factory=lambda: int(os.getenv("MAX_HISTORY_MESSAGES", "0"))
-    )
+    max_history: int = field(default_factory=lambda: int(os.getenv("MAX_HISTORY_MESSAGES", "0")))
 
 
 class BaseAgentState(BaseModel):
@@ -83,21 +81,11 @@ class BaseAgentState(BaseModel):
     """
 
     messages: Annotated[list[BaseMessage], add_messages] = Field(
-        default_factory=list,
-        description="Conversation message history"
+        default_factory=list, description="Conversation message history"
     )
-    session_id: str | None = Field(
-        default=None,
-        description="Unique session identifier"
-    )
-    user_id: str | None = Field(
-        default=None,
-        description="User identifier for personalization"
-    )
-    metadata: dict[str, Any] = Field(
-        default_factory=dict,
-        description="Additional metadata for the session"
-    )
+    session_id: str | None = Field(default=None, description="Unique session identifier")
+    user_id: str | None = Field(default=None, description="User identifier for personalization")
+    metadata: dict[str, Any] = Field(default_factory=dict, description="Additional metadata for the session")
 
 
 class BaseAgent(ABC):
@@ -212,18 +200,20 @@ class BaseAgent(ABC):
             checkpointer = get_checkpointer()
         elif self.config.memory_backend == "postgres":
             from app.agents.memory.checkpointers import (
-                CheckpointerConfig,
                 CheckpointerBackend,
+                CheckpointerConfig,
                 create_checkpointer,
             )
+
             config = CheckpointerConfig(backend=CheckpointerBackend.POSTGRES)
             checkpointer = create_checkpointer(config)
         elif self.config.memory_backend == "sqlite":
             from app.agents.memory.checkpointers import (
-                CheckpointerConfig,
                 CheckpointerBackend,
+                CheckpointerConfig,
                 create_checkpointer,
             )
+
             config = CheckpointerConfig(backend=CheckpointerBackend.SQLITE)
             checkpointer = create_checkpointer(config)
         else:
@@ -315,9 +305,7 @@ class BaseAgent(ABC):
         config = {"configurable": {"thread_id": session_id or str(uuid.uuid4())}}
 
         try:
-            async for event in self._compiled_graph.astream_events(
-                input_state, config=config, version="v2"
-            ):
+            async for event in self._compiled_graph.astream_events(input_state, config=config, version="v2"):
                 kind = event["event"]
                 if kind == "on_chat_model_stream":
                     chunk_content = event["data"]["chunk"].content
@@ -424,10 +412,9 @@ class BaseAgent(ABC):
                     user_id=user_id,
                 )
                 if results:
-                    relevant = "\n".join([
-                        f"- {r.content[:200]}..." if len(r.content) > 200 else f"- {r.content}"
-                        for r in results
-                    ])
+                    relevant = "\n".join(
+                        [f"- {r.content[:200]}..." if len(r.content) > 200 else f"- {r.content}" for r in results]
+                    )
                     context_parts.append(f"## Relevant Past Context\n{relevant}")
 
             if context_parts:
@@ -579,11 +566,7 @@ def create_react_agent_graph(
     graph.add_edge(START, "agent")
 
     if agent._tools:
-        graph.add_conditional_edges(
-            "agent",
-            should_continue,
-            {"tools": "tools", "end": END}
-        )
+        graph.add_conditional_edges("agent", should_continue, {"tools": "tools", "end": END})
         graph.add_edge("tools", "agent")
     else:
         graph.add_edge("agent", END)

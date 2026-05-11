@@ -2,7 +2,6 @@
 
 from datetime import datetime
 
-from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.tools import tool
 from langgraph.prebuilt import create_react_agent
 

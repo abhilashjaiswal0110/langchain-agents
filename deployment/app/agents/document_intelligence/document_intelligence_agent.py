@@ -13,12 +13,12 @@ Following Enterprise Development Standards:
 import logging
 from typing import Any
 
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
-from langgraph.graph import StateGraph, START, END
+from langchain_core.messages import HumanMessage, SystemMessage
+from langgraph.graph import END, START, StateGraph
 from langgraph.prebuilt import ToolNode
 from langsmith import traceable
 
-from app.agents.base.agent_base import BaseAgent, AgentConfig
+from app.agents.base.agent_base import AgentConfig, BaseAgent
 from app.agents.document_intelligence.state import DocumentIntelligenceState
 from app.agents.document_intelligence.tools import (
     ALL_TOOLS,
@@ -130,7 +130,9 @@ For uploaded images (PNG/JPG):
             current_doc_id = vector_store.get_current_document_id(session_id)
 
             if not docs:
-                return "\n\n## CURRENT DOCUMENT STATUS:\nNo documents uploaded yet. Ask user to upload a document first."
+                return (
+                    "\n\n## CURRENT DOCUMENT STATUS:\nNo documents uploaded yet. Ask user to upload a document first."
+                )
 
             # Find current document
             current_doc = None
@@ -149,10 +151,10 @@ For uploaded images (PNG/JPG):
 ## CURRENT DOCUMENT STATUS:
 **A DOCUMENT IS UPLOADED AND READY!**
 
-- **Current Document**: {current_doc.get('filename', 'Unknown')}
+- **Current Document**: {current_doc.get("filename", "Unknown")}
 - **Document ID**: {current_doc_id}
 - **Type**: {type_label}
-- **Language**: {current_doc.get('language', 'en')}
+- **Language**: {current_doc.get("language", "en")}
 - **Total Documents in Session**: {len(docs)}
 
 **IMPORTANT**: When user asks about "the document", "this file", "the image", "it", or asks to summarize/analyze:
@@ -167,7 +169,7 @@ For uploaded images (PNG/JPG):
                     return f"""
 
 ## CURRENT DOCUMENT STATUS:
-**Documents are uploaded!** Most recent: {latest.get('filename', 'Unknown')}
+**Documents are uploaded!** Most recent: {latest.get("filename", "Unknown")}
 Total documents: {len(docs)}
 
 When user asks about documents, call search_documents with scope='current'."""
@@ -240,11 +242,7 @@ When user asks about documents, call search_documents with scope='current'."""
 
         # Add edges
         graph.add_edge(START, "agent")
-        graph.add_conditional_edges(
-            "agent",
-            should_continue,
-            {"tools": "tools", "end": END}
-        )
+        graph.add_conditional_edges("agent", should_continue, {"tools": "tools", "end": END})
         graph.add_edge("tools", "agent")
 
         return graph
@@ -340,6 +338,7 @@ When user asks about documents, call search_documents with scope='current'."""
             Upload result with document ID
         """
         import base64
+
         from app.agents.document_intelligence.tools import upload_document
 
         # Set session for tools
@@ -349,10 +348,12 @@ When user asks about documents, call search_documents with scope='current'."""
         # Encode content and call tool
         content_b64 = base64.b64encode(content).decode("utf-8")
 
-        result = upload_document.invoke({
-            "content_base64": content_b64,
-            "filename": filename,
-        })
+        result = upload_document.invoke(
+            {
+                "content_base64": content_b64,
+                "filename": filename,
+            }
+        )
 
         return {
             "success": "successfully" in result.lower(),

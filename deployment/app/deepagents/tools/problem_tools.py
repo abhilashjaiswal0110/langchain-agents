@@ -10,7 +10,6 @@ from langchain_core.tools import tool
 
 from app.agents.servicenow_agent import is_live_mode
 
-
 # Simulated problem database
 PROBLEMS_DB = {
     "PRB0000001": {
@@ -78,7 +77,10 @@ def search_problems(
                 continue
         if query:
             query_lower = query.lower()
-            if query_lower not in problem["short_description"].lower() and query_lower not in problem["description"].lower():
+            if (
+                query_lower not in problem["short_description"].lower()
+                and query_lower not in problem["description"].lower()
+            ):
                 continue
 
         results.append(problem)
@@ -94,10 +96,10 @@ def search_problems(
     for prb in results:
         rca_status = "RCA Identified" if prb["root_cause"] else "Under Investigation"
         output.append(f"""
-**{prb['number']}** - {prb['short_description']}
-- State: {prb['state']} | Priority: {prb['priority']}
+**{prb["number"]}** - {prb["short_description"]}
+- State: {prb["state"]} | Priority: {prb["priority"]}
 - Root Cause: {rca_status}
-- Related Incidents: {len(prb['related_incidents'])}
+- Related Incidents: {len(prb["related_incidents"])}
 """)
 
     return "\n".join(output)
@@ -125,26 +127,26 @@ def get_problem_details(problem_number: str) -> str:
 
     related = ", ".join(problem["related_incidents"]) or "None"
 
-    return f"""**Problem Record: {problem['number']}** [{mode}]
+    return f"""**Problem Record: {problem["number"]}** [{mode}]
 
-**Summary:** {problem['short_description']}
-**Description:** {problem['description']}
+**Summary:** {problem["short_description"]}
+**Description:** {problem["description"]}
 
 **Status:**
-- State: {problem['state']}
-- Priority: {problem['priority']}
+- State: {problem["state"]}
+- Priority: {problem["priority"]}
 
 **Analysis:**
-- Root Cause: {problem['root_cause'] or 'Under investigation'}
-- Workaround: {problem['workaround'] or 'None available'}
+- Root Cause: {problem["root_cause"] or "Under investigation"}
+- Workaround: {problem["workaround"] or "None available"}
 
 **Impact:**
-- Affected CI: {problem['affected_ci']}
+- Affected CI: {problem["affected_ci"]}
 - Related Incidents: {related}
 
 **Assignment:**
-- Assigned To: {problem['assigned_to']}
-- Created: {problem['created']}"""
+- Assigned To: {problem["assigned_to"]}
+- Created: {problem["created"]}"""
 
 
 @tool
@@ -185,11 +187,11 @@ def create_problem(
 
 **Number:** {problem_number}
 **Title:** {short_description}
-**Priority:** {priority_map.get(priority, '3 - Moderate')}
+**Priority:** {priority_map.get(priority, "3 - Moderate")}
 **State:** New
 
 **Related Incidents:** {incidents_list}
-**Affected CI:** {affected_ci or 'To be determined'}
+**Affected CI:** {affected_ci or "To be determined"}
 
 Next Steps:
 1. Assign to appropriate team for investigation
@@ -219,7 +221,7 @@ def link_incidents_to_problem(
     return f"""**Incidents Linked to {problem_number}** [{mode}]
 
 Linked Incidents:
-{chr(10).join('- ' + inc for inc in incident_numbers)}
+{chr(10).join("- " + inc for inc in incident_numbers)}
 
 Total Linked: {len(incident_numbers)}
 

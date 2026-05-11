@@ -318,10 +318,7 @@ class InMemorySessionStore(BaseSessionStore):
             Number of sessions removed.
         """
         with self._lock:
-            expired = [
-                key for key, session in self._sessions.items()
-                if session.is_expired
-            ]
+            expired = [key for key, session in self._sessions.items() if session.is_expired]
 
             for key in expired:
                 del self._sessions[key]

@@ -5,27 +5,26 @@ change requests, and CMDB operations. Supports both live API calls
 and simulation mode for development/testing.
 """
 
-import asyncio
 import os
 import uuid
 from datetime import datetime
 from typing import Annotated, Any, Literal
 
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.tools import tool
 from langgraph.checkpoint.memory import MemorySaver
-
-from app.agents.base.llm_factory import get_llm
-from langgraph.graph import StateGraph, START, END
+from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode
 from langsmith import traceable
 from pydantic import BaseModel
 
+from app.agents.base.llm_factory import get_llm
 
 # =============================================================================
 # ServiceNow Configuration
 # =============================================================================
+
 
 def get_servicenow_config() -> dict[str, Any]:
     """Get ServiceNow configuration from environment.
@@ -71,6 +70,7 @@ def get_base_url() -> str:
 
 try:
     import httpx
+
     HTTPX_AVAILABLE = True
 except ImportError:
     HTTPX_AVAILABLE = False
@@ -509,6 +509,7 @@ def get_api_client() -> ServiceNowAPI:
 # Agent State
 # =============================================================================
 
+
 class ServiceNowState(BaseModel):
     """State for ServiceNow Agent."""
 
@@ -535,9 +536,7 @@ INCIDENTS_DB: dict[str, dict[str, Any]] = {
         "updated": "2024-12-14 14:30:00",
         "category": "Software",
         "subcategory": "Email",
-        "comments": [
-            {"user": "John Smith", "text": "Investigating sync settings", "time": "2024-12-14 14:30:00"}
-        ]
+        "comments": [{"user": "John Smith", "text": "Investigating sync settings", "time": "2024-12-14 14:30:00"}],
     },
     "INC0010002": {
         "number": "INC0010002",
@@ -552,8 +551,8 @@ INCIDENTS_DB: dict[str, dict[str, Any]] = {
         "updated": "2024-12-15 08:00:00",
         "category": "Network",
         "subcategory": "VPN",
-        "comments": []
-    }
+        "comments": [],
+    },
 }
 
 CHANGE_REQUESTS_DB: dict[str, dict[str, Any]] = {
@@ -568,7 +567,7 @@ CHANGE_REQUESTS_DB: dict[str, dict[str, Any]] = {
         "planned_end": "2024-12-18 06:00:00",
         "assigned_to": "DevOps Team",
         "approval_status": "Approved",
-        "impact": "Low - Automated patching with auto-restart"
+        "impact": "Low - Automated patching with auto-restart",
     },
     "CHG0000009": {
         "number": "CHG0000009",
@@ -581,8 +580,8 @@ CHANGE_REQUESTS_DB: dict[str, dict[str, Any]] = {
         "planned_end": "2026-01-11 06:00:00",
         "assigned_to": "Database Migration Team",
         "approval_status": "Approved",
-        "impact": "High - ERP system will be unavailable during migration window"
-    }
+        "impact": "High - ERP system will be unavailable during migration window",
+    },
 }
 
 CMDB_DB: dict[str, dict[str, Any]] = {
@@ -593,7 +592,7 @@ CMDB_DB: dict[str, dict[str, Any]] = {
         "ip": "10.0.1.100",
         "location": "DC-East",
         "status": "Operational",
-        "owner": "Web Team"
+        "owner": "Web Team",
     },
     "SRV002": {
         "name": "PROD-DB-01",
@@ -602,7 +601,7 @@ CMDB_DB: dict[str, dict[str, Any]] = {
         "ip": "10.0.1.101",
         "location": "DC-East",
         "status": "Operational",
-        "owner": "Database Team"
+        "owner": "Database Team",
     },
     "APP001": {
         "name": "SAP-ERP",
@@ -610,8 +609,8 @@ CMDB_DB: dict[str, dict[str, Any]] = {
         "version": "S/4HANA 2023",
         "status": "Operational",
         "owner": "ERP Team",
-        "dependencies": ["PROD-DB-01", "PROD-APP-01"]
-    }
+        "dependencies": ["PROD-DB-01", "PROD-APP-01"],
+    },
 }
 
 # Simulated service requests
@@ -632,9 +631,9 @@ SERVICE_REQUESTS_DB: dict[str, dict[str, Any]] = {
                 "number": "RITM0010001",
                 "short_description": "MacBook Pro 16-inch",
                 "stage": "Fulfillment",
-                "assigned_to": "IT Asset Team"
+                "assigned_to": "IT Asset Team",
             }
-        ]
+        ],
     },
     "REQ0010007": {
         "number": "REQ0010007",
@@ -652,16 +651,17 @@ SERVICE_REQUESTS_DB: dict[str, dict[str, Any]] = {
                 "number": "RITM0010007",
                 "short_description": "Adobe Creative Cloud - Single License",
                 "stage": "Waiting for Approval",
-                "assigned_to": "Software Licensing Team"
+                "assigned_to": "Software Licensing Team",
             }
-        ]
-    }
+        ],
+    },
 }
 
 
 # =============================================================================
 # ServiceNow Tools
 # =============================================================================
+
 
 @tool
 def search_incidents(
@@ -700,11 +700,11 @@ def search_incidents(
             output = [f"**Found {len(incidents)} incident(s) [LIVE DATA]:**\n"]
             for inc in incidents:
                 output.append(f"""
-**{inc.get('number', 'N/A')}** - {inc.get('short_description', 'No description')}
-- State: {inc.get('state', 'Unknown')}
-- Priority: {inc.get('priority', 'Unknown')}
-- Assigned to: {inc.get('assigned_to', 'Unassigned') or 'Unassigned'}
-- Created: {inc.get('sys_created_on', 'Unknown')}
+**{inc.get("number", "N/A")}** - {inc.get("short_description", "No description")}
+- State: {inc.get("state", "Unknown")}
+- Priority: {inc.get("priority", "Unknown")}
+- Assigned to: {inc.get("assigned_to", "Unassigned") or "Unassigned"}
+- Created: {inc.get("sys_created_on", "Unknown")}
 """)
             return "\n".join(output)
 
@@ -723,7 +723,10 @@ def search_incidents(
             continue
         if query:
             query_lower = query.lower()
-            if query_lower not in incident["short_description"].lower() and query_lower not in incident["description"].lower():
+            if (
+                query_lower not in incident["short_description"].lower()
+                and query_lower not in incident["description"].lower()
+            ):
                 continue
 
         results.append(incident)
@@ -737,11 +740,11 @@ def search_incidents(
     output = [f"**Found {len(results)} incident(s) [SIMULATION]:**\n"]
     for inc in results:
         output.append(f"""
-**{inc['number']}** - {inc['short_description']}
-- State: {inc['state']}
-- Priority: {inc['priority']}
-- Assigned to: {inc['assigned_to'] or 'Unassigned'}
-- Created: {inc['created']}
+**{inc["number"]}** - {inc["short_description"]}
+- State: {inc["state"]}
+- Priority: {inc["priority"]}
+- Assigned to: {inc["assigned_to"] or "Unassigned"}
+- Created: {inc["created"]}
 """)
 
     return "\n".join(output)
@@ -765,28 +768,28 @@ def get_incident_details(incident_number: str) -> str:
             if not incident:
                 return f"Incident {incident_number} not found. Please verify the incident number."
 
-            return f"""**Incident Details: {incident.get('number')}** [LIVE DATA]
+            return f"""**Incident Details: {incident.get("number")}** [LIVE DATA]
 
-**Short Description:** {incident.get('short_description', 'N/A')}
-**Description:** {incident.get('description', 'N/A')}
+**Short Description:** {incident.get("short_description", "N/A")}
+**Description:** {incident.get("description", "N/A")}
 
 **Status Information:**
-- State: {incident.get('state', 'Unknown')}
-- Priority: {incident.get('priority', 'Unknown')}
-- Category: {incident.get('category', 'N/A')} / {incident.get('subcategory', 'N/A')}
+- State: {incident.get("state", "Unknown")}
+- Priority: {incident.get("priority", "Unknown")}
+- Category: {incident.get("category", "N/A")} / {incident.get("subcategory", "N/A")}
 
 **Assignment:**
-- Assigned To: {incident.get('assigned_to', 'Unassigned') or 'Unassigned'}
-- Assignment Group: {incident.get('assignment_group', 'N/A')}
+- Assigned To: {incident.get("assigned_to", "Unassigned") or "Unassigned"}
+- Assignment Group: {incident.get("assignment_group", "N/A")}
 
-**Caller:** {incident.get('caller_id', 'Unknown')}
+**Caller:** {incident.get("caller_id", "Unknown")}
 
 **Timestamps:**
-- Created: {incident.get('sys_created_on', 'Unknown')}
-- Last Updated: {incident.get('sys_updated_on', 'Unknown')}
+- Created: {incident.get("sys_created_on", "Unknown")}
+- Last Updated: {incident.get("sys_updated_on", "Unknown")}
 
 **Work Notes:**
-{incident.get('work_notes', 'No work notes')}"""
+{incident.get("work_notes", "No work notes")}"""
 
         except Exception as e:
             return f"Error getting incident details: {e}"
@@ -797,30 +800,30 @@ def get_incident_details(incident_number: str) -> str:
     if not incident:
         return f"Incident {incident_number} not found. Please verify the incident number."
 
-    comments_text = "\n".join([
-        f"  - [{c['time']}] {c['user']}: {c['text']}"
-        for c in incident.get("comments", [])
-    ]) or "  No comments yet"
+    comments_text = (
+        "\n".join([f"  - [{c['time']}] {c['user']}: {c['text']}" for c in incident.get("comments", [])])
+        or "  No comments yet"
+    )
 
-    return f"""**Incident Details: {incident['number']}** [SIMULATION]
+    return f"""**Incident Details: {incident["number"]}** [SIMULATION]
 
-**Short Description:** {incident['short_description']}
-**Description:** {incident['description']}
+**Short Description:** {incident["short_description"]}
+**Description:** {incident["description"]}
 
 **Status Information:**
-- State: {incident['state']}
-- Priority: {incident['priority']}
-- Category: {incident['category']} / {incident['subcategory']}
+- State: {incident["state"]}
+- Priority: {incident["priority"]}
+- Category: {incident["category"]} / {incident["subcategory"]}
 
 **Assignment:**
-- Assigned To: {incident['assigned_to'] or 'Unassigned'}
-- Assignment Group: {incident['assignment_group']}
+- Assigned To: {incident["assigned_to"] or "Unassigned"}
+- Assignment Group: {incident["assignment_group"]}
 
-**Caller:** {incident['caller']}
+**Caller:** {incident["caller"]}
 
 **Timestamps:**
-- Created: {incident['created']}
-- Last Updated: {incident['updated']}
+- Created: {incident["created"]}
+- Last Updated: {incident["updated"]}
 
 **Work Notes/Comments:**
 {comments_text}"""
@@ -848,12 +851,7 @@ def create_incident(
     Returns:
         Created incident details.
     """
-    priority_map = {
-        "1": "1 - Critical",
-        "2": "2 - High",
-        "3": "3 - Moderate",
-        "4": "4 - Low"
-    }
+    priority_map = {"1": "1 - Critical", "2": "2 - High", "3": "3 - Moderate", "4": "4 - Low"}
 
     if is_live_mode():
         try:
@@ -872,14 +870,14 @@ def create_incident(
 
             return f"""**Incident Created Successfully** [LIVE DATA]
 
-**Incident Number:** {result.get('number', 'N/A')}
+**Incident Number:** {result.get("number", "N/A")}
 **Short Description:** {short_description}
-**Priority:** {priority_map.get(priority, '3 - Moderate')}
+**Priority:** {priority_map.get(priority, "3 - Moderate")}
 **Category:** {category} / {subcategory}
-**State:** {result.get('state', 'New')}
+**State:** {result.get("state", "New")}
 
 The incident has been submitted to ServiceNow.
-You will receive email updates at {caller_email or 'your registered email'}.
+You will receive email updates at {caller_email or "your registered email"}.
 
 **SLA Information:**
 - Critical (P1): 1 hour response, 4 hour resolution
@@ -906,7 +904,7 @@ You will receive email updates at {caller_email or 'your registered email'}.
         "updated": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "category": category,
         "subcategory": subcategory,
-        "comments": []
+        "comments": [],
     }
 
     INCIDENTS_DB[incident_number] = incident
@@ -915,12 +913,12 @@ You will receive email updates at {caller_email or 'your registered email'}.
 
 **Incident Number:** {incident_number}
 **Short Description:** {short_description}
-**Priority:** {priority_map.get(priority, '3 - Moderate')}
+**Priority:** {priority_map.get(priority, "3 - Moderate")}
 **Category:** {category} / {subcategory}
 **State:** New
 
 The incident has been submitted and will be assigned to the {category} Support team.
-You will receive email updates at {caller_email or 'your registered email'}.
+You will receive email updates at {caller_email or "your registered email"}.
 
 **SLA Information:**
 - Critical (P1): 1 hour response, 4 hour resolution
@@ -971,10 +969,10 @@ def update_incident(
             return f"""**Incident {incident_number} Updated** [LIVE DATA]
 
 Updates applied:
-{chr(10).join('- ' + u for u in updates)}
+{chr(10).join("- " + u for u in updates)}
 
-Current State: {result.get('state', 'Unknown')}
-Last Updated: {result.get('sys_updated_on', 'Unknown')}"""
+Current State: {result.get("state", "Unknown")}
+Last Updated: {result.get("sys_updated_on", "Unknown")}"""
 
         except Exception as e:
             return f"Error updating incident: {e}"
@@ -996,11 +994,9 @@ Last Updated: {result.get('sys_updated_on', 'Unknown')}"""
         updates.append(f"Assigned to: {assigned_to}")
 
     if work_notes:
-        incident["comments"].append({
-            "user": "IT Support Agent",
-            "text": work_notes,
-            "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        })
+        incident["comments"].append(
+            {"user": "IT Support Agent", "text": work_notes, "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+        )
         updates.append("Work notes added")
 
     incident["updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -1008,10 +1004,10 @@ Last Updated: {result.get('sys_updated_on', 'Unknown')}"""
     return f"""**Incident {incident_number} Updated** [SIMULATION]
 
 Updates applied:
-{chr(10).join('- ' + u for u in updates)}
+{chr(10).join("- " + u for u in updates)}
 
-Current State: {incident['state']}
-Last Updated: {incident['updated']}"""
+Current State: {incident["state"]}
+Last Updated: {incident["updated"]}"""
 
 
 @tool
@@ -1040,10 +1036,10 @@ def get_change_requests(
 
             for chg in changes:
                 output.append(f"""
-**{chg.get('number', 'N/A')}** - {chg.get('short_description', 'No description')}
-- Type: {chg.get('type', 'N/A')} | Risk: {chg.get('risk', 'N/A')}
-- State: {chg.get('state', 'Unknown')} | Approval: {chg.get('approval', 'Unknown')}
-- Planned: {chg.get('start_date', 'TBD')} to {chg.get('end_date', 'TBD')}
+**{chg.get("number", "N/A")}** - {chg.get("short_description", "No description")}
+- Type: {chg.get("type", "N/A")} | Risk: {chg.get("risk", "N/A")}
+- State: {chg.get("state", "Unknown")} | Approval: {chg.get("approval", "Unknown")}
+- Planned: {chg.get("start_date", "TBD")} to {chg.get("end_date", "TBD")}
 """)
 
             return "\n".join(output)
@@ -1066,11 +1062,11 @@ def get_change_requests(
 
     for chg in results:
         output.append(f"""
-**{chg['number']}** - {chg['short_description']}
-- Type: {chg['type']} | Risk: {chg['risk']}
-- State: {chg['state']} | Approval: {chg['approval_status']}
-- Planned: {chg['planned_start']} to {chg['planned_end']}
-- Impact: {chg['impact']}
+**{chg["number"]}** - {chg["short_description"]}
+- Type: {chg["type"]} | Risk: {chg["risk"]}
+- State: {chg["state"]} | Approval: {chg["approval_status"]}
+- Planned: {chg["planned_start"]} to {chg["planned_end"]}
+- Impact: {chg["impact"]}
 """)
 
     return "\n".join(output)
@@ -1109,10 +1105,10 @@ def search_cmdb(
 
             for ci in cis:
                 output.append(f"""
-**{ci.get('name', 'N/A')}** ({ci.get('sys_id', 'N/A')[:8]}...)
-- Class: {ci.get('sys_class_name', 'Unknown')}
-- Status: {ci.get('install_status', 'Unknown')}
-- Owner: {ci.get('owned_by', 'Unknown')}
+**{ci.get("name", "N/A")}** ({ci.get("sys_id", "N/A")[:8]}...)
+- Class: {ci.get("sys_class_name", "Unknown")}
+- Status: {ci.get("install_status", "Unknown")}
+- Owner: {ci.get("owned_by", "Unknown")}
 """)
 
             return "\n".join(output)
@@ -1140,22 +1136,22 @@ def search_cmdb(
     for ci_id, ci in results:
         if ci["class"] == "Server":
             output.append(f"""
-**{ci['name']}** ({ci_id})
-- Class: {ci['class']}
-- OS: {ci['os']}
-- IP: {ci['ip']}
-- Location: {ci['location']}
-- Status: {ci['status']}
-- Owner: {ci['owner']}
+**{ci["name"]}** ({ci_id})
+- Class: {ci["class"]}
+- OS: {ci["os"]}
+- IP: {ci["ip"]}
+- Location: {ci["location"]}
+- Status: {ci["status"]}
+- Owner: {ci["owner"]}
 """)
         else:
             deps = ", ".join(ci.get("dependencies", [])) or "None"
             output.append(f"""
-**{ci['name']}** ({ci_id})
-- Class: {ci['class']}
-- Version: {ci.get('version', 'N/A')}
-- Status: {ci['status']}
-- Owner: {ci['owner']}
+**{ci["name"]}** ({ci_id})
+- Class: {ci["class"]}
+- Version: {ci.get("version", "N/A")}
+- Status: {ci["status"]}
+- Owner: {ci["owner"]}
 - Dependencies: {deps}
 """)
 
@@ -1184,9 +1180,9 @@ def get_my_tickets(user_email: str) -> str:
 
             for inc in incidents:
                 output.append(f"""
-**{inc.get('number', 'N/A')}** - {inc.get('short_description', 'No description')}
-- State: {inc.get('state', 'Unknown')} | Priority: {inc.get('priority', 'Unknown')}
-- Updated: {inc.get('sys_updated_on', 'Unknown')}
+**{inc.get("number", "N/A")}** - {inc.get("short_description", "No description")}
+- State: {inc.get("state", "Unknown")} | Priority: {inc.get("priority", "Unknown")}
+- Updated: {inc.get("sys_updated_on", "Unknown")}
 """)
 
             return "\n".join(output)
@@ -1208,9 +1204,9 @@ def get_my_tickets(user_email: str) -> str:
 
     for inc in results:
         output.append(f"""
-**{inc['number']}** - {inc['short_description']}
-- State: {inc['state']} | Priority: {inc['priority']}
-- Updated: {inc['updated']}
+**{inc["number"]}** - {inc["short_description"]}
+- State: {inc["state"]} | Priority: {inc["priority"]}
+- Updated: {inc["updated"]}
 """)
 
     return "\n".join(output)
@@ -1234,31 +1230,31 @@ def get_change_request_details(change_number: str) -> str:
             if not change:
                 return f"Change request {change_number} not found. Please verify the number."
 
-            return f"""**Change Request Details: {change.get('number')}** [LIVE DATA]
+            return f"""**Change Request Details: {change.get("number")}** [LIVE DATA]
 
-**Short Description:** {change.get('short_description', 'N/A')}
-**Description:** {change.get('description', 'N/A')}
+**Short Description:** {change.get("short_description", "N/A")}
+**Description:** {change.get("description", "N/A")}
 
 **Status Information:**
-- State: {change.get('state', 'Unknown')}
-- Type: {change.get('type', 'N/A')}
-- Risk: {change.get('risk', 'N/A')}
-- Priority: {change.get('priority', 'N/A')}
+- State: {change.get("state", "Unknown")}
+- Type: {change.get("type", "N/A")}
+- Risk: {change.get("risk", "N/A")}
+- Priority: {change.get("priority", "N/A")}
 
 **Schedule:**
-- Planned Start: {change.get('start_date', 'TBD')}
-- Planned End: {change.get('end_date', 'TBD')}
+- Planned Start: {change.get("start_date", "TBD")}
+- Planned End: {change.get("end_date", "TBD")}
 
 **Assignment:**
-- Assigned To: {change.get('assigned_to', 'Unassigned') or 'Unassigned'}
-- Assignment Group: {change.get('assignment_group', 'N/A')}
+- Assigned To: {change.get("assigned_to", "Unassigned") or "Unassigned"}
+- Assignment Group: {change.get("assignment_group", "N/A")}
 
 **Approval:**
-- Approval Status: {change.get('approval', 'Unknown')}
+- Approval Status: {change.get("approval", "Unknown")}
 
 **Timestamps:**
-- Created: {change.get('sys_created_on', 'Unknown')}
-- Last Updated: {change.get('sys_updated_on', 'Unknown')}"""
+- Created: {change.get("sys_created_on", "Unknown")}
+- Last Updated: {change.get("sys_updated_on", "Unknown")}"""
 
         except Exception as e:
             return f"Error getting change request details: {e}"
@@ -1269,26 +1265,26 @@ def get_change_request_details(change_number: str) -> str:
     if not change:
         return f"Change request {change_number} not found. Please verify the number."
 
-    return f"""**Change Request Details: {change['number']}** [SIMULATION]
+    return f"""**Change Request Details: {change["number"]}** [SIMULATION]
 
-**Short Description:** {change['short_description']}
-**Description:** {change['description']}
+**Short Description:** {change["short_description"]}
+**Description:** {change["description"]}
 
 **Status Information:**
-- State: {change['state']}
-- Type: {change['type']}
-- Risk: {change['risk']}
+- State: {change["state"]}
+- Type: {change["type"]}
+- Risk: {change["risk"]}
 
 **Schedule:**
-- Planned Start: {change['planned_start']}
-- Planned End: {change['planned_end']}
+- Planned Start: {change["planned_start"]}
+- Planned End: {change["planned_end"]}
 
 **Assignment:**
-- Assigned To: {change['assigned_to']}
+- Assigned To: {change["assigned_to"]}
 
 **Approval:**
-- Approval Status: {change['approval_status']}
-- Impact: {change['impact']}"""
+- Approval Status: {change["approval_status"]}
+- Impact: {change["impact"]}"""
 
 
 @tool
@@ -1312,33 +1308,33 @@ def get_service_request_details(request_number: str) -> str:
             # Also get the requested items
             items = api.get_requested_items(request_number.upper())
 
-            output = f"""**Service Request Details: {request.get('number')}** [LIVE DATA]
+            output = f"""**Service Request Details: {request.get("number")}** [LIVE DATA]
 
-**Short Description:** {request.get('short_description', 'N/A')}
-**Description:** {request.get('description', 'N/A')}
+**Short Description:** {request.get("short_description", "N/A")}
+**Description:** {request.get("description", "N/A")}
 
 **Status Information:**
-- Request State: {request.get('request_state', 'Unknown')}
-- Stage: {request.get('stage', 'N/A')}
+- Request State: {request.get("request_state", "Unknown")}
+- Stage: {request.get("stage", "N/A")}
 
 **Requester Information:**
-- Requested For: {request.get('requested_for', 'Unknown')}
-- Opened By: {request.get('opened_by', 'Unknown')}
+- Requested For: {request.get("requested_for", "Unknown")}
+- Opened By: {request.get("opened_by", "Unknown")}
 
 **Timestamps:**
-- Created: {request.get('sys_created_on', 'Unknown')}
-- Last Updated: {request.get('sys_updated_on', 'Unknown')}
+- Created: {request.get("sys_created_on", "Unknown")}
+- Last Updated: {request.get("sys_updated_on", "Unknown")}
 
-**Price:** {request.get('price', 'N/A')}
+**Price:** {request.get("price", "N/A")}
 """
 
             if items:
                 output += "\n**Requested Items:**\n"
                 for item in items:
                     output += f"""
-- **{item.get('number', 'N/A')}**: {item.get('short_description', 'N/A')}
-  - Stage: {item.get('stage', 'Unknown')}
-  - Assigned To: {item.get('assigned_to', 'Unassigned') or 'Unassigned'}
+- **{item.get("number", "N/A")}**: {item.get("short_description", "N/A")}
+  - Stage: {item.get("stage", "Unknown")}
+  - Assigned To: {item.get("assigned_to", "Unassigned") or "Unassigned"}
 """
 
             return output
@@ -1352,33 +1348,33 @@ def get_service_request_details(request_number: str) -> str:
     if not request:
         return f"Service request {request_number} not found. Please verify the number."
 
-    output = f"""**Service Request Details: {request['number']}** [SIMULATION]
+    output = f"""**Service Request Details: {request["number"]}** [SIMULATION]
 
-**Short Description:** {request['short_description']}
-**Description:** {request['description']}
+**Short Description:** {request["short_description"]}
+**Description:** {request["description"]}
 
 **Status Information:**
-- Request State: {request['request_state']}
-- Stage: {request['stage']}
+- Request State: {request["request_state"]}
+- Stage: {request["stage"]}
 
 **Requester Information:**
-- Requested For: {request['requested_for']}
-- Opened By: {request['opened_by']}
+- Requested For: {request["requested_for"]}
+- Opened By: {request["opened_by"]}
 
 **Timestamps:**
-- Created: {request['created']}
-- Last Updated: {request['updated']}
+- Created: {request["created"]}
+- Last Updated: {request["updated"]}
 
-**Price:** {request['price']}
+**Price:** {request["price"]}
 """
 
     if request.get("items"):
         output += "\n**Requested Items:**\n"
         for item in request["items"]:
             output += f"""
-- **{item['number']}**: {item['short_description']}
-  - Stage: {item['stage']}
-  - Assigned To: {item['assigned_to']}
+- **{item["number"]}**: {item["short_description"]}
+  - Stage: {item["stage"]}
+  - Assigned To: {item["assigned_to"]}
 """
 
     return output
@@ -1418,11 +1414,11 @@ def search_service_requests(
             output = [f"**Found {len(requests)} service request(s) [LIVE DATA]:**\n"]
             for req in requests:
                 output.append(f"""
-**{req.get('number', 'N/A')}** - {req.get('short_description', 'No description')}
-- State: {req.get('request_state', 'Unknown')}
-- Stage: {req.get('stage', 'N/A')}
-- Requested For: {req.get('requested_for', 'Unknown')}
-- Created: {req.get('sys_created_on', 'Unknown')}
+**{req.get("number", "N/A")}** - {req.get("short_description", "No description")}
+- State: {req.get("request_state", "Unknown")}
+- Stage: {req.get("stage", "N/A")}
+- Requested For: {req.get("requested_for", "Unknown")}
+- Created: {req.get("sys_created_on", "Unknown")}
 """)
             return "\n".join(output)
 
@@ -1439,7 +1435,10 @@ def search_service_requests(
             continue
         if query:
             query_lower = query.lower()
-            if query_lower not in request["short_description"].lower() and query_lower not in request["description"].lower():
+            if (
+                query_lower not in request["short_description"].lower()
+                and query_lower not in request["description"].lower()
+            ):
                 continue
 
         results.append(request)
@@ -1453,11 +1452,11 @@ def search_service_requests(
     output = [f"**Found {len(results)} service request(s) [SIMULATION]:**\n"]
     for req in results:
         output.append(f"""
-**{req['number']}** - {req['short_description']}
-- State: {req['request_state']}
-- Stage: {req['stage']}
-- Requested For: {req['requested_for']}
-- Created: {req['created']}
+**{req["number"]}** - {req["short_description"]}
+- State: {req["request_state"]}
+- Stage: {req["stage"]}
+- Requested For: {req["requested_for"]}
+- Created: {req["created"]}
 """)
 
     return "\n".join(output)
@@ -1466,6 +1465,7 @@ def search_service_requests(
 # =============================================================================
 # ServiceNow Agent Class
 # =============================================================================
+
 
 class ServiceNowAgent:
     """ServiceNow Agent for ITSM operations with conversation memory."""
@@ -1478,7 +1478,7 @@ class ServiceNowAgent:
         """
         mode = "LIVE" if is_live_mode() else "SIMULATION"
         config = get_servicenow_config()
-        instance_info = f"Instance: {config['instance']}" if config['instance'] else "Instance: Not configured"
+        instance_info = f"Instance: {config['instance']}" if config["instance"] else "Instance: Not configured"
 
         return f"""You are a ServiceNow ITSM Agent specialized in helping users interact with the ServiceNow platform. You have access to incident management, change management, and CMDB functions.
 

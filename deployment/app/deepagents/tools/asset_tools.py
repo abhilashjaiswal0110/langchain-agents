@@ -6,11 +6,10 @@ Tools for querying and managing Configuration Items.
 from langchain_core.tools import tool
 
 from app.agents.servicenow_agent import (
+    CMDB_DB,
     get_api_client,
     is_live_mode,
-    CMDB_DB,
 )
-
 
 # Extended CMDB data for relationships
 CMDB_RELATIONSHIPS = {
@@ -80,10 +79,10 @@ def search_cmdb(
             output = [f"**CMDB Search Results ({len(cis)} items) [LIVE]:**\n"]
             for ci in cis:
                 output.append(f"""
-**{ci.get('name', 'N/A')}**
-- Class: {ci.get('sys_class_name', 'Unknown')}
-- Status: {ci.get('install_status', 'Unknown')}
-- Location: {ci.get('location', 'N/A')}
+**{ci.get("name", "N/A")}**
+- Class: {ci.get("sys_class_name", "Unknown")}
+- Status: {ci.get("install_status", "Unknown")}
+- Location: {ci.get("location", "N/A")}
 """)
             return "\n".join(output)
         except Exception as e:
@@ -110,10 +109,10 @@ def search_cmdb(
     output = [f"**CMDB Search Results ({len(results)} items) [SIMULATION]:**\n"]
     for ci_id, ci in results:
         output.append(f"""
-**{ci['name']}** ({ci_id})
-- Class: {ci['class']}
-- Status: {ci['status']}
-- Owner: {ci['owner']}
+**{ci["name"]}** ({ci_id})
+- Class: {ci["class"]}
+- Status: {ci["status"]}
+- Owner: {ci["owner"]}
 """)
     return "\n".join(output)
 
@@ -146,41 +145,41 @@ def get_ci_details(ci_name: str) -> str:
         return f"Configuration Item '{ci_name}' not found. [{mode}]"
 
     if ci_data["class"] == "Server":
-        return f"""**Configuration Item: {ci_data['name']}** [{mode}]
+        return f"""**Configuration Item: {ci_data["name"]}** [{mode}]
 
 **Identity:**
 - CI ID: {ci_id}
-- Class: {ci_data['class']}
-- Status: {ci_data['status']}
+- Class: {ci_data["class"]}
+- Status: {ci_data["status"]}
 
 **Technical Details:**
-- Operating System: {ci_data.get('os', 'N/A')}
-- IP Address: {ci_data.get('ip', 'N/A')}
-- Location: {ci_data.get('location', 'N/A')}
+- Operating System: {ci_data.get("os", "N/A")}
+- IP Address: {ci_data.get("ip", "N/A")}
+- Location: {ci_data.get("location", "N/A")}
 
 **Ownership:**
-- Owner: {ci_data['owner']}
-- Support Group: {ci_data['owner']}
+- Owner: {ci_data["owner"]}
+- Support Group: {ci_data["owner"]}
 
-**Services:** {', '.join(SERVICE_MAP.get(ci_data['name'], ['Unknown']))}"""
+**Services:** {", ".join(SERVICE_MAP.get(ci_data["name"], ["Unknown"]))}"""
 
     else:
         deps = ", ".join(ci_data.get("dependencies", [])) or "None"
-        return f"""**Configuration Item: {ci_data['name']}** [{mode}]
+        return f"""**Configuration Item: {ci_data["name"]}** [{mode}]
 
 **Identity:**
 - CI ID: {ci_id}
-- Class: {ci_data['class']}
-- Status: {ci_data['status']}
+- Class: {ci_data["class"]}
+- Status: {ci_data["status"]}
 
 **Technical Details:**
-- Version: {ci_data.get('version', 'N/A')}
+- Version: {ci_data.get("version", "N/A")}
 
 **Ownership:**
-- Owner: {ci_data['owner']}
+- Owner: {ci_data["owner"]}
 
 **Dependencies:** {deps}
-**Services:** {', '.join(SERVICE_MAP.get(ci_data['name'], ['Unknown']))}"""
+**Services:** {", ".join(SERVICE_MAP.get(ci_data["name"], ["Unknown"]))}"""
 
 
 @tool

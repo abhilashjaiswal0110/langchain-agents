@@ -57,10 +57,7 @@ class ConversationTurn:
 
         tool_calls = []
         if hasattr(msg, "tool_calls") and msg.tool_calls:
-            tool_calls = [
-                {"name": tc.get("name", ""), "args": tc.get("args", {})}
-                for tc in msg.tool_calls
-            ]
+            tool_calls = [{"name": tc.get("name", ""), "args": tc.get("args", {})} for tc in msg.tool_calls]
 
         return cls(
             turn_number=turn_number,
@@ -473,18 +470,11 @@ class MultiTurnEvaluator:
             MultiTurnEvaluationResult with detailed analysis.
         """
         # Convert messages to turns
-        turns = [
-            ConversationTurn.from_message(msg, i + 1)
-            for i, msg in enumerate(messages)
-        ]
+        turns = [ConversationTurn.from_message(msg, i + 1) for i, msg in enumerate(messages)]
 
         # Separate user and assistant content
-        user_content = "\n".join(
-            t.content for t in turns if t.role == "user"
-        )
-        assistant_content = "\n".join(
-            t.content for t in turns if t.role == "assistant"
-        )
+        user_content = "\n".join(t.content for t in turns if t.role == "user")
+        assistant_content = "\n".join(t.content for t in turns if t.role == "assistant")
 
         # Collect all tool calls
         all_tool_calls = []
@@ -498,26 +488,22 @@ class MultiTurnEvaluator:
             self.tool_evaluator.expected_sequence = test_case.expected_tool_sequence
 
         # Run evaluations
-        intent_result = self.intent_evaluator.evaluate(
-            user_content, assistant_content
-        )
-        context_result = self.context_evaluator.evaluate(
-            user_content, assistant_content
-        )
+        intent_result = self.intent_evaluator.evaluate(user_content, assistant_content)
+        context_result = self.context_evaluator.evaluate(user_content, assistant_content)
         tool_result = self.tool_evaluator.evaluate_tool_calls(all_tool_calls)
-        flow_result = self.flow_evaluator.evaluate(
-            user_content, assistant_content
-        )
+        flow_result = self.flow_evaluator.evaluate(user_content, assistant_content)
 
         # Per-turn analysis
         turn_analysis = []
         for turn in turns:
-            turn_analysis.append({
-                "turn": turn.turn_number,
-                "role": turn.role,
-                "content_length": len(turn.content),
-                "tool_calls": len(turn.tool_calls),
-            })
+            turn_analysis.append(
+                {
+                    "turn": turn.turn_number,
+                    "role": turn.role,
+                    "content_length": len(turn.content),
+                    "tool_calls": len(turn.tool_calls),
+                }
+            )
 
         # Calculate overall score (weighted average)
         weights = {

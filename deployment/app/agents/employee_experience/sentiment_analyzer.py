@@ -11,7 +11,6 @@ For production use, consider integrating with:
 
 from typing import Literal
 
-
 # =============================================================================
 # Sentiment Analysis Patterns
 # =============================================================================
@@ -19,49 +18,140 @@ from typing import Literal
 # Sentiment keyword patterns
 POSITIVE_KEYWORDS = [
     # Strong positive
-    "excited", "thrilled", "love", "amazing", "excellent", "outstanding", "fantastic", "wonderful",
-    "grateful", "thankful", "appreciate", "happy", "joy", "delighted", "pleased",
+    "excited",
+    "thrilled",
+    "love",
+    "amazing",
+    "excellent",
+    "outstanding",
+    "fantastic",
+    "wonderful",
+    "grateful",
+    "thankful",
+    "appreciate",
+    "happy",
+    "joy",
+    "delighted",
+    "pleased",
     # Moderate positive
-    "good", "great", "helpful", "satisfied", "content", "comfortable", "confident",
-    "optimistic", "hopeful", "motivated", "engaged", "inspired",
+    "good",
+    "great",
+    "helpful",
+    "satisfied",
+    "content",
+    "comfortable",
+    "confident",
+    "optimistic",
+    "hopeful",
+    "motivated",
+    "engaged",
+    "inspired",
 ]
 
 NEGATIVE_KEYWORDS = [
     # Strong negative
-    "frustrated", "angry", "furious", "hate", "terrible", "awful", "horrible", "miserable",
-    "overwhelmed", "exhausted", "burned out", "burnt out", "stressed", "anxious",
-    "depressed", "hopeless", "helpless", "desperate",
+    "frustrated",
+    "angry",
+    "furious",
+    "hate",
+    "terrible",
+    "awful",
+    "horrible",
+    "miserable",
+    "overwhelmed",
+    "exhausted",
+    "burned out",
+    "burnt out",
+    "stressed",
+    "anxious",
+    "depressed",
+    "hopeless",
+    "helpless",
+    "desperate",
     # Moderate negative
-    "worried", "concerned", "disappointed", "upset", "sad", "unhappy", "dissatisfied",
-    "confused", "lost", "stuck", "struggling", "difficult", "hard", "challenging",
+    "worried",
+    "concerned",
+    "disappointed",
+    "upset",
+    "sad",
+    "unhappy",
+    "dissatisfied",
+    "confused",
+    "lost",
+    "stuck",
+    "struggling",
+    "difficult",
+    "hard",
+    "challenging",
 ]
 
 STRESS_INDICATORS = [
-    "too much work", "can't keep up", "falling behind", "no time", "too busy",
-    "working late", "working weekends", "no breaks", "constant deadlines",
-    "never enough time", "always rushing", "back-to-back meetings",
-    "drowning", "swamped", "buried", "slammed",
+    "too much work",
+    "can't keep up",
+    "falling behind",
+    "no time",
+    "too busy",
+    "working late",
+    "working weekends",
+    "no breaks",
+    "constant deadlines",
+    "never enough time",
+    "always rushing",
+    "back-to-back meetings",
+    "drowning",
+    "swamped",
+    "buried",
+    "slammed",
 ]
 
 BURNOUT_INDICATORS = [
-    "burned out", "burnt out", "exhausted", "drained", "depleted",
-    "can't do this anymore", "want to quit", "looking for other jobs",
-    "not motivated", "don't care", "going through the motions",
-    "disconnected", "isolated", "alone", "unsupported",
+    "burned out",
+    "burnt out",
+    "exhausted",
+    "drained",
+    "depleted",
+    "can't do this anymore",
+    "want to quit",
+    "looking for other jobs",
+    "not motivated",
+    "don't care",
+    "going through the motions",
+    "disconnected",
+    "isolated",
+    "alone",
+    "unsupported",
 ]
 
 DISENGAGEMENT_INDICATORS = [
-    "not excited", "lost interest", "don't see the point",
-    "why bother", "doesn't matter", "nobody cares",
-    "checking out", "counting days", "just a job",
-    "no growth", "stuck", "going nowhere",
+    "not excited",
+    "lost interest",
+    "don't see the point",
+    "why bother",
+    "doesn't matter",
+    "nobody cares",
+    "checking out",
+    "counting days",
+    "just a job",
+    "no growth",
+    "stuck",
+    "going nowhere",
 ]
 
 CONFLICT_INDICATORS = [
-    "conflict with", "disagreement with", "problem with", "issue with",
-    "tension", "difficult relationship", "not getting along",
-    "micromanaging", "not listening", "not supported by",
-    "unfair", "discriminated", "harassed", "bullied",
+    "conflict with",
+    "disagreement with",
+    "problem with",
+    "issue with",
+    "tension",
+    "difficult relationship",
+    "not getting along",
+    "micromanaging",
+    "not listening",
+    "not supported by",
+    "unfair",
+    "discriminated",
+    "harassed",
+    "bullied",
 ]
 
 
@@ -248,7 +338,9 @@ def assess_burnout_risk(messages: list[str]) -> dict:
     # Determine risk level
     if risk_score >= 7:
         risk_level = "high"
-        recommendation = "URGENT: Immediate wellbeing check-in recommended. Consider escalation to HRBP or EAP referral."
+        recommendation = (
+            "URGENT: Immediate wellbeing check-in recommended. Consider escalation to HRBP or EAP referral."
+        )
     elif risk_score >= 4:
         risk_level = "medium"
         recommendation = "MODERATE: Proactive wellbeing resources should be offered. Schedule check-in within 1 week."
@@ -264,8 +356,13 @@ def assess_burnout_risk(messages: list[str]) -> dict:
         "recommendation": recommendation,
         "sentiment_trend": {
             "average": round(avg_sentiment, 2),
-            "recent": round(sum(sentiment_scores[-3:]) / 3, 2) if len(sentiment_scores) >= 3 else round(avg_sentiment, 2),
-            "trend": "declining" if len(sentiment_scores) > 3 and (sum(sentiment_scores[-3:]) / 3) < (sum(sentiment_scores[:-3]) / (len(sentiment_scores) - 3) - 0.2) else "stable",
+            "recent": round(sum(sentiment_scores[-3:]) / 3, 2)
+            if len(sentiment_scores) >= 3
+            else round(avg_sentiment, 2),
+            "trend": "declining"
+            if len(sentiment_scores) > 3
+            and (sum(sentiment_scores[-3:]) / 3) < (sum(sentiment_scores[:-3]) / (len(sentiment_scores) - 3) - 0.2)
+            else "stable",
         },
         "indicator_counts": {
             "stress": total_stress,
@@ -289,33 +386,70 @@ def detect_escalation_triggers(message: str) -> dict:
 
     # Critical escalation keywords
     HARASSMENT_KEYWORDS = [
-        "harassment", "harassed", "harassing", "sexual harassment",
-        "unwanted advances", "inappropriate touching", "sexually explicit",
+        "harassment",
+        "harassed",
+        "harassing",
+        "sexual harassment",
+        "unwanted advances",
+        "inappropriate touching",
+        "sexually explicit",
     ]
 
     DISCRIMINATION_KEYWORDS = [
-        "discrimination", "discriminated", "racist", "racism", "sexist", "sexism",
-        "ageism", "homophobia", "transphobia", "disability discrimination",
+        "discrimination",
+        "discriminated",
+        "racist",
+        "racism",
+        "sexist",
+        "sexism",
+        "ageism",
+        "homophobia",
+        "transphobia",
+        "disability discrimination",
     ]
 
     SAFETY_KEYWORDS = [
-        "unsafe", "dangerous", "threat", "threatened", "afraid", "scared",
-        "violence", "violent", "assault", "physical altercation",
+        "unsafe",
+        "dangerous",
+        "threat",
+        "threatened",
+        "afraid",
+        "scared",
+        "violence",
+        "violent",
+        "assault",
+        "physical altercation",
     ]
 
     LEGAL_KEYWORDS = [
-        "illegal", "unlawful", "lawsuit", "lawyer", "attorney",
-        "legal action", "sue", "suing", "court",
+        "illegal",
+        "unlawful",
+        "lawsuit",
+        "lawyer",
+        "attorney",
+        "legal action",
+        "sue",
+        "suing",
+        "court",
     ]
 
     RETALIATION_KEYWORDS = [
-        "retaliation", "retaliated", "retaliating", "punished for reporting",
-        "fired for speaking up", "demoted for complaining",
+        "retaliation",
+        "retaliated",
+        "retaliating",
+        "punished for reporting",
+        "fired for speaking up",
+        "demoted for complaining",
     ]
 
     SELF_HARM_KEYWORDS = [
-        "want to die", "kill myself", "suicide", "suicidal",
-        "end it all", "not worth living", "self-harm",
+        "want to die",
+        "kill myself",
+        "suicide",
+        "suicidal",
+        "end it all",
+        "not worth living",
+        "self-harm",
     ]
 
     # Check for triggers
@@ -350,10 +484,7 @@ def detect_escalation_triggers(message: str) -> dict:
         "escalation_required": escalation_required,
         "triggers": triggers,
         "urgency": "critical" if escalation_required else "normal",
-        "recommended_action": (
-            "IMMEDIATE ESCALATION TO HRBP" if escalation_required
-            else "Standard agent response"
-        ),
+        "recommended_action": ("IMMEDIATE ESCALATION TO HRBP" if escalation_required else "Standard agent response"),
     }
 
 
@@ -414,7 +545,9 @@ def format_sentiment_report(sentiment_result: dict, burnout_result: dict | None 
 
     # Sentiment section
     emoji = get_sentiment_emoji(sentiment_result["score"])
-    report.append(f"{emoji} **Overall Sentiment:** {sentiment_result['label'].title()} (score: {sentiment_result['score']})")
+    report.append(
+        f"{emoji} **Overall Sentiment:** {sentiment_result['label'].title()} (score: {sentiment_result['score']})"
+    )
     report.append(f"**Confidence:** {sentiment_result['confidence']:.0%}")
 
     if sentiment_result["indicators"]:
@@ -424,11 +557,13 @@ def format_sentiment_report(sentiment_result: dict, burnout_result: dict | None 
     if burnout_result:
         report.append("\n\n**Burnout Risk Assessment:**\n")
         risk_emoji = get_risk_emoji(burnout_result["risk_level"])
-        report.append(f"{risk_emoji} **Risk Level:** {burnout_result['risk_level'].upper()} (score: {burnout_result['risk_score']}/{burnout_result['max_score']})")
+        report.append(
+            f"{risk_emoji} **Risk Level:** {burnout_result['risk_level'].upper()} (score: {burnout_result['risk_score']}/{burnout_result['max_score']})"
+        )
         report.append(f"\n**Recommendation:** {burnout_result['recommendation']}")
 
         if burnout_result["factors"]:
-            report.append(f"\n**Contributing Factors:**")
+            report.append("\n**Contributing Factors:**")
             for factor in burnout_result["factors"]:
                 report.append(f"  - {factor.replace('_', ' ').title()}")
 

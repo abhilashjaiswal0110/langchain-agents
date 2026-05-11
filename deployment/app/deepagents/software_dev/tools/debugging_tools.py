@@ -11,7 +11,6 @@ import uuid
 from langchain_core.tools import tool
 from langsmith import traceable
 
-
 # Session storage
 _debug_store: dict[str, dict] = {}
 
@@ -332,25 +331,31 @@ def identify_root_cause(
     potential_causes = []
 
     if categories["performance"]:
-        potential_causes.extend([
-            {"cause": "Resource exhaustion", "probability": "high", "evidence": categories["performance"]},
-            {"cause": "Inefficient algorithm", "probability": "medium", "evidence": []},
-            {"cause": "External service latency", "probability": "medium", "evidence": []},
-        ])
+        potential_causes.extend(
+            [
+                {"cause": "Resource exhaustion", "probability": "high", "evidence": categories["performance"]},
+                {"cause": "Inefficient algorithm", "probability": "medium", "evidence": []},
+                {"cause": "External service latency", "probability": "medium", "evidence": []},
+            ]
+        )
 
     if categories["connectivity"]:
-        potential_causes.extend([
-            {"cause": "Network configuration issue", "probability": "high", "evidence": categories["connectivity"]},
-            {"cause": "Service unavailable", "probability": "medium", "evidence": []},
-            {"cause": "Firewall blocking traffic", "probability": "low", "evidence": []},
-        ])
+        potential_causes.extend(
+            [
+                {"cause": "Network configuration issue", "probability": "high", "evidence": categories["connectivity"]},
+                {"cause": "Service unavailable", "probability": "medium", "evidence": []},
+                {"cause": "Firewall blocking traffic", "probability": "low", "evidence": []},
+            ]
+        )
 
     if categories["data"]:
-        potential_causes.extend([
-            {"cause": "Data validation missing", "probability": "high", "evidence": categories["data"]},
-            {"cause": "Database corruption", "probability": "low", "evidence": []},
-            {"cause": "Race condition", "probability": "medium", "evidence": []},
-        ])
+        potential_causes.extend(
+            [
+                {"cause": "Data validation missing", "probability": "high", "evidence": categories["data"]},
+                {"cause": "Database corruption", "probability": "low", "evidence": []},
+                {"cause": "Race condition", "probability": "medium", "evidence": []},
+            ]
+        )
 
     # Determine most likely root cause
     most_likely = potential_causes[0] if potential_causes else {"cause": "Unknown", "probability": "unknown"}
@@ -396,69 +401,79 @@ def propose_fix(
 
     # Match issue patterns to fixes
     if "null" in issue_lower or "none" in issue_lower:
-        fixes.append({
-            "type": "null_check",
-            "description": "Add null/None checks before accessing",
-            "before": "result = obj.method()",
-            "after": "result = obj.method() if obj is not None else None",
-            "explanation": "Prevents NoneType errors by checking before access",
-        })
+        fixes.append(
+            {
+                "type": "null_check",
+                "description": "Add null/None checks before accessing",
+                "before": "result = obj.method()",
+                "after": "result = obj.method() if obj is not None else None",
+                "explanation": "Prevents NoneType errors by checking before access",
+            }
+        )
 
     if "timeout" in issue_lower or "slow" in issue_lower:
-        fixes.append({
-            "type": "timeout_handling",
-            "description": "Add timeout and retry logic",
-            "before": "response = requests.get(url)",
-            "after": '''from tenacity import retry, stop_after_attempt, wait_exponential
+        fixes.append(
+            {
+                "type": "timeout_handling",
+                "description": "Add timeout and retry logic",
+                "before": "response = requests.get(url)",
+                "after": """from tenacity import retry, stop_after_attempt, wait_exponential
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
 def fetch_with_retry(url):
     return requests.get(url, timeout=30)
 
-response = fetch_with_retry(url)''',
-            "explanation": "Implements retry with exponential backoff for transient failures",
-        })
+response = fetch_with_retry(url)""",
+                "explanation": "Implements retry with exponential backoff for transient failures",
+            }
+        )
 
     if "memory" in issue_lower:
-        fixes.append({
-            "type": "memory_optimization",
-            "description": "Optimize memory usage",
-            "before": "data = [process(item) for item in large_list]",
-            "after": '''def process_generator(items):
+        fixes.append(
+            {
+                "type": "memory_optimization",
+                "description": "Optimize memory usage",
+                "before": "data = [process(item) for item in large_list]",
+                "after": """def process_generator(items):
     for item in items:
         yield process(item)
 
 # Use generator instead of list
 for result in process_generator(large_list):
-    handle(result)''',
-            "explanation": "Uses generator to process items one at a time, reducing memory",
-        })
+    handle(result)""",
+                "explanation": "Uses generator to process items one at a time, reducing memory",
+            }
+        )
 
     if "exception" in issue_lower or "error" in issue_lower:
-        fixes.append({
-            "type": "error_handling",
-            "description": "Add proper error handling",
-            "before": '''result = risky_operation()''',
-            "after": '''try:
+        fixes.append(
+            {
+                "type": "error_handling",
+                "description": "Add proper error handling",
+                "before": """result = risky_operation()""",
+                "after": """try:
     result = risky_operation()
 except SpecificError as e:
     logger.error(f"Operation failed: {e}")
     result = fallback_value
-    # Optionally re-raise or handle gracefully''',
-            "explanation": "Catches specific exceptions and handles them appropriately",
-        })
+    # Optionally re-raise or handle gracefully""",
+                "explanation": "Catches specific exceptions and handles them appropriately",
+            }
+        )
 
     if not fixes:
-        fixes.append({
-            "type": "general",
-            "description": "General debugging approach",
-            "steps": [
-                "Add logging around the problematic area",
-                "Validate inputs and state before operation",
-                "Check for edge cases",
-                "Add unit tests to reproduce the issue",
-            ],
-        })
+        fixes.append(
+            {
+                "type": "general",
+                "description": "General debugging approach",
+                "steps": [
+                    "Add logging around the problematic area",
+                    "Validate inputs and state before operation",
+                    "Check for edge cases",
+                    "Add unit tests to reproduce the issue",
+                ],
+            }
+        )
 
     result = {
         "issue": issue_description,
@@ -508,56 +523,66 @@ def analyze_performance(
         if "for " in stripped:
             # Check for nested loops
             indent = len(line) - len(line.lstrip())
-            for j in range(max(0, i-5), i):
-                prev_line = lines[j-1] if j > 0 else ""
+            for j in range(max(0, i - 5), i):
+                prev_line = lines[j - 1] if j > 0 else ""
                 prev_indent = len(prev_line) - len(prev_line.lstrip())
                 if "for " in prev_line and prev_indent < indent:
-                    issues.append({
-                        "line": i,
-                        "type": "nested_loop",
-                        "severity": "medium",
-                        "message": "Nested loop detected - O(n^2) complexity",
-                        "optimization": "Consider using dictionary lookup or set operations",
-                    })
+                    issues.append(
+                        {
+                            "line": i,
+                            "type": "nested_loop",
+                            "severity": "medium",
+                            "message": "Nested loop detected - O(n^2) complexity",
+                            "optimization": "Consider using dictionary lookup or set operations",
+                        }
+                    )
                     break
 
         # String concatenation in loop
         if "+=" in stripped and ("str" in stripped or '"' in stripped or "'" in stripped):
-            issues.append({
-                "line": i,
-                "type": "string_concat",
-                "severity": "low",
-                "message": "String concatenation may be inefficient in loops",
-                "optimization": "Use list.append() and ''.join() instead",
-            })
+            issues.append(
+                {
+                    "line": i,
+                    "type": "string_concat",
+                    "severity": "low",
+                    "message": "String concatenation may be inefficient in loops",
+                    "optimization": "Use list.append() and ''.join() instead",
+                }
+            )
 
         # List comprehension vs map/filter
         if "map(" in stripped or "filter(" in stripped:
-            optimizations.append({
-                "line": i,
-                "suggestion": "Consider list comprehension for readability",
-            })
+            optimizations.append(
+                {
+                    "line": i,
+                    "suggestion": "Consider list comprehension for readability",
+                }
+            )
 
         # Database query in loop (N+1 pattern)
         if any(kw in stripped for kw in [".query(", ".execute(", ".fetch", ".find("]):
             # Check if inside a loop
-            for j in range(max(0, i-10), i):
-                if "for " in lines[j-1]:
-                    issues.append({
-                        "line": i,
-                        "type": "n_plus_1",
-                        "severity": "high",
-                        "message": "Database query inside loop - N+1 problem",
-                        "optimization": "Fetch all data in single query before loop",
-                    })
+            for j in range(max(0, i - 10), i):
+                if "for " in lines[j - 1]:
+                    issues.append(
+                        {
+                            "line": i,
+                            "type": "n_plus_1",
+                            "severity": "high",
+                            "message": "Database query inside loop - N+1 problem",
+                            "optimization": "Fetch all data in single query before loop",
+                        }
+                    )
                     break
 
     # General optimizations
     if "import time" in code and "sleep" in code:
-        optimizations.append({
-            "type": "async",
-            "suggestion": "Consider async/await for I/O-bound operations",
-        })
+        optimizations.append(
+            {
+                "type": "async",
+                "suggestion": "Consider async/await for I/O-bound operations",
+            }
+        )
 
     result = {
         "lines_analyzed": len(lines),
@@ -607,56 +632,66 @@ def detect_memory_issues(
         stripped = line.strip()
 
         # Large list/dict creation
-        if re.search(r'\[\s*\w+\s+for\s+\w+\s+in\s+range\s*\(\s*\d{5,}', stripped):
-            issues.append({
-                "line": i,
-                "type": "large_allocation",
-                "severity": "high",
-                "message": "Large list allocation detected",
-                "recommendation": "Use generator expression or itertools",
-            })
+        if re.search(r"\[\s*\w+\s+for\s+\w+\s+in\s+range\s*\(\s*\d{5,}", stripped):
+            issues.append(
+                {
+                    "line": i,
+                    "type": "large_allocation",
+                    "severity": "high",
+                    "message": "Large list allocation detected",
+                    "recommendation": "Use generator expression or itertools",
+                }
+            )
 
         # File not closed
         if "open(" in stripped and "with " not in stripped:
-            issues.append({
-                "line": i,
-                "type": "unclosed_resource",
-                "severity": "medium",
-                "message": "File opened without context manager",
-                "recommendation": "Use 'with open(...)' to ensure file is closed",
-            })
+            issues.append(
+                {
+                    "line": i,
+                    "type": "unclosed_resource",
+                    "severity": "medium",
+                    "message": "File opened without context manager",
+                    "recommendation": "Use 'with open(...)' to ensure file is closed",
+                }
+            )
 
         # Connection not closed
         if any(kw in stripped for kw in ["connect(", "Connection(", "session("]):
             if "with " not in stripped and ".close()" not in code:
-                issues.append({
-                    "line": i,
-                    "type": "unclosed_connection",
-                    "severity": "high",
-                    "message": "Connection opened without explicit close",
-                    "recommendation": "Use context manager or try-finally with close()",
-                })
+                issues.append(
+                    {
+                        "line": i,
+                        "type": "unclosed_connection",
+                        "severity": "high",
+                        "message": "Connection opened without explicit close",
+                        "recommendation": "Use context manager or try-finally with close()",
+                    }
+                )
 
         # Global variable accumulation
         if stripped.startswith("global ") or (stripped.endswith(".append(") and "global" in code):
-            issues.append({
-                "line": i,
-                "type": "global_accumulation",
-                "severity": "medium",
-                "message": "Data accumulating in global variable",
-                "recommendation": "Implement cleanup or use bounded data structures",
-            })
+            issues.append(
+                {
+                    "line": i,
+                    "type": "global_accumulation",
+                    "severity": "medium",
+                    "message": "Data accumulating in global variable",
+                    "recommendation": "Implement cleanup or use bounded data structures",
+                }
+            )
 
         # Caching without limit
         if "@cache" in stripped or "@lru_cache" in stripped:
             if "maxsize" not in stripped:
-                issues.append({
-                    "line": i,
-                    "type": "unbounded_cache",
-                    "severity": "low",
-                    "message": "Cache without size limit",
-                    "recommendation": "Set maxsize parameter to limit memory usage",
-                })
+                issues.append(
+                    {
+                        "line": i,
+                        "type": "unbounded_cache",
+                        "severity": "low",
+                        "message": "Cache without size limit",
+                        "recommendation": "Set maxsize parameter to limit memory usage",
+                    }
+                )
 
     result = {
         "lines_analyzed": len(lines),

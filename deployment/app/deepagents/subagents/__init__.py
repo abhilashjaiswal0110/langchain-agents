@@ -4,12 +4,12 @@ Each subagent provides focused expertise for a specific IT domain.
 """
 
 from app.deepagents.subagents.definitions import (
-    INCIDENT_AGENT,
-    CHANGE_AGENT,
-    PROBLEM_AGENT,
     ASSET_AGENT,
-    SLA_AGENT,
+    CHANGE_AGENT,
+    INCIDENT_AGENT,
     KNOWLEDGE_AGENT,
+    PROBLEM_AGENT,
+    SLA_AGENT,
     get_all_subagents,
     get_subagent_tools,
 )

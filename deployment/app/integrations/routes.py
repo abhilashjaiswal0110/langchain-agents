@@ -6,19 +6,19 @@ Provides webhook endpoints for Microsoft Teams and Slack integrations.
 import logging
 from typing import Any
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
+from fastapi import APIRouter, Header, HTTPException, Request, Response
 from pydantic import BaseModel, ConfigDict
 
-from app.integrations.teams_webhook import (
-    TeamsWebhookHandler,
-    process_teams_webhook,
-)
+from app.integrations.retry_handler import get_retry_handler
 from app.integrations.slack_webhook import (
     SlackWebhookHandler,
     process_slack_webhook,
     verify_slack_signature,
 )
-from app.integrations.retry_handler import get_retry_handler
+from app.integrations.teams_webhook import (
+    TeamsWebhookHandler,
+    process_teams_webhook,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -291,6 +291,7 @@ async def slack_interactive(request: Request) -> dict[str, Any]:
         payload = form.get("payload", "{}")
 
         import json
+
         data = json.loads(payload) if isinstance(payload, str) else payload
 
         action_type = data.get("type", "")

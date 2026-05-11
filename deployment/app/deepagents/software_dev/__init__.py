@@ -14,11 +14,11 @@ automation. This agent coordinates specialized subagents to handle:
 - Documentation generation
 """
 
-from app.deepagents.software_dev.state import SoftwareDevState
 from app.deepagents.software_dev.software_dev_agent import (
     SoftwareDevDeepAgent,
     create_software_dev_agent,
 )
+from app.deepagents.software_dev.state import SoftwareDevState
 
 __all__ = [
     "SoftwareDevState",

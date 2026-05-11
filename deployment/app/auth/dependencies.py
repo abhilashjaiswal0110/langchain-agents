@@ -12,14 +12,14 @@ Following Enterprise Development Standards:
 """
 
 import os
+from collections.abc import Callable
 from functools import wraps
-from typing import Annotated, Callable
+from typing import Annotated
 
 from fastapi import Depends, Header, HTTPException, Request, status
 
-from app.auth.jwt_handler import JWTHandler, TokenValidationError, get_jwt_handler
+from app.auth.jwt_handler import TokenValidationError, get_jwt_handler
 from app.auth.user_context import UserContext, UserRole
-
 
 # Check if auth is enabled (allows graceful degradation in dev)
 AUTH_ENABLED = os.getenv("AUTH_ENABLED", "true").lower() == "true"
@@ -272,9 +272,7 @@ def _get_dev_user(request: Request | None = None) -> UserContext:
 CurrentUser = Annotated[UserContext, Depends(get_current_user)]
 OptionalUser = Annotated[UserContext, Depends(get_current_user_optional)]
 AdminUser = Annotated[UserContext, Depends(require_role(UserRole.ADMIN))]
-OperatorUser = Annotated[
-    UserContext, Depends(require_any_role([UserRole.ADMIN, UserRole.OPERATOR]))
-]
+OperatorUser = Annotated[UserContext, Depends(require_any_role([UserRole.ADMIN, UserRole.OPERATOR]))]
 
 
 # Decorator for class methods that need user context

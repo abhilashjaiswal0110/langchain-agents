@@ -62,17 +62,17 @@ class SharePointClient:
         self._site_id: str | None = None
 
         # Demo mode flag
-        self._demo_mode = not all([
-            self.site_url,
-            self.tenant_id,
-            self.client_id,
-            self.client_secret,
-        ])
+        self._demo_mode = not all(
+            [
+                self.site_url,
+                self.tenant_id,
+                self.client_id,
+                self.client_secret,
+            ]
+        )
 
         if self._demo_mode:
-            logger.warning(
-                "SharePoint credentials not configured. Running in demo mode."
-            )
+            logger.warning("SharePoint credentials not configured. Running in demo mode.")
 
     @property
     def is_configured(self) -> bool:
@@ -116,6 +116,7 @@ class SharePointClient:
 
             # Token typically valid for 1 hour, refresh at 50 minutes
             from datetime import timedelta
+
             self._token_expiry = datetime.now() + timedelta(minutes=50)
 
             return self._access_token
@@ -144,8 +145,9 @@ class SharePointClient:
             return "demo_site_id"
 
         try:
-            import requests
             from urllib.parse import urlparse
+
+            import requests
 
             parsed = urlparse(self.site_url)
             hostname = parsed.netloc
@@ -188,10 +190,7 @@ class SharePointClient:
             # Encode folder path
             encoded_path = folder_path.replace("/", ":/").replace(" ", "%20")
 
-            graph_url = (
-                f"https://graph.microsoft.com/v1.0/sites/{site_id}"
-                f"/drive/root:/{encoded_path}:/children"
-            )
+            graph_url = f"https://graph.microsoft.com/v1.0/sites/{site_id}/drive/root:/{encoded_path}:/children"
 
             response = requests.get(
                 graph_url,
@@ -240,10 +239,7 @@ class SharePointClient:
             file_path = f"{folder_path}/{filename}".replace(" ", "%20")
             encoded_path = file_path.replace("/", ":/")
 
-            graph_url = (
-                f"https://graph.microsoft.com/v1.0/sites/{site_id}"
-                f"/drive/root:/{encoded_path}:/content"
-            )
+            graph_url = f"https://graph.microsoft.com/v1.0/sites/{site_id}/drive/root:/{encoded_path}:/content"
 
             response = requests.get(
                 graph_url,
@@ -288,10 +284,7 @@ class SharePointClient:
 
             # For files < 4MB, use simple upload
             if len(content) < 4 * 1024 * 1024:
-                graph_url = (
-                    f"https://graph.microsoft.com/v1.0/sites/{site_id}"
-                    f"/drive/root:/{encoded_path}:/content"
-                )
+                graph_url = f"https://graph.microsoft.com/v1.0/sites/{site_id}/drive/root:/{encoded_path}:/content"
 
                 headers = self._get_headers()
                 headers["Content-Type"] = content_type
@@ -339,8 +332,7 @@ class SharePointClient:
 
             # Create upload session
             session_url = (
-                f"https://graph.microsoft.com/v1.0/sites/{site_id}"
-                f"/drive/root:/{encoded_path}:/createUploadSession"
+                f"https://graph.microsoft.com/v1.0/sites/{site_id}/drive/root:/{encoded_path}:/createUploadSession"
             )
 
             response = requests.post(
@@ -402,16 +394,10 @@ class SharePointClient:
             if len(parts) == 2:
                 parent_path, folder_name = parts
                 encoded_parent = parent_path.replace("/", ":/").replace(" ", "%20")
-                graph_url = (
-                    f"https://graph.microsoft.com/v1.0/sites/{site_id}"
-                    f"/drive/root:/{encoded_parent}:/children"
-                )
+                graph_url = f"https://graph.microsoft.com/v1.0/sites/{site_id}/drive/root:/{encoded_parent}:/children"
             else:
                 folder_name = parts[0]
-                graph_url = (
-                    f"https://graph.microsoft.com/v1.0/sites/{site_id}"
-                    f"/drive/root/children"
-                )
+                graph_url = f"https://graph.microsoft.com/v1.0/sites/{site_id}/drive/root/children"
 
             response = requests.post(
                 graph_url,
@@ -453,10 +439,7 @@ class SharePointClient:
 
             site_id = self._get_site_id()
 
-            graph_url = (
-                f"https://graph.microsoft.com/v1.0/sites/{site_id}"
-                f"/drive/root/search(q='{query}')"
-            )
+            graph_url = f"https://graph.microsoft.com/v1.0/sites/{site_id}/drive/root/search(q='{query}')"
 
             response = requests.get(
                 graph_url,
@@ -470,7 +453,8 @@ class SharePointClient:
             # Filter by folder if specified
             if folder_path:
                 items = [
-                    item for item in items
+                    item
+                    for item in items
                     if folder_path.lower() in item.get("parentReference", {}).get("path", "").lower()
                 ]
 
@@ -661,6 +645,7 @@ def clear_session_cache(session_id: str = "default") -> None:
 # =============================================================================
 # Tool Functions
 # =============================================================================
+
 
 @tool
 def list_sharepoint_folder(
@@ -923,7 +908,9 @@ def get_cached_document(
         text_content = content.decode("utf-8")
         return f"## Document: {filename}\n\n{text_content}"
     except UnicodeDecodeError:
-        return f"Document {filename} is binary ({len(content):,} bytes). Use document processing tools to extract content."
+        return (
+            f"Document {filename} is binary ({len(content):,} bytes). Use document processing tools to extract content."
+        )
 
 
 @tool

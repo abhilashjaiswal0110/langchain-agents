@@ -9,9 +9,7 @@ Following Enterprise Development Standards:
 """
 
 from dataclasses import dataclass
-from typing import Any, Callable
-
-from pydantic import BaseModel
+from typing import Any
 
 
 @dataclass
@@ -168,14 +166,8 @@ class TaskCompletionEvaluator(BaseEvaluator):
         """Evaluate task completion."""
         output_lower = output_text.lower()
 
-        success_count = sum(
-            1 for indicator in self.success_indicators
-            if indicator in output_lower
-        )
-        failure_count = sum(
-            1 for indicator in self.failure_indicators
-            if indicator in output_lower
-        )
+        success_count = sum(1 for indicator in self.success_indicators if indicator in output_lower)
+        failure_count = sum(1 for indicator in self.failure_indicators if indicator in output_lower)
 
         # Calculate score
         if failure_count > success_count:

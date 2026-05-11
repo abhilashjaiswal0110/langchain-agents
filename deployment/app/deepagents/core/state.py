@@ -11,7 +11,7 @@ from langchain_core.messages import BaseMessage
 from langgraph.graph.message import add_messages
 from pydantic import BaseModel, Field
 
-from app.deepagents.core.types import Todo, FileEntry, SubAgentResult
+from app.deepagents.core.types import FileEntry, SubAgentResult, Todo
 
 
 def merge_todos(existing: list[Todo], new: list[Todo]) -> list[Todo]:
@@ -79,16 +79,19 @@ class DeepAgentState(BaseModel):
     def get_pending_todos(self) -> list[Todo]:
         """Get all pending todos."""
         from app.deepagents.core.types import TodoStatus
+
         return [t for t in self.todos if t.status == TodoStatus.PENDING]
 
     def get_in_progress_todos(self) -> list[Todo]:
         """Get all in-progress todos."""
         from app.deepagents.core.types import TodoStatus
+
         return [t for t in self.todos if t.status == TodoStatus.IN_PROGRESS]
 
     def get_completed_todos(self) -> list[Todo]:
         """Get all completed todos."""
         from app.deepagents.core.types import TodoStatus
+
         return [t for t in self.todos if t.status == TodoStatus.COMPLETED]
 
     def get_todo_summary(self) -> str:
@@ -101,10 +104,7 @@ class DeepAgentState(BaseModel):
         if total == 0:
             return "No tasks planned yet."
 
-        return (
-            f"Tasks: {completed}/{total} completed, "
-            f"{in_progress} in progress, {pending} pending"
-        )
+        return f"Tasks: {completed}/{total} completed, {in_progress} in progress, {pending} pending"
 
     def get_file_list(self) -> list[str]:
         """Get list of all file paths."""

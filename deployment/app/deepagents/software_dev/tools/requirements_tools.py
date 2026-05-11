@@ -13,10 +13,9 @@ from langchain_core.tools import tool
 from langsmith import traceable
 
 from app.deepagents.config.software_dev_config import (
-    RequirementType,
     RequirementPriority,
+    RequirementType,
 )
-
 
 # Session storage for requirements (in production, use persistent storage)
 _requirements_store: dict[str, dict] = {}
@@ -301,13 +300,15 @@ def prioritize_requirements(
         sorted_reqs = sorted(reqs, key=lambda r: priority_order.get(r.get("priority", "should_have"), 2))
 
         for i, req in enumerate(sorted_reqs, 1):
-            prioritized.append({
-                "rank": i,
-                "id": req["id"],
-                "title": req["title"],
-                "priority": req.get("priority", "should_have"),
-                "rationale": f"Ranked by MoSCoW priority: {req.get('priority', 'should_have')}",
-            })
+            prioritized.append(
+                {
+                    "rank": i,
+                    "id": req["id"],
+                    "title": req["title"],
+                    "priority": req.get("priority", "should_have"),
+                    "rationale": f"Ranked by MoSCoW priority: {req.get('priority', 'should_have')}",
+                }
+            )
 
     elif method == "weighted":
         # Weighted scoring (simplified)
@@ -317,14 +318,16 @@ def prioritize_requirements(
             urgency = 5 if req.get("priority") == "must_have" else 3
             score = business_value * 0.6 + urgency * 0.4
 
-            prioritized.append({
-                "rank": i,
-                "id": req["id"],
-                "title": req["title"],
-                "score": round(score, 2),
-                "business_value": business_value,
-                "urgency": urgency,
-            })
+            prioritized.append(
+                {
+                    "rank": i,
+                    "id": req["id"],
+                    "title": req["title"],
+                    "score": round(score, 2),
+                    "business_value": business_value,
+                    "urgency": urgency,
+                }
+            )
 
         # Sort by score
         prioritized.sort(key=lambda x: x["score"], reverse=True)
@@ -368,59 +371,70 @@ def detect_ambiguities(
     vague_quantifiers = ["some", "many", "few", "several", "most", "various", "numerous"]
     for word in vague_quantifiers:
         if word in text.lower():
-            ambiguities.append({
-                "type": "vague_quantifier",
-                "word": word,
-                "severity": "medium",
-                "suggestion": f"Replace '{word}' with specific number or percentage",
-            })
+            ambiguities.append(
+                {
+                    "type": "vague_quantifier",
+                    "word": word,
+                    "severity": "medium",
+                    "suggestion": f"Replace '{word}' with specific number or percentage",
+                }
+            )
 
     # Vague adjectives
     vague_adjectives = ["fast", "slow", "good", "bad", "large", "small", "easy", "simple"]
     for word in vague_adjectives:
         if word in text.lower():
-            ambiguities.append({
-                "type": "vague_adjective",
-                "word": word,
-                "severity": "medium",
-                "suggestion": f"Define measurable criteria for '{word}'",
-            })
+            ambiguities.append(
+                {
+                    "type": "vague_adjective",
+                    "word": word,
+                    "severity": "medium",
+                    "suggestion": f"Define measurable criteria for '{word}'",
+                }
+            )
 
     # Uncertain words
     uncertain_words = ["might", "may", "could", "possibly", "perhaps", "probably"]
     for word in uncertain_words:
         if word in text.lower():
-            ambiguities.append({
-                "type": "uncertain_language",
-                "word": word,
-                "severity": "high",
-                "suggestion": f"Replace '{word}' with definitive 'shall' or 'must'",
-            })
+            ambiguities.append(
+                {
+                    "type": "uncertain_language",
+                    "word": word,
+                    "severity": "high",
+                    "suggestion": f"Replace '{word}' with definitive 'shall' or 'must'",
+                }
+            )
 
     # Check for passive voice indicators
     passive_indicators = ["is done", "are processed", "will be", "should be", "must be"]
     for phrase in passive_indicators:
         if phrase in text.lower():
-            ambiguities.append({
-                "type": "passive_voice",
-                "phrase": phrase,
-                "severity": "low",
-                "suggestion": "Consider active voice to clarify who performs the action",
-            })
+            ambiguities.append(
+                {
+                    "type": "passive_voice",
+                    "phrase": phrase,
+                    "severity": "low",
+                    "suggestion": "Consider active voice to clarify who performs the action",
+                }
+            )
 
     # Missing units
     import re
-    numbers = re.findall(r'\b\d+\b', text)
+
+    numbers = re.findall(r"\b\d+\b", text)
     for num in numbers[:5]:  # Check first 5 numbers
         # Check if number has units nearby
-        pattern = rf'{num}\s*(ms|seconds|minutes|hours|MB|GB|%|users|requests)'
+        pattern = rf"{num}\s*(ms|seconds|minutes|hours|MB|GB|%|users|requests)"
         if not re.search(pattern, text, re.IGNORECASE):
-            ambiguities.append({
-                "type": "missing_unit",
-                "number": num,
-                "severity": "medium",
-                "suggestion": f"Add unit or context for number '{num}'",
-            })
+            ambiguities.append(
+                {
+                    "type": "missing_unit",
+                    "number": num,
+                    "severity": "medium",
+                    "suggestion": f"Add unit or context for number '{num}'",
+                }
+            )
 
     result = {
         "total_ambiguities": len(ambiguities),
@@ -496,10 +510,7 @@ def generate_acceptance_criteria(
         ]
 
     elif format == "checklist":
-        criteria = [
-            {"id": f"AC-{i}", "criterion": f"Criterion {i}", "verified": False}
-            for i in range(1, 6)
-        ]
+        criteria = [{"id": f"AC-{i}", "criterion": f"Criterion {i}", "verified": False} for i in range(1, 6)]
         criteria[0]["criterion"] = "Feature is accessible to authorized users"
         criteria[1]["criterion"] = "Feature performs intended action correctly"
         criteria[2]["criterion"] = "Error cases are handled gracefully"

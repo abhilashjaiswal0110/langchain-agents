@@ -7,13 +7,11 @@ Provides:
 """
 
 import os
-from typing import Any
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from langchain_core.prompts import ChatPromptTemplate
 
 from app.agents.base.llm_factory import get_llm
-
 
 # Default summarization prompt
 SUMMARIZATION_PROMPT = """You are a conversation summarizer. Your task is to create a concise summary of the conversation that captures:
@@ -47,9 +45,7 @@ class ConversationSummarizer:
             max_tokens_before_summary: Approximate token limit before summarization.
         """
         self._llm = llm
-        self.summary_threshold = summary_threshold or int(
-            os.getenv("CONVERSATION_SUMMARY_THRESHOLD", "10")
-        )
+        self.summary_threshold = summary_threshold or int(os.getenv("CONVERSATION_SUMMARY_THRESHOLD", "10"))
         self.max_tokens_before_summary = max_tokens_before_summary
         self._prompt = ChatPromptTemplate.from_template(SUMMARIZATION_PROMPT)
 
@@ -70,8 +66,7 @@ class ConversationSummarizer:
             return get_llm(temperature=0, max_tokens=500)
         except ValueError as e:
             raise ImportError(
-                f"No LLM available for summarization: {e}. "
-                "Configure Azure OpenAI, OpenAI, or Anthropic."
+                f"No LLM available for summarization: {e}. Configure Azure OpenAI, OpenAI, or Anthropic."
             ) from e
 
     def should_summarize(self, messages: list[BaseMessage]) -> bool:
@@ -206,8 +201,7 @@ class ConversationSummarizer:
 
         # Create a system message with the summary
         summary_message = SystemMessage(
-            content=f"## Previous Conversation Summary\n{summary}\n\n"
-            f"(Summarized from {len(old_messages)} messages)"
+            content=f"## Previous Conversation Summary\n{summary}\n\n(Summarized from {len(old_messages)} messages)"
         )
 
         # Reconstruct message list

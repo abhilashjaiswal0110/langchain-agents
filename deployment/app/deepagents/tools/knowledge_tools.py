@@ -9,7 +9,6 @@ from langchain_core.tools import tool
 
 from app.agents.servicenow_agent import is_live_mode
 
-
 # Simulated knowledge base
 KNOWLEDGE_BASE = {
     "KB0010001": {
@@ -162,10 +161,10 @@ No matching articles found. Consider:
 
     for score, article in results:
         output.append(f"""
-**{article['number']}**: {article['title']}
-{article['short_description']}
-- Category: {article['category']} | Views: {article['views']}
-- Helpful: {article['helpful_votes']} votes
+**{article["number"]}**: {article["title"]}
+{article["short_description"]}
+- Category: {article["category"]} | Views: {article["views"]}
+- Helpful: {article["helpful_votes"]} votes
 """)
 
     return "\n".join(output)
@@ -190,15 +189,15 @@ def get_kb_article(article_number: str) -> str:
     if not article:
         return f"Knowledge article {article_number} not found. [{mode}]"
 
-    return f"""**{article['number']}: {article['title']}** [{mode}]
+    return f"""**{article["number"]}: {article["title"]}** [{mode}]
 
-**Category:** {article['category']}
-**Last Updated:** {article['updated']}
-**Views:** {article['views']} | **Helpful Votes:** {article['helpful_votes']}
+**Category:** {article["category"]}
+**Last Updated:** {article["updated"]}
+**Views:** {article["views"]} | **Helpful Votes:** {article["helpful_votes"]}
 
 ---
 
-{article['content']}
+{article["content"]}
 
 ---
 *Was this article helpful? Rate it in ServiceNow.*"""
@@ -240,7 +239,7 @@ def create_kb_article(
 **Summary:**
 {short_description}
 
-{f'**Related Incident:** {related_incident}' if related_incident else ''}
+{f"**Related Incident:** {related_incident}" if related_incident else ""}
 
 **Next Steps:**
 1. Article is in Draft status
@@ -306,8 +305,8 @@ No directly matching articles found for:
         article = KNOWLEDGE_BASE.get(kb_num)
         if article:
             output.append(f"""
-**{article['number']}**: {article['title']}
-{article['short_description']}
+**{article["number"]}**: {article["title"]}
+{article["short_description"]}
 - Relevance: High | Success Rate: {85 + hash(kb_num) % 10}%
 """)
 

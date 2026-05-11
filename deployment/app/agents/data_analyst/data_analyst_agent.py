@@ -14,67 +14,34 @@ Following Enterprise Development Standards:
 - Software Engineer: Type-safe, comprehensive error handling
 """
 
-import io
 import os
-from datetime import datetime
 from typing import Annotated, Any, Literal
 
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.messages import SystemMessage
 from langchain_core.tools import tool
-from langgraph.checkpoint.memory import MemorySaver
-from langgraph.graph import StateGraph, START, END
+from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode
 from langsmith import traceable
 from pydantic import BaseModel, Field
 
-from app.agents.base.agent_base import BaseAgent, AgentConfig
-from app.agents.base.tools import tool_error_handler, sanitize_output
+from app.agents.base.agent_base import AgentConfig, BaseAgent
+from app.agents.base.tools import tool_error_handler
 
 
 class DataAnalystState(BaseModel):
     """State schema for the Data Analyst Agent."""
 
-    messages: Annotated[list, add_messages] = Field(
-        default_factory=list,
-        description="Conversation history"
-    )
-    session_id: str | None = Field(
-        default=None,
-        description="Session identifier"
-    )
-    user_id: str | None = Field(
-        default=None,
-        description="User identifier"
-    )
-    data_source: str = Field(
-        default="",
-        description="Current data source (file path or connection string)"
-    )
-    data_type: Literal["excel", "csv", "database", "none"] = Field(
-        default="none",
-        description="Type of data source"
-    )
-    columns: list[str] = Field(
-        default_factory=list,
-        description="Available columns in the data"
-    )
-    row_count: int = Field(
-        default=0,
-        description="Number of rows in the data"
-    )
-    analysis_results: dict[str, Any] = Field(
-        default_factory=dict,
-        description="Results from analysis operations"
-    )
-    insights: list[str] = Field(
-        default_factory=list,
-        description="Generated insights from analysis"
-    )
-    visualizations: list[dict[str, Any]] = Field(
-        default_factory=list,
-        description="Visualization recommendations"
-    )
+    messages: Annotated[list, add_messages] = Field(default_factory=list, description="Conversation history")
+    session_id: str | None = Field(default=None, description="Session identifier")
+    user_id: str | None = Field(default=None, description="User identifier")
+    data_source: str = Field(default="", description="Current data source (file path or connection string)")
+    data_type: Literal["excel", "csv", "database", "none"] = Field(default="none", description="Type of data source")
+    columns: list[str] = Field(default_factory=list, description="Available columns in the data")
+    row_count: int = Field(default=0, description="Number of rows in the data")
+    analysis_results: dict[str, Any] = Field(default_factory=dict, description="Results from analysis operations")
+    insights: list[str] = Field(default_factory=list, description="Generated insights from analysis")
+    visualizations: list[dict[str, Any]] = Field(default_factory=list, description="Visualization recommendations")
 
 
 # Session-aware DataFrame storage (keyed by session_id)
@@ -85,12 +52,14 @@ def _get_pandas():
     """Lazy import pandas."""
     try:
         import pandas as pd
+
         return pd
     except ImportError:
         return None
 
 
 # Data Analysis Tools
+
 
 @tool
 @tool_error_handler
@@ -232,7 +201,7 @@ def get_data_summary(session_id: str = "default_session") -> str:
     df = _dataframes[session_id]["current"]
 
     try:
-        summary = df.describe(include='all').to_string()
+        summary = df.describe(include="all").to_string()
         missing = df.isnull().sum()
         missing_str = missing[missing > 0].to_string() if missing.any() else "No missing values"
 
@@ -279,6 +248,7 @@ def run_sql_query(query: str, session_id: str = "default_session") -> str:
         # Try using pandasql if available
         try:
             from pandasql import sqldf
+
             result = sqldf(query, {"df": df})
         except ImportError:
             # Fallback: interpret simple SELECT queries
@@ -288,12 +258,7 @@ def run_sql_query(query: str, session_id: str = "default_session") -> str:
             # Very basic query interpretation
             result = df.head(100)
 
-        return (
-            f"Query Results\n"
-            f"{'=' * 50}\n\n"
-            f"Rows returned: {len(result)}\n\n"
-            f"{result.to_string(max_rows=50)}"
-        )
+        return f"Query Results\n{'=' * 50}\n\nRows returned: {len(result)}\n\n{result.to_string(max_rows=50)}"
     except Exception as e:
         return f"Error executing query: {e}"
 
@@ -328,15 +293,15 @@ def calculate_statistics(column: str, operation: str = "all", session_id: str = 
         results = []
 
         if operation in ["all", "mean"]:
-            if col.dtype in ['int64', 'float64']:
+            if col.dtype in ["int64", "float64"]:
                 results.append(f"Mean: {col.mean():.4f}")
 
         if operation in ["all", "median"]:
-            if col.dtype in ['int64', 'float64']:
+            if col.dtype in ["int64", "float64"]:
                 results.append(f"Median: {col.median():.4f}")
 
         if operation in ["all", "std"]:
-            if col.dtype in ['int64', 'float64']:
+            if col.dtype in ["int64", "float64"]:
                 results.append(f"Std Dev: {col.std():.4f}")
 
         if operation in ["all", "min"]:
@@ -375,9 +340,9 @@ def suggest_visualization(analysis_goal: str, session_id: str = "default_session
         return "Error: No data loaded."
 
     df = _dataframes[session_id]["current"]
-    numeric_cols = df.select_dtypes(include=['int64', 'float64']).columns.tolist()
-    categorical_cols = df.select_dtypes(include=['object', 'category']).columns.tolist()
-    date_cols = df.select_dtypes(include=['datetime64']).columns.tolist()
+    numeric_cols = df.select_dtypes(include=["int64", "float64"]).columns.tolist()
+    categorical_cols = df.select_dtypes(include=["object", "category"]).columns.tolist()
+    date_cols = df.select_dtypes(include=["datetime64"]).columns.tolist()
 
     suggestions = [f"Based on your goal: '{analysis_goal}'\n"]
 
@@ -394,7 +359,7 @@ def suggest_visualization(analysis_goal: str, session_id: str = "default_session
         suggestions.append("For correlations/relationships:")
         if len(numeric_cols) >= 2:
             suggestions.append(f"  - Scatter plot: {numeric_cols[0]} vs {numeric_cols[1]}")
-            suggestions.append(f"  - Correlation heatmap of numeric columns")
+            suggestions.append("  - Correlation heatmap of numeric columns")
 
     # Trend analysis
     if "trend" in analysis_goal.lower() or "time" in analysis_goal.lower():
@@ -408,7 +373,7 @@ def suggest_visualization(analysis_goal: str, session_id: str = "default_session
         suggestions.append("For comparisons:")
         if categorical_cols and numeric_cols:
             suggestions.append(f"  - Box plot: {numeric_cols[0]} by {categorical_cols[0]}")
-            suggestions.append(f"  - Grouped bar chart")
+            suggestions.append("  - Grouped bar chart")
 
     # General recommendations
     suggestions.append("\nGeneral recommendations:")
@@ -452,7 +417,7 @@ def generate_insights(focus_area: str = "general", session_id: str = "default_se
                 insights.append(f"Columns with >10% missing: {', '.join(high_missing.index)}\n")
 
         # Numeric column insights
-        numeric_cols = df.select_dtypes(include=['int64', 'float64']).columns
+        numeric_cols = df.select_dtypes(include=["int64", "float64"]).columns
         for col in numeric_cols[:3]:
             insights.append(f"\n{col}:")
             insights.append(f"  Range: {df[col].min():.2f} to {df[col].max():.2f}")
@@ -465,20 +430,18 @@ def generate_insights(focus_area: str = "general", session_id: str = "default_se
                 IQR = Q3 - Q1
                 outliers = ((df[col] < Q1 - 1.5 * IQR) | (df[col] > Q3 + 1.5 * IQR)).sum()
                 if outliers > 0:
-                    insights.append(f"  Potential outliers: {outliers} ({outliers/len(df)*100:.1f}%)")
+                    insights.append(f"  Potential outliers: {outliers} ({outliers / len(df) * 100:.1f}%)")
 
         # Correlation insights
         if focus_area in ["general", "correlations"] and len(numeric_cols) >= 2:
             corr = df[numeric_cols].corr()
             high_corr = []
             for i in range(len(corr.columns)):
-                for j in range(i+1, len(corr.columns)):
+                for j in range(i + 1, len(corr.columns)):
                     if abs(corr.iloc[i, j]) > 0.7:
-                        high_corr.append(
-                            f"{corr.columns[i]} & {corr.columns[j]}: {corr.iloc[i, j]:.2f}"
-                        )
+                        high_corr.append(f"{corr.columns[i]} & {corr.columns[j]}: {corr.iloc[i, j]:.2f}")
             if high_corr:
-                insights.append(f"\nStrong correlations found:")
+                insights.append("\nStrong correlations found:")
                 for c in high_corr[:5]:
                     insights.append(f"  - {c}")
 
@@ -508,16 +471,18 @@ class DataAnalystAgent(BaseAgent):
         super().__init__(config)
 
         # Register data analysis tools
-        self.register_tools([
-            check_data_status,
-            load_excel_file,
-            load_csv_file,
-            get_data_summary,
-            run_sql_query,
-            calculate_statistics,
-            suggest_visualization,
-            generate_insights,
-        ])
+        self.register_tools(
+            [
+                check_data_status,
+                load_excel_file,
+                load_csv_file,
+                get_data_summary,
+                run_sql_query,
+                calculate_statistics,
+                suggest_visualization,
+                generate_insights,
+            ]
+        )
 
     def _get_system_prompt(self) -> str:
         """Get the data analyst agent's system prompt."""
@@ -583,7 +548,7 @@ For SQL queries, the table name is always 'df'."""
 A data file has been uploaded and is ready for analysis. DO NOT ask the user to upload a file.
 - Rows: {len(df)}
 - Columns: {len(df.columns)}
-- Column names: {', '.join(df.columns.tolist()[:20])}{'...' if len(df.columns) > 20 else ''}
+- Column names: {", ".join(df.columns.tolist()[:20])}{"..." if len(df.columns) > 20 else ""}
 
 You can directly use get_data_summary, generate_insights, calculate_statistics, run_sql_query, or suggest_visualization tools to analyze this data."""
 
@@ -612,11 +577,7 @@ You can directly use get_data_summary, generate_insights, calculate_statistics, 
 
         # Add edges
         graph.add_edge(START, "agent")
-        graph.add_conditional_edges(
-            "agent",
-            should_continue,
-            {"tools": "tools", "end": END}
-        )
+        graph.add_conditional_edges("agent", should_continue, {"tools": "tools", "end": END})
         graph.add_edge("tools", "agent")
 
         return graph

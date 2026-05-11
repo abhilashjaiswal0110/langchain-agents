@@ -16,7 +16,6 @@ from typing import Any
 
 from langchain_core.language_models import BaseChatModel
 
-
 # Cache for LLM instances
 _llm_cache: dict[str, BaseChatModel] = {}
 
@@ -118,7 +117,9 @@ def get_llm(
         is_reasoning_model = any(model.lower().startswith(prefix) for prefix in reasoning_models)
 
         if is_reasoning_model:
-            print(f"[LLM Factory] Using Azure OpenAI reasoning model: deployment={model}, endpoint={azure_endpoint[:50]}..., api_version={api_version} (temperature not supported)")
+            print(
+                f"[LLM Factory] Using Azure OpenAI reasoning model: deployment={model}, endpoint={azure_endpoint[:50]}..., api_version={api_version} (temperature not supported)"
+            )
 
             try:
                 llm = AzureChatOpenAI(
@@ -139,7 +140,9 @@ def get_llm(
                 )
                 raise ValueError(msg) from e
         else:
-            print(f"[LLM Factory] Using Azure OpenAI: deployment={model}, endpoint={azure_endpoint[:50]}..., api_version={api_version}")
+            print(
+                f"[LLM Factory] Using Azure OpenAI: deployment={model}, endpoint={azure_endpoint[:50]}..., api_version={api_version}"
+            )
 
             try:
                 llm = AzureChatOpenAI(
@@ -202,11 +205,13 @@ def _is_azure_openai_configured() -> bool:
     Returns:
         True if all required Azure OpenAI env vars are set.
     """
-    return all([
-        os.getenv("AZURE_OPENAI_API_KEY"),
-        os.getenv("AZURE_OPENAI_ENDPOINT"),
-        os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME"),
-    ])
+    return all(
+        [
+            os.getenv("AZURE_OPENAI_API_KEY"),
+            os.getenv("AZURE_OPENAI_ENDPOINT"),
+            os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME"),
+        ]
+    )
 
 
 def get_embedding_model(
@@ -298,11 +303,13 @@ def _is_azure_openai_embedding_configured() -> bool:
     Returns:
         True if Azure OpenAI endpoint and key are set, and embedding deployment exists.
     """
-    return all([
-        os.getenv("AZURE_OPENAI_API_KEY"),
-        os.getenv("AZURE_OPENAI_ENDPOINT"),
-        os.getenv("AZURE_OPENAI_EMBEDDING_DEPLOYMENT"),
-    ])
+    return all(
+        [
+            os.getenv("AZURE_OPENAI_API_KEY"),
+            os.getenv("AZURE_OPENAI_ENDPOINT"),
+            os.getenv("AZURE_OPENAI_EMBEDDING_DEPLOYMENT"),
+        ]
+    )
 
 
 def clear_llm_cache() -> None:

@@ -14,12 +14,12 @@ from langchain_core.tools import tool
 from langgraph.graph import END, StateGraph, add_messages
 from langgraph.prebuilt import ToolNode
 
-from app.agents.base.llm_factory import get_llm, _is_azure_openai_configured
-
+from app.agents.base.llm_factory import get_llm
 
 # ============================================================================
 # Custom Tools for the Agent
 # ============================================================================
+
 
 @tool
 def web_search(query: str) -> str:
@@ -36,6 +36,7 @@ def web_search(query: str) -> str:
     if tavily_key:
         try:
             from langchain_community.tools.tavily_search import TavilySearchResults
+
             tavily = TavilySearchResults(max_results=3)
             results = tavily.invoke(query)
             return str(results)
@@ -74,12 +75,14 @@ def get_system_info() -> str:
         System information including date/time.
     """
     from datetime import datetime
+
     return f"Current time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
 
 
 # ============================================================================
 # Agent State and Context
 # ============================================================================
+
 
 class AgentContext(TypedDict):
     """Context for selecting model provider."""
@@ -96,6 +99,7 @@ class AgentState(TypedDict):
 # ============================================================================
 # Agent Graph Construction
 # ============================================================================
+
 
 def create_langgraph_agent(
     model_provider: str = "auto",
@@ -171,6 +175,7 @@ def create_langgraph_agent(
 # ============================================================================
 # Runnable Wrapper for LangServe
 # ============================================================================
+
 
 class LangGraphAgentRunnable:
     """Wrapper to make LangGraph agent compatible with LangServe."""

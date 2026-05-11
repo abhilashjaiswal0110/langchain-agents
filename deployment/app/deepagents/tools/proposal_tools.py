@@ -253,11 +253,11 @@ def search_rfp_templates(
     output = [f"**Found {len(results)} template(s):**\n"]
     for tmpl in results:
         output.append(f"""
-**{tmpl['id']}** - {tmpl['name']}
-- Category: {tmpl['category']} | Win Rate: {tmpl['win_rate']}%
-- Sections: {', '.join(tmpl['sections'][:5])}...
-- Tags: {', '.join(tmpl['tags'])}
-- Last Updated: {tmpl['last_updated']}
+**{tmpl["id"]}** - {tmpl["name"]}
+- Category: {tmpl["category"]} | Win Rate: {tmpl["win_rate"]}%
+- Sections: {", ".join(tmpl["sections"][:5])}...
+- Tags: {", ".join(tmpl["tags"])}
+- Last Updated: {tmpl["last_updated"]}
 """)
     return "\n".join(output)
 
@@ -276,20 +276,20 @@ def get_template_details(template_id: str) -> str:
     if not tmpl:
         return f"Template {template_id} not found."
 
-    sections_list = "\n".join(f"{i+1}. {s}" for i, s in enumerate(tmpl["sections"]))
+    sections_list = "\n".join(f"{i + 1}. {s}" for i, s in enumerate(tmpl["sections"]))
 
     return f"""
-**Template: {tmpl['name']}**
+**Template: {tmpl["name"]}**
 
-- ID: {tmpl['id']}
-- Category: {tmpl['category']}
-- Historical Win Rate: {tmpl['win_rate']}%
-- Last Updated: {tmpl['last_updated']}
+- ID: {tmpl["id"]}
+- Category: {tmpl["category"]}
+- Historical Win Rate: {tmpl["win_rate"]}%
+- Last Updated: {tmpl["last_updated"]}
 
 **Sections:**
 {sections_list}
 
-**Tags:** {', '.join(tmpl['tags'])}
+**Tags:** {", ".join(tmpl["tags"])}
 """
 
 
@@ -346,7 +346,9 @@ def extract_requirements(
     if focus_areas:
         output.append(f"\n*Focus areas requested: {focus_areas}*")
 
-    output.append("\n\n**Recommendation:** Use the `draft_proposal_section` tool to create responses for each requirement category.")
+    output.append(
+        "\n\n**Recommendation:** Use the `draft_proposal_section` tool to create responses for each requirement category."
+    )
 
     return "\n".join(output)
 
@@ -394,7 +396,7 @@ def draft_proposal_section(
             result += template
 
             if key_points:
-                result += f"\n\n**Key Points to Emphasize:**\n"
+                result += "\n\n**Key Points to Emphasize:**\n"
                 for point in key_points.split(","):
                     result += f"- {point.strip()}\n"
 
@@ -415,7 +417,7 @@ def draft_proposal_section(
 4. Specific deliverables and outcomes
 5. Next steps or call to action
 
-**Key Points:** {key_points or 'None specified'}
+**Key Points:** {key_points or "None specified"}
 
 *Tip: Search for templates using `search_rfp_templates` for more options.*
 """
@@ -541,11 +543,11 @@ def search_past_proposals(
         factors = prop.get(factors_key, ["No factors recorded"])
 
         output.append(f"""
-**{prop['id']}** - {prop['title']}
-- Customer: {prop['customer']} | Value: ${prop['value']:,}
-- Category: {prop['category']} | Outcome: **{prop['outcome']}**
-- Date: {prop['date']}
-- {'Win' if prop['outcome'] == 'Won' else 'Loss'} Factors: {', '.join(factors)}
+**{prop["id"]}** - {prop["title"]}
+- Customer: {prop["customer"]} | Value: ${prop["value"]:,}
+- Category: {prop["category"]} | Outcome: **{prop["outcome"]}**
+- Date: {prop["date"]}
+- {"Win" if prop["outcome"] == "Won" else "Loss"} Factors: {", ".join(factors)}
 """)
 
     return "\n".join(output)

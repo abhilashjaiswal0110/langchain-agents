@@ -11,9 +11,9 @@ import uuid
 from langchain_core.tools import tool
 
 from app.deepagents.core.types import (
+    SubAgentDefinition,
     Todo,
     TodoStatus,
-    SubAgentDefinition,
 )
 
 
@@ -182,6 +182,7 @@ class FilesystemMiddleware:
 
     def _create_read_file_tool(self):
         """Create the read_file tool."""
+
         @tool
         def read_file(path: str) -> str:
             """Read a file from the workspace.

@@ -43,11 +43,7 @@ def categorize_expense(description: str, amount: float) -> str:
         if keyword in description.lower():
             category = gl
             break
-    return (
-        f"Expense: '{description}' (${amount:,.2f})\n"
-        f"GL Account: {category}\n"
-        f"Submit at finance.company.com/expenses"
-    )
+    return f"Expense: '{description}' (${amount:,.2f})\nGL Account: {category}\nSubmit at finance.company.com/expenses"
 
 
 @tool

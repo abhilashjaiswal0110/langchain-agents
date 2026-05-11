@@ -20,9 +20,10 @@ import contextlib
 import logging
 import time
 from collections import defaultdict, deque
+from collections.abc import Generator
 from dataclasses import dataclass, field
 from threading import Lock
-from typing import Any, Generator
+from typing import Any
 
 logger = logging.getLogger(__name__)
 

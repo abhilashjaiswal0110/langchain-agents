@@ -4,7 +4,6 @@ This agent handles common IT support tasks like password resets,
 software troubleshooting, hardware issues, and knowledge base searches.
 """
 
-import os
 import uuid
 from datetime import datetime
 from typing import Annotated, Any, Literal
@@ -12,18 +11,18 @@ from typing import Annotated, Any, Literal
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.tools import tool
 from langgraph.checkpoint.memory import MemorySaver
-
-from app.agents.base.llm_factory import get_llm
-from langgraph.graph import StateGraph, START, END
+from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 from langgraph.prebuilt import ToolNode
 from langsmith import traceable
 from pydantic import BaseModel
 
+from app.agents.base.llm_factory import get_llm
 
 # =============================================================================
 # Agent State
 # =============================================================================
+
 
 class AgentState(BaseModel):
     """State for IT Helpdesk Agent."""
@@ -53,7 +52,7 @@ IT_KNOWLEDGE_BASE = {
    - At least one uppercase, lowercase, number, and special character
    - Cannot reuse last 10 passwords
 If you're locked out, contact IT Support at ext. 5555.""",
-        "category": "access"
+        "category": "access",
     },
     "vpn_setup": {
         "title": "VPN Setup Instructions",
@@ -68,7 +67,7 @@ Troubleshooting:
 - If connection fails, check your internet connection
 - Ensure your firewall allows GlobalProtect
 - Clear cache if certificate errors occur""",
-        "category": "network"
+        "category": "network",
     },
     "email_outlook": {
         "title": "Outlook Email Configuration",
@@ -82,7 +81,7 @@ Common issues:
 - Sync problems: Check internet connection
 - Calendar not updating: Clear offline items
 - Large mailbox: Archive old emails""",
-        "category": "email"
+        "category": "email",
     },
     "software_install": {
         "title": "Software Installation Guide",
@@ -96,7 +95,7 @@ For software not in Software Center:
 - Include business justification
 - Manager approval may be required
 Standard approval time: 24-48 hours""",
-        "category": "software"
+        "category": "software",
     },
     "printer_setup": {
         "title": "Printer Setup Guide",
@@ -110,7 +109,7 @@ Common printer names by floor:
 - Floor 1: PRINTER-F1-HP
 - Floor 2: PRINTER-F2-XEROX
 - Floor 3: PRINTER-F3-HP""",
-        "category": "hardware"
+        "category": "hardware",
     },
     "teams_issues": {
         "title": "Microsoft Teams Troubleshooting",
@@ -126,8 +125,8 @@ Common printer names by floor:
    - Clear Teams cache
    - Disable animations
    - Check network bandwidth""",
-        "category": "software"
-    }
+        "category": "software",
+    },
 }
 
 # Simulated ticket database
@@ -210,7 +209,7 @@ def create_support_ticket(
 **Category:** {category}
 **Status:** New
 
-You will receive updates at {user_email or 'your registered email'}.
+You will receive updates at {user_email or "your registered email"}.
 Expected response time based on priority:
 - Critical: 1 hour
 - High: 4 hours
@@ -245,14 +244,14 @@ To check tickets in ServiceNow:
 
     return f"""**Ticket Status: {ticket_id}**
 
-**Title:** {ticket['title']}
-**Status:** {ticket['status'].upper()}
-**Priority:** {ticket['priority'].upper()}
-**Category:** {ticket['category']}
-**Created:** {ticket['created_at']}
-**Last Updated:** {ticket['updated_at']}
-**Assigned To:** {ticket['assigned_to'] or 'Pending assignment'}
-**Resolution:** {ticket['resolution'] or 'In progress'}"""
+**Title:** {ticket["title"]}
+**Status:** {ticket["status"].upper()}
+**Priority:** {ticket["priority"].upper()}
+**Category:** {ticket["category"]}
+**Created:** {ticket["created_at"]}
+**Last Updated:** {ticket["updated_at"]}
+**Assigned To:** {ticket["assigned_to"] or "Pending assignment"}
+**Resolution:** {ticket["resolution"] or "In progress"}"""
 
 
 @tool
@@ -296,7 +295,9 @@ def check_system_status(system: str | None = None) -> str:
 
 
 @tool
-def initiate_password_reset(employee_id: str, reset_method: Literal["email", "sms", "security_questions"] = "email") -> str:
+def initiate_password_reset(
+    employee_id: str, reset_method: Literal["email", "sms", "security_questions"] = "email"
+) -> str:
     """Initiate a password reset for a user.
 
     Args:
@@ -308,7 +309,7 @@ def initiate_password_reset(employee_id: str, reset_method: Literal["email", "sm
     """
     return f"""Password reset initiated for {employee_id}
 
-**Reset Method:** {reset_method.replace('_', ' ').title()}
+**Reset Method:** {reset_method.replace("_", " ").title()}
 
 Next steps:
 1. {"Check your registered email for the reset link" if reset_method == "email" else "Check your registered phone for SMS code" if reset_method == "sms" else "You will be prompted to answer your security questions"}
@@ -399,6 +400,7 @@ Please have the following ready:
 # =============================================================================
 # IT Helpdesk Agent Class
 # =============================================================================
+
 
 class ITHelpdeskAgent:
     """IT Helpdesk Agent with conversation memory and LangGraph workflow."""
@@ -617,7 +619,11 @@ Remember: Your goal is to resolve issues efficiently while providing excellent u
                 messages = state.values.get("messages", [])
                 return [
                     {
-                        "role": "assistant" if isinstance(m, AIMessage) else "user" if isinstance(m, HumanMessage) else "system",
+                        "role": "assistant"
+                        if isinstance(m, AIMessage)
+                        else "user"
+                        if isinstance(m, HumanMessage)
+                        else "system",
                         "content": m.content,
                     }
                     for m in messages
@@ -652,4 +658,3 @@ def get_graph():
         temperature=0.7,
     )
     return agent.graph
-

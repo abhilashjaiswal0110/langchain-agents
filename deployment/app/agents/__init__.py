@@ -14,27 +14,26 @@ Following the 4-role Enterprise Development Standards from CLAUDE.md.
 """
 
 # IT Support agents (classes only - no global instances)
-from app.agents.it_helpdesk import ITHelpdeskAgent
-from app.agents.servicenow_agent import ServiceNowAgent
-from app.agents.conversation_manager import ConversationManager
-
 # Base framework
-from app.agents.base import BaseAgent, AgentConfig
+from app.agents.base import AgentConfig, BaseAgent
+from app.agents.code_assistant import CodeAssistantAgent
+from app.agents.content import ContentAgent
+from app.agents.conversation_manager import ConversationManager
+from app.agents.data_analyst import DataAnalystAgent
+from app.agents.document_intelligence import DocumentIntelligenceAgent
+from app.agents.documents import DocumentAgent
+from app.agents.employee_experience import EmployeeExperienceAgent
+from app.agents.evals import evaluate_agent_response
+from app.agents.it_helpdesk import ITHelpdeskAgent
+from app.agents.it_support import HITLSupportAgent
+from app.agents.rag import MultilingualRAGAgent
 
 # New enterprise agents
 from app.agents.research import ResearchAgent
-from app.agents.content import ContentAgent
-from app.agents.data_analyst import DataAnalystAgent
-from app.agents.documents import DocumentAgent
-from app.agents.rag import MultilingualRAGAgent
-from app.agents.it_support import HITLSupportAgent
-from app.agents.code_assistant import CodeAssistantAgent
-from app.agents.document_intelligence import DocumentIntelligenceAgent
-from app.agents.employee_experience import EmployeeExperienceAgent
+from app.agents.servicenow_agent import ServiceNowAgent
 
 # Tracing and evaluation
-from app.agents.tracing import setup_tracing, get_tracing_status
-from app.agents.evals import evaluate_agent_response
+from app.agents.tracing import get_tracing_status, setup_tracing
 
 __all__ = [
     # Existing

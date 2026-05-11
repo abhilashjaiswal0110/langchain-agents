@@ -1,6 +1,6 @@
 """FastAPI router for the analytics metrics API."""
+
 from fastapi import APIRouter
-from fastapi.responses import HTMLResponse
 
 from app.analytics.metrics_collector import get_metrics_collector
 

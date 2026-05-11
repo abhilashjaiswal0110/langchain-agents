@@ -16,8 +16,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any
 
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
-from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.messages import AIMessage, BaseMessage
 from langchain_core.tools import BaseTool
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.prebuilt import create_react_agent
@@ -152,10 +151,10 @@ class DomainAgent(ABC):
 
         user_info = f"""
 User Information:
-- Name: {user_context.get('display_name', 'User')}
-- Email: {user_context.get('email', 'unknown')}
-- Role: {user_context.get('primary_role', 'user')}
-- Department: {user_context.get('department', 'unknown')}
+- Name: {user_context.get("display_name", "User")}
+- Email: {user_context.get("email", "unknown")}
+- Role: {user_context.get("primary_role", "user")}
+- Department: {user_context.get("department", "unknown")}
 
 Instructions:
 1. Be helpful and professional
@@ -267,7 +266,9 @@ Instructions:
             }
 
         except Exception as e:
-            error_msg = f"I encountered an issue processing your request. Please try again or contact support. Error: {e}"
+            error_msg = (
+                f"I encountered an issue processing your request. Please try again or contact support. Error: {e}"
+            )
             return {
                 "response": error_msg,
                 "messages": [AIMessage(content=error_msg)],
@@ -321,15 +322,15 @@ def create_domain_agent(
         ValueError: If domain is not supported.
     """
     # Import here to avoid circular imports
-    from app.agents.domains.marcom_agent import MarComAgent
-    from app.agents.domains.hr_agent import HRAgent
-    from app.agents.domains.lnd_agent import LnDAgent
-    from app.agents.domains.presales_agent import PresalesAgent
-    from app.agents.domains.datacenter_agent import DatacenterAgent
     from app.agents.domains.cloud_agent import CloudAgent
     from app.agents.domains.cybersecurity_agent import CybersecurityAgent
     from app.agents.domains.data_ai_agent import DataAIAgent
+    from app.agents.domains.datacenter_agent import DatacenterAgent
     from app.agents.domains.finance_agent import FinanceAgent
+    from app.agents.domains.hr_agent import HRAgent
+    from app.agents.domains.lnd_agent import LnDAgent
+    from app.agents.domains.marcom_agent import MarComAgent
+    from app.agents.domains.presales_agent import PresalesAgent
 
     agents = {
         DomainType.MARCOM: MarComAgent,

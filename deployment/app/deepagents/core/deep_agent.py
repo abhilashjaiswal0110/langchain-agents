@@ -4,32 +4,29 @@ This module provides the main DeepAgent class that combines LangGraph
 with middleware for planning, file system, and subagent capabilities.
 """
 
-import os
 import uuid
 from datetime import datetime
 from typing import Any, Literal
 
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_core.language_models import BaseChatModel
+from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.checkpoint.memory import MemorySaver
-from langgraph.graph import StateGraph, START, END
+from langgraph.graph import END, START, StateGraph
 from langgraph.prebuilt import ToolNode
 from langsmith import traceable
 
 from app.agents.base.llm_factory import get_llm
-
+from app.deepagents.core.middleware import (
+    FilesystemMiddleware,
+    SubAgentMiddleware,
+    TodoListMiddleware,
+)
+from app.deepagents.core.state import DeepAgentState
 from app.deepagents.core.types import (
     DeepAgentConfig,
     FileEntry,
     SubAgentDefinition,
     Todo,
-    TodoStatus,
-)
-from app.deepagents.core.state import DeepAgentState
-from app.deepagents.core.middleware import (
-    TodoListMiddleware,
-    FilesystemMiddleware,
-    SubAgentMiddleware,
 )
 
 

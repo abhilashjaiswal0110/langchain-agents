@@ -96,6 +96,7 @@ class MCPRequest:
         """Generate request ID if not provided."""
         if not self.request_id:
             import uuid
+
             self.request_id = str(uuid.uuid4())
 
 
@@ -128,9 +129,7 @@ class MCPRateLimiter:
             self._requests[client_id] = []
 
         # Clean old requests
-        self._requests[client_id] = [
-            t for t in self._requests[client_id] if t > window_start
-        ]
+        self._requests[client_id] = [t for t in self._requests[client_id] if t > window_start]
 
         # Check limit
         if len(self._requests[client_id]) >= self.requests_per_minute:
@@ -163,15 +162,17 @@ class MCPAuditLogger:
         Args:
             request: The MCP request to log.
         """
-        self._entries.append({
-            "type": "request",
-            "request_id": request.request_id,
-            "tool_name": request.tool_name,
-            "client_id": request.client.client_id,
-            "user_id": request.client.user_id,
-            "timestamp": request.timestamp,
-            "arguments_keys": list(request.arguments.keys()),
-        })
+        self._entries.append(
+            {
+                "type": "request",
+                "request_id": request.request_id,
+                "tool_name": request.tool_name,
+                "client_id": request.client.client_id,
+                "user_id": request.client.user_id,
+                "timestamp": request.timestamp,
+                "arguments_keys": list(request.arguments.keys()),
+            }
+        )
 
     def log_response(
         self,
@@ -188,14 +189,16 @@ class MCPAuditLogger:
             duration_ms: Request duration in milliseconds.
             error: Error message if failed.
         """
-        self._entries.append({
-            "type": "response",
-            "request_id": request_id,
-            "success": success,
-            "duration_ms": duration_ms,
-            "error": error,
-            "timestamp": time.time(),
-        })
+        self._entries.append(
+            {
+                "type": "response",
+                "request_id": request_id,
+                "success": success,
+                "duration_ms": duration_ms,
+                "error": error,
+                "timestamp": time.time(),
+            }
+        )
 
     def get_entries(self, limit: int = 100) -> list[dict[str, Any]]:
         """Get recent audit entries.

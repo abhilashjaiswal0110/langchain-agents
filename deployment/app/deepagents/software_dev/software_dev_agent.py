@@ -13,30 +13,30 @@ Following Enterprise Development Standards:
 
 import logging
 import uuid
+from collections.abc import AsyncGenerator
 from datetime import datetime
-from typing import Any, AsyncGenerator, Literal
+from typing import Any, Literal
 
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, BaseMessage
-from langchain_core.tools import tool
+from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.checkpoint.memory import MemorySaver
-from langgraph.graph import StateGraph, START, END
+from langgraph.graph import END, START, StateGraph
 from langgraph.prebuilt import ToolNode
 from langsmith import traceable
 
 from app.agents.base.llm_factory import get_llm
-from app.deepagents.core.types import TodoStatus
-from app.deepagents.core.middleware import (
-    TodoListMiddleware,
-    FilesystemMiddleware,
-    SubAgentMiddleware,
-)
-from app.deepagents.software_dev.state import SoftwareDevState
-from app.deepagents.software_dev.subagents import get_all_subagents
 from app.deepagents.config.software_dev_config import (
-    SoftwareDevAgentConfig,
     SDLCPhase,
+    SoftwareDevAgentConfig,
     get_default_config,
 )
+from app.deepagents.core.middleware import (
+    FilesystemMiddleware,
+    SubAgentMiddleware,
+    TodoListMiddleware,
+)
+from app.deepagents.core.types import TodoStatus
+from app.deepagents.software_dev.state import SoftwareDevState
+from app.deepagents.software_dev.subagents import get_all_subagents
 
 logger = logging.getLogger(__name__)
 
@@ -261,19 +261,21 @@ class SoftwareDevDeepAgent:
         tools.extend(self.subagent_middleware.get_tools())
 
         # Add a subset of direct tools for common operations
-        from app.deepagents.software_dev.tools.requirements_tools import analyze_requirements
         from app.deepagents.software_dev.tools.codegen_tools import generate_code
+        from app.deepagents.software_dev.tools.requirements_tools import analyze_requirements
         from app.deepagents.software_dev.tools.review_tools import review_code
-        from app.deepagents.software_dev.tools.testing_tools import generate_unit_tests
         from app.deepagents.software_dev.tools.security_tools import scan_security_issues
+        from app.deepagents.software_dev.tools.testing_tools import generate_unit_tests
 
-        tools.extend([
-            analyze_requirements,
-            generate_code,
-            review_code,
-            generate_unit_tests,
-            scan_security_issues,
-        ])
+        tools.extend(
+            [
+                analyze_requirements,
+                generate_code,
+                review_code,
+                generate_unit_tests,
+                scan_security_issues,
+            ]
+        )
 
         return tools
 

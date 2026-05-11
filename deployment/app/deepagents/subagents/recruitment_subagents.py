@@ -5,45 +5,41 @@ Recruitment Deep Agent for context-isolated task execution.
 """
 
 from app.deepagents.core.types import SubAgentDefinition
+from app.deepagents.tools.interview_tools import (
+    evaluate_candidate_answers,
+    export_question_set,
+    generate_interview_questions,
+    get_candidate_score,
+    list_question_sets,
+    submit_candidate_answers,
+)
+from app.deepagents.tools.recruitment_tools import (
+    batch_screen_resumes,
+    get_candidate_profile,
+    get_shortlisted_candidates,
+    list_candidates,
+    list_job_descriptions,
+    parse_job_description,
+    parse_resume,
+    screen_candidate,
+)
+from app.deepagents.tools.scoring_tools import (
+    export_scoring_excel,
+    generate_scoring_report,
+    generate_shortlist_report,
+    get_passing_score_thresholds,
+    get_ranking_summary,
+)
 
 # Import tools for subagent mapping
 from app.deepagents.tools.sharepoint_tools import (
-    list_sharepoint_folder,
-    download_sharepoint_document,
-    upload_to_sharepoint,
-    search_sharepoint_documents,
-    get_cached_document,
     create_sharepoint_folder,
+    download_sharepoint_document,
+    get_cached_document,
+    list_sharepoint_folder,
+    search_sharepoint_documents,
+    upload_to_sharepoint,
 )
-
-from app.deepagents.tools.recruitment_tools import (
-    parse_resume,
-    parse_job_description,
-    screen_candidate,
-    batch_screen_resumes,
-    get_candidate_profile,
-    list_candidates,
-    list_job_descriptions,
-    get_shortlisted_candidates,
-)
-
-from app.deepagents.tools.interview_tools import (
-    generate_interview_questions,
-    export_question_set,
-    submit_candidate_answers,
-    evaluate_candidate_answers,
-    get_candidate_score,
-    list_question_sets,
-)
-
-from app.deepagents.tools.scoring_tools import (
-    generate_scoring_report,
-    export_scoring_excel,
-    get_ranking_summary,
-    get_passing_score_thresholds,
-    generate_shortlist_report,
-)
-
 
 # =============================================================================
 # Document Manager Subagent
@@ -265,6 +261,7 @@ When generating reports:
 # =============================================================================
 # Helper Functions
 # =============================================================================
+
 
 def get_recruitment_subagents() -> list[SubAgentDefinition]:
     """Get all available recruitment subagent definitions."""

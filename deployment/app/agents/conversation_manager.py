@@ -12,11 +12,11 @@ Supports multiple storage backends via the memory module:
 import os
 from datetime import datetime, timezone
 from typing import Any, Literal
+
 from langsmith import traceable
 
 from app.memory import get_session_store
 from app.memory.base import BaseSessionStore, Message
-
 
 # =============================================================================
 # Session TTL Configuration
@@ -35,6 +35,7 @@ _HISTORY_DISPLAY_LIMIT: int | None = _MAX_HISTORY_MESSAGES if _MAX_HISTORY_MESSA
 # =============================================================================
 # Conversation Manager
 # =============================================================================
+
 
 class ConversationManager:
     """Unified conversation manager for all IT Support agents.
@@ -66,18 +67,21 @@ class ConversationManager:
         """Lazy load agents."""
         try:
             from app.agents.it_helpdesk import ITHelpdeskAgent
+
             self._agents["it_helpdesk"] = ITHelpdeskAgent(model_provider="auto")
         except Exception as e:
             print(f"Failed to load IT Helpdesk Agent: {e}")
 
         try:
             from app.agents.servicenow_agent import ServiceNowAgent
+
             self._agents["servicenow"] = ServiceNowAgent(model_provider="auto")
         except Exception as e:
             print(f"Failed to load ServiceNow Agent: {e}")
 
         try:
             from app.agents.document_intelligence import DocumentIntelligenceAgent
+
             self._agents["document_intelligence"] = DocumentIntelligenceAgent()
         except Exception as e:
             print(f"Failed to load Document Intelligence Agent: {e}")
@@ -363,6 +367,7 @@ What would you like to do?""",
             # Import and call system status
             try:
                 from app.agents.it_helpdesk import check_system_status
+
                 status = check_system_status.invoke({})
                 return {
                     "session_id": session_id,
@@ -508,10 +513,7 @@ Just type your question to chat with the current agent.""",
             KeyError: If *session_id* does not exist.
         """
         if new_agent_type not in self.AVAILABLE_AGENTS:
-            msg = (
-                f"Unknown agent type '{new_agent_type}'. "
-                f"Available: {list(self.AVAILABLE_AGENTS)}"
-            )
+            msg = f"Unknown agent type '{new_agent_type}'. Available: {list(self.AVAILABLE_AGENTS)}"
             raise ValueError(msg)
 
         session = self.session_store.get_session(session_id, tenant_id=tenant_id)
@@ -530,13 +532,9 @@ Just type your question to chat with the current agent.""",
                 f"Reason: {handoff_context.get('reason', '')}",
             ]
             if handoff_context.get("conversation_summary"):
-                note_lines.append(
-                    f"Summary: {handoff_context['conversation_summary']}"
-                )
+                note_lines.append(f"Summary: {handoff_context['conversation_summary']}")
             if handoff_context.get("key_entities"):
-                note_lines.append(
-                    f"Key context: {handoff_context['key_entities']}"
-                )
+                note_lines.append(f"Key context: {handoff_context['key_entities']}")
             note = Message(
                 role="system",
                 content="\n".join(note_lines),

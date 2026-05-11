@@ -18,7 +18,6 @@ import asyncio
 import os
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
 from enum import Enum
 from typing import Any
 from uuid import uuid4
@@ -144,6 +143,7 @@ class TavilySearchProvider(SearchProvider):
         if self._client is None:
             try:
                 from tavily import TavilyClient
+
                 self._client = TavilyClient(api_key=self._api_key)
             except ImportError:
                 msg = "tavily package not installed"
@@ -171,6 +171,7 @@ class TavilySearchProvider(SearchProvider):
             SearchResponse with results
         """
         import time
+
         start = time.time()
 
         if not self.is_available():
@@ -198,18 +199,20 @@ class TavilySearchProvider(SearchProvider):
 
             results = []
             for item in response.get("results", []):
-                results.append(SearchResult(
-                    title=item.get("title", ""),
-                    url=item.get("url", ""),
-                    snippet=item.get("content", "")[:500],
-                    content=item.get("content", ""),
-                    score=item.get("score", 0.5),
-                    provider=self.provider_type,
-                    metadata={
-                        "raw_content": item.get("raw_content"),
-                        "published_date": item.get("published_date"),
-                    },
-                ))
+                results.append(
+                    SearchResult(
+                        title=item.get("title", ""),
+                        url=item.get("url", ""),
+                        snippet=item.get("content", "")[:500],
+                        content=item.get("content", ""),
+                        score=item.get("score", 0.5),
+                        provider=self.provider_type,
+                        metadata={
+                            "raw_content": item.get("raw_content"),
+                            "published_date": item.get("published_date"),
+                        },
+                    )
+                )
 
             elapsed = (time.time() - start) * 1000
 
@@ -247,9 +250,10 @@ class DuckDuckGoSearchProvider(SearchProvider):
         """Check if DuckDuckGo package is installed."""
         if self._available is None:
             try:
-                from duckduckgo_search import DDGS
-                self._available = True
-            except ImportError:
+                import importlib.util
+
+                self._available = importlib.util.find_spec("duckduckgo_search") is not None
+            except Exception:
                 self._available = False
         return self._available
 
@@ -270,6 +274,7 @@ class DuckDuckGoSearchProvider(SearchProvider):
             SearchResponse with results
         """
         import time
+
         start = time.time()
 
         if not self.is_available():
@@ -287,12 +292,14 @@ class DuckDuckGoSearchProvider(SearchProvider):
 
             def _search() -> list[dict[str, Any]]:
                 with DDGS() as ddgs:
-                    return list(ddgs.text(
-                        query,
-                        max_results=max_results,
-                        region=kwargs.get("region", "wt-wt"),
-                        safesearch=kwargs.get("safesearch", "moderate"),
-                    ))
+                    return list(
+                        ddgs.text(
+                            query,
+                            max_results=max_results,
+                            region=kwargs.get("region", "wt-wt"),
+                            safesearch=kwargs.get("safesearch", "moderate"),
+                        )
+                    )
 
             raw_results = await loop.run_in_executor(None, _search)
 
@@ -302,14 +309,16 @@ class DuckDuckGoSearchProvider(SearchProvider):
                 # Estimate based on position
                 score = 1.0 - (i / max(len(raw_results), 1)) * 0.5
 
-                results.append(SearchResult(
-                    title=item.get("title", ""),
-                    url=item.get("href", item.get("link", "")),
-                    snippet=item.get("body", "")[:500],
-                    content=item.get("body", ""),
-                    score=score,
-                    provider=self.provider_type,
-                ))
+                results.append(
+                    SearchResult(
+                        title=item.get("title", ""),
+                        url=item.get("href", item.get("link", "")),
+                        snippet=item.get("body", "")[:500],
+                        content=item.get("body", ""),
+                        score=score,
+                        provider=self.provider_type,
+                    )
+                )
 
             elapsed = (time.time() - start) * 1000
 
@@ -400,6 +409,7 @@ class SimulatedSearchProvider(SearchProvider):
             SearchResponse with simulated results
         """
         import time
+
         start = time.time()
 
         # Simulate network delay
@@ -412,27 +422,31 @@ class SimulatedSearchProvider(SearchProvider):
         for keyword, samples in self.SAMPLE_RESULTS.items():
             if keyword in query_lower:
                 for sample in samples[:max_results]:
-                    results.append(SearchResult(
-                        title=sample["title"],
-                        url=sample["url"],
-                        snippet=sample["snippet"],
-                        content=sample["snippet"],
-                        score=0.8,
-                        provider=self.provider_type,
-                    ))
+                    results.append(
+                        SearchResult(
+                            title=sample["title"],
+                            url=sample["url"],
+                            snippet=sample["snippet"],
+                            content=sample["snippet"],
+                            score=0.8,
+                            provider=self.provider_type,
+                        )
+                    )
 
         # If no matches, generate generic results
         if not results:
             for i in range(min(3, max_results)):
-                results.append(SearchResult(
-                    title=f"Result {i+1} for: {query}",
-                    url=f"https://example.com/result-{i+1}",
-                    snippet=f"This is a simulated result for the query '{query}'. "
-                            f"Configure TAVILY_API_KEY for real search results.",
-                    content=f"Simulated content for '{query}'.",
-                    score=0.7 - (i * 0.1),
-                    provider=self.provider_type,
-                ))
+                results.append(
+                    SearchResult(
+                        title=f"Result {i + 1} for: {query}",
+                        url=f"https://example.com/result-{i + 1}",
+                        snippet=f"This is a simulated result for the query '{query}'. "
+                        f"Configure TAVILY_API_KEY for real search results.",
+                        content=f"Simulated content for '{query}'.",
+                        score=0.7 - (i * 0.1),
+                        provider=self.provider_type,
+                    )
+                )
 
         elapsed = (time.time() - start) * 1000
 
@@ -556,10 +570,7 @@ class SearchProviderManager:
         Returns:
             List of SearchResponse objects
         """
-        tasks = [
-            self.search(query, max_results_per_query, **kwargs)
-            for query in queries
-        ]
+        tasks = [self.search(query, max_results_per_query, **kwargs) for query in queries]
 
         return await asyncio.gather(*tasks)
 

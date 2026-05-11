@@ -8,10 +8,11 @@ import json
 import logging
 import os
 import sqlite3
+from collections.abc import Generator
 from contextlib import contextmanager
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Generator
+from typing import Any
 
 # Maximum number of messages to keep per session (0 = unlimited).
 # Set MAX_HISTORY_MESSAGES environment variable to override.
@@ -76,9 +77,7 @@ class SQLiteSessionStore(BaseSessionStore):
             # The ALTER TABLE is a no-op if the column already exists; the exception
             # is silently swallowed so existing deployments are unaffected.
             try:
-                conn.execute(
-                    "ALTER TABLE sessions ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'default'"
-                )
+                conn.execute("ALTER TABLE sessions ADD COLUMN tenant_id TEXT NOT NULL DEFAULT 'default'")
             except sqlite3.OperationalError as e:
                 if "duplicate column name" not in str(e).lower():
                     raise
@@ -225,12 +224,14 @@ class SQLiteSessionStore(BaseSessionStore):
 
             messages = []
             for msg_row in messages_rows:
-                messages.append(Message(
-                    role=msg_row["role"],
-                    content=msg_row["content"],
-                    timestamp=datetime.fromisoformat(msg_row["timestamp"]),
-                    metadata=json.loads(msg_row["metadata"] or "{}"),
-                ))
+                messages.append(
+                    Message(
+                        role=msg_row["role"],
+                        content=msg_row["content"],
+                        timestamp=datetime.fromisoformat(msg_row["timestamp"]),
+                        metadata=json.loads(msg_row["metadata"] or "{}"),
+                    )
+                )
 
             # Build session
             metadata = SessionMetadata.from_dict(json.loads(row["metadata"] or "{}"))
@@ -460,12 +461,14 @@ class SQLiteSessionStore(BaseSessionStore):
 
             messages = []
             for row in rows:
-                messages.append(Message(
-                    role=row["role"],
-                    content=row["content"],
-                    timestamp=datetime.fromisoformat(row["timestamp"]),
-                    metadata=json.loads(row["metadata"] or "{}"),
-                ))
+                messages.append(
+                    Message(
+                        role=row["role"],
+                        content=row["content"],
+                        timestamp=datetime.fromisoformat(row["timestamp"]),
+                        metadata=json.loads(row["metadata"] or "{}"),
+                    )
+                )
 
             return messages
 
@@ -586,7 +589,7 @@ class SQLiteSessionStore(BaseSessionStore):
                 conn.execute(
                     f"""
                     DELETE FROM messages
-                    WHERE session_id IN ({','.join('?' * len(expired_ids))})
+                    WHERE session_id IN ({",".join("?" * len(expired_ids))})
                     """,
                     expired_ids,
                 )
@@ -595,7 +598,7 @@ class SQLiteSessionStore(BaseSessionStore):
                 conn.execute(
                     f"""
                     DELETE FROM sessions
-                    WHERE id IN ({','.join('?' * len(expired_ids))})
+                    WHERE id IN ({",".join("?" * len(expired_ids))})
                     """,
                     expired_ids,
                 )
@@ -612,13 +615,9 @@ class SQLiteSessionStore(BaseSessionStore):
             Statistics dictionary.
         """
         with self._get_connection() as conn:
-            session_count = conn.execute(
-                "SELECT COUNT(*) FROM sessions"
-            ).fetchone()[0]
+            session_count = conn.execute("SELECT COUNT(*) FROM sessions").fetchone()[0]
 
-            message_count = conn.execute(
-                "SELECT COUNT(*) FROM messages"
-            ).fetchone()[0]
+            message_count = conn.execute("SELECT COUNT(*) FROM messages").fetchone()[0]
 
             active_count = conn.execute(
                 """

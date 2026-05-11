@@ -17,7 +17,6 @@ from langsmith import traceable
 
 from app.deepagents.config.software_dev_config import TestType
 
-
 # Session storage
 _test_store: dict[str, dict] = {}
 
@@ -52,7 +51,8 @@ def generate_unit_tests(
 
     # Parse code to find functions (simplified)
     import re
-    functions = re.findall(r'def (\w+)\([^)]*\)', code)
+
+    functions = re.findall(r"def (\w+)\([^)]*\)", code)
 
     if function_name:
         functions = [f for f in functions if f == function_name]
@@ -104,7 +104,7 @@ class Test{func.title().replace("_", "")}:
         assert result is not None
 '''
         elif language == "typescript" and framework == "jest":
-            test_code = f'''import {{ {func} }} from './module';
+            test_code = f"""import {{ {func} }} from './module';
 
 describe('{func}', () => {{
     it('should handle basic input', () => {{
@@ -122,18 +122,20 @@ describe('{func}', () => {{
         expect(result).toBeDefined();
     }});
 }});
-'''
+"""
         else:
             test_code = f"// Test for {func}"
 
-        tests.append({
-            "id": f"{test_id}-{len(tests)+1}",
-            "function": func,
-            "type": TestType.UNIT.value,
-            "framework": framework,
-            "code": test_code,
-            "test_count": 4 if framework == "pytest" else 3,
-        })
+        tests.append(
+            {
+                "id": f"{test_id}-{len(tests) + 1}",
+                "function": func,
+                "type": TestType.UNIT.value,
+                "framework": framework,
+                "code": test_code,
+                "test_count": 4 if framework == "pytest" else 3,
+            }
+        )
 
     result = {
         "id": test_id,
@@ -206,12 +208,14 @@ class TestAPIIntegration:
         assert response.status_code in [200, 201, 204]
 '''
 
-            tests.append({
-                "type": TestType.INTEGRATION.value,
-                "name": "api_integration",
-                "code": api_test,
-                "endpoints_tested": len(api_endpoints),
-            })
+            tests.append(
+                {
+                    "type": TestType.INTEGRATION.value,
+                    "name": "api_integration",
+                    "code": api_test,
+                    "endpoints_tested": len(api_endpoints),
+                }
+            )
 
         # Generate component integration tests
         for component in components:
@@ -242,12 +246,14 @@ class Test{component}Integration:
         result = instance.process({{"test": "data"}})
         assert result is not None
 '''
-            tests.append({
-                "type": TestType.INTEGRATION.value,
-                "name": f"{component.lower()}_integration",
-                "code": comp_test,
-                "component": component,
-            })
+            tests.append(
+                {
+                    "type": TestType.INTEGRATION.value,
+                    "name": f"{component.lower()}_integration",
+                    "code": comp_test,
+                    "component": component,
+                }
+            )
 
     result = {
         "language": language,
@@ -290,18 +296,21 @@ def analyze_test_coverage(
     for source_file in source_files:
         # Simulate coverage metrics
         import random
+
         line_coverage = random.uniform(60, 95)
         branch_coverage = random.uniform(50, 90)
 
-        coverage_data.append({
-            "file": source_file,
-            "line_coverage": round(line_coverage, 1),
-            "branch_coverage": round(branch_coverage, 1),
-            "lines_covered": int(100 * line_coverage / 100),
-            "lines_total": 100,
-            "uncovered_lines": [15, 23, 45, 67] if line_coverage < 80 else [],
-            "uncovered_branches": [22, 44] if branch_coverage < 70 else [],
-        })
+        coverage_data.append(
+            {
+                "file": source_file,
+                "line_coverage": round(line_coverage, 1),
+                "branch_coverage": round(branch_coverage, 1),
+                "lines_covered": int(100 * line_coverage / 100),
+                "lines_total": 100,
+                "uncovered_lines": [15, 23, 45, 67] if line_coverage < 80 else [],
+                "uncovered_branches": [22, 44] if branch_coverage < 70 else [],
+            }
+        )
 
     total_line_coverage = sum(c["line_coverage"] for c in coverage_data) / max(len(coverage_data), 1)
     total_branch_coverage = sum(c["branch_coverage"] for c in coverage_data) / max(len(coverage_data), 1)
@@ -381,12 +390,14 @@ def run_tests(
         else:
             skipped += 1
 
-        test_results.append({
-            "name": test_name,
-            "status": status,
-            "duration": round(random.uniform(0.01, 2.0), 3),
-            "message": None if status == "passed" else "Assertion failed" if status == "failed" else "Skipped",
-        })
+        test_results.append(
+            {
+                "name": test_name,
+                "status": status,
+                "duration": round(random.uniform(0.01, 2.0), 3),
+                "message": None if status == "passed" else "Assertion failed" if status == "failed" else "Skipped",
+            }
+        )
 
     total = passed + failed + skipped
 
@@ -432,12 +443,11 @@ def generate_test_data(
         JSON string with generated test data.
     """
     import random
-    import string
 
     data = []
 
     for i in range(count):
-        record = {"id": f"test-{i+1:04d}"}
+        record = {"id": f"test-{i + 1:04d}"}
 
         for field, field_type in data_schema.items():
             if field == "id":
@@ -454,7 +464,7 @@ def generate_test_data(
             elif field_type == "boolean":
                 record[field] = random.choice([True, False])
             elif field_type == "date":
-                record[field] = f"2024-{random.randint(1,12):02d}-{random.randint(1,28):02d}"
+                record[field] = f"2024-{random.randint(1, 12):02d}-{random.randint(1, 28):02d}"
             elif field_type == "uuid":
                 record[field] = str(uuid.uuid4())
             else:
@@ -468,7 +478,10 @@ def generate_test_data(
         edge_cases = [
             {"id": "edge-empty", **{k: "" if v == "string" else None for k, v in data_schema.items() if k != "id"}},
             {"id": "edge-null", **{k: None for k in data_schema.keys() if k != "id"}},
-            {"id": "edge-special", **{k: "!@#$%^&*()" if v == "string" else 0 for k, v in data_schema.items() if k != "id"}},
+            {
+                "id": "edge-special",
+                **{k: "!@#$%^&*()" if v == "string" else 0 for k, v in data_schema.items() if k != "id"},
+            },
         ]
 
     result = {
@@ -536,12 +549,14 @@ def create_test_plan(
         }
 
         if feature in risk_areas:
-            feature_tests["test_cases"].append({
-                "id": f"TC-{feature[:3].upper()}-004",
-                "name": f"Security test for {feature}",
-                "type": "security",
-                "priority": "critical",
-            })
+            feature_tests["test_cases"].append(
+                {
+                    "id": f"TC-{feature[:3].upper()}-004",
+                    "name": f"Security test for {feature}",
+                    "type": "security",
+                    "priority": "critical",
+                }
+            )
 
         test_cases.append(feature_tests)
 

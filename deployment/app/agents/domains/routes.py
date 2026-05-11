@@ -84,6 +84,7 @@ def _get_domain_router() -> DomainRouter:
 # Request / Response models
 # ---------------------------------------------------------------------------
 
+
 class DomainInvokeRequest(BaseModel):
     """Request body for domain agent invocation.
 
@@ -152,6 +153,7 @@ class DomainChatRequest(BaseModel):
 # Endpoints
 # ---------------------------------------------------------------------------
 
+
 @router.get("/agents", response_model=AgentListResponse)
 def list_domain_agents() -> AgentListResponse:
     """List all available domain agents.
@@ -162,11 +164,13 @@ def list_domain_agents() -> AgentListResponse:
     entries = []
     for key in DOMAIN_AGENT_REGISTRY:
         agent = _get_agent(key)
-        entries.append(AgentEntry(
-            type=key,
-            name=agent.name,
-            description=agent.description or "",
-        ))
+        entries.append(
+            AgentEntry(
+                type=key,
+                name=agent.name,
+                description=agent.description or "",
+            )
+        )
     return AgentListResponse(agents=entries)
 
 

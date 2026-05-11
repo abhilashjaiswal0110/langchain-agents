@@ -13,15 +13,15 @@ IMPORTANT FIX (2026-01-02):
 - Added tracing diagnostics and verification functions
 """
 
-import os
 import logging
+import os
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Callable, Literal
+from typing import Any
 from uuid import uuid4
 
 from langsmith import Client
-from langsmith.schemas import Example, Run
 
 from app.agents.evals.evaluators import BaseEvaluator, EvaluationResult
 
@@ -192,25 +192,27 @@ class LangSmithEvaluator:
             if expected_keywords:
                 context += f"\nExpected keywords: {', '.join(expected_keywords)}"
 
-            examples.append({
-                "inputs": {
-                    "input": case.get("input", ""),
-                    # Include context in inputs for evaluators that need it
-                    "context": context,
-                },
-                "outputs": {
-                    # Standard output field
-                    "expected": expected_output,
-                    "keywords": expected_keywords,
-                    # Reference output for LangSmith built-in evaluators
-                    "reference_output": expected_output,
-                },
-                "metadata": {
-                    "id": case.get("id"),
-                    "tags": case.get("tags", []),
-                    "difficulty": case.get("difficulty", "medium"),
-                },
-            })
+            examples.append(
+                {
+                    "inputs": {
+                        "input": case.get("input", ""),
+                        # Include context in inputs for evaluators that need it
+                        "context": context,
+                    },
+                    "outputs": {
+                        # Standard output field
+                        "expected": expected_output,
+                        "keywords": expected_keywords,
+                        # Reference output for LangSmith built-in evaluators
+                        "reference_output": expected_output,
+                    },
+                    "metadata": {
+                        "id": case.get("id"),
+                        "tags": case.get("tags", []),
+                        "difficulty": case.get("difficulty", "medium"),
+                    },
+                }
+            )
 
         return self.create_dataset(
             name=dataset_name,
@@ -276,12 +278,14 @@ class LangSmithEvaluator:
                             "feedback": f"Evaluation error: {e}",
                         }
 
-                experiment.results.append({
-                    "example_id": str(example.id),
-                    "input": input_text,
-                    "output": output_text,
-                    "evaluations": eval_results,
-                })
+                experiment.results.append(
+                    {
+                        "example_id": str(example.id),
+                        "input": input_text,
+                        "output": output_text,
+                        "evaluations": eval_results,
+                    }
+                )
 
             # Calculate aggregated metrics
             experiment.metrics = self._calculate_metrics(experiment.results)
@@ -309,10 +313,7 @@ class LangSmithEvaluator:
                 metrics[eval_name].append(eval_result.get("score", 0.0))
 
         # Calculate averages
-        return {
-            f"{name}_avg": sum(scores) / len(scores) if scores else 0.0
-            for name, scores in metrics.items()
-        }
+        return {f"{name}_avg": sum(scores) / len(scores) if scores else 0.0 for name, scores in metrics.items()}
 
     def submit_feedback(
         self,
@@ -365,6 +366,7 @@ class LangSmithEvaluator:
             True if run should be evaluated.
         """
         import random
+
         return random.random() < self.config.sampling_rate
 
     async def evaluate_async(
@@ -457,8 +459,7 @@ class LangSmithEvaluator:
             "avg_latency_seconds": total_latency / total_runs if total_runs > 0 else 0,
             "error_rate": error_count / total_runs if total_runs > 0 else 0,
             "feedback_averages": {
-                key: sum(scores) / len(scores) if scores else 0
-                for key, scores in feedback_scores.items()
+                key: sum(scores) / len(scores) if scores else 0 for key, scores in feedback_scores.items()
             },
         }
 
@@ -632,13 +633,16 @@ def get_recent_traces(
 
         # Calculate start time for query
         from datetime import timedelta
+
         query_start = datetime.now(timezone.utc) - timedelta(hours=hours)
 
-        runs = list(client.list_runs(
-            project_name=project_name,
-            start_time=query_start,
-            limit=limit,
-        ))
+        runs = list(
+            client.list_runs(
+                project_name=project_name,
+                start_time=query_start,
+                limit=limit,
+            )
+        )
 
         result["total_count"] = len(runs)
         result["traces"] = [
@@ -698,6 +702,7 @@ def create_langsmith_evaluator_wrapper(
         FIX (2026-01-06): Updated to properly handle context and reference_outputs
         to fix KeyError in LangSmith Playground evaluators.
     """
+
     def evaluator_fn(
         inputs: dict[str, Any],
         outputs: dict[str, Any],
@@ -774,6 +779,7 @@ def create_playground_compatible_evaluator(
     Note:
         Added 2026-01-06 to fix Playground evaluator errors.
     """
+
     def evaluator_fn(
         inputs: dict[str, Any] | None = None,
         outputs: dict[str, Any] | None = None,
@@ -865,6 +871,7 @@ async def run_langsmith_sdk_evaluation(
             ResponseQualityEvaluator,
             TaskCompletionEvaluator,
         )
+
         evaluators = [ResponseQualityEvaluator(), TaskCompletionEvaluator()]
 
     # Create LangSmith SDK compatible wrappers

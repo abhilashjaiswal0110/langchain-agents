@@ -11,7 +11,6 @@ from datetime import datetime
 from langchain_core.tools import tool
 from langsmith import traceable
 
-
 # Session storage
 _pipeline_store: dict[str, dict] = {}
 
@@ -48,7 +47,7 @@ def create_ci_pipeline(
     pipeline_id = f"CI-{str(uuid.uuid4())[:8].upper()}"
 
     if platform == "github-actions":
-        config = f'''name: CI Pipeline
+        config = """name: CI Pipeline
 
 on:
   push:
@@ -72,9 +71,9 @@ jobs:
         run: ruff check .
       - name: Run type checking
         run: mypy . --ignore-missing-imports
-'''
+"""
         if include_tests:
-            config += '''
+            config += """
   test:
     runs-on: ubuntu-latest
     needs: lint
@@ -90,9 +89,9 @@ jobs:
         run: pytest --cov=. --cov-report=xml
       - name: Upload coverage
         uses: codecov/codecov-action@v4
-'''
+"""
         if include_security:
-            config += '''
+            config += """
   security:
     runs-on: ubuntu-latest
     needs: lint
@@ -107,19 +106,19 @@ jobs:
         run: |
           pip install bandit
           bandit -r . -f json -o bandit-report.json || true
-'''
-        config += '''
-  build:
-    runs-on: ubuntu-latest
-    needs: [test, security]
-    steps:
-      - uses: actions/checkout@v4
-      - name: Build Docker image
-        run: docker build -t {project}:${{{{ github.sha }}}} .
-''' % {"project": project_name.lower()}
+"""
+        config += (
+            "  build:\n"
+            "    runs-on: ubuntu-latest\n"
+            "    needs: [test, security]\n"
+            "    steps:\n"
+            "      - uses: actions/checkout@v4\n"
+            "      - name: Build Docker image\n"
+            f"        run: docker build -t {project_name.lower()}:${{{{ github.sha }}}} .\n"
+        )
 
     elif platform == "gitlab-ci":
-        config = f'''stages:
+        config = """stages:
   - lint
   - test
   - security
@@ -135,9 +134,9 @@ lint:
     - pip install ruff mypy
     - ruff check .
     - mypy . --ignore-missing-imports
-'''
+"""
         if include_tests:
-            config += '''
+            config += """
 test:
   stage: test
   image: python:3.11
@@ -150,8 +149,8 @@ test:
       coverage_report:
         coverage_format: cobertura
         path: coverage.xml
-'''
-        config += f'''
+"""
+        config += f"""
 build:
   stage: build
   image: docker:latest
@@ -159,7 +158,7 @@ build:
     - docker:dind
   script:
     - docker build -t {project_name.lower()}:$CI_COMMIT_SHA .
-'''
+"""
     else:
         config = f"# CI Pipeline for {project_name} on {platform}"
 
@@ -208,7 +207,7 @@ def create_cd_pipeline(
     pipeline_id = f"CD-{str(uuid.uuid4())[:8].upper()}"
 
     if platform == "github-actions":
-        config = f'''name: CD Pipeline
+        config = f"""name: CD Pipeline
 
 on:
   push:
@@ -269,7 +268,7 @@ jobs:
         run: |
           echo "Deploying to production..."
           # Add production deployment steps
-'''
+"""
 
     pipeline = {
         "id": pipeline_id,
@@ -408,7 +407,7 @@ CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "{port}"]
 
     elif language == "typescript" or language == "javascript":
         base = base_image or "node:20-alpine"
-        dockerfile = f'''# Build stage
+        dockerfile = f"""# Build stage
 FROM {base} AS builder
 
 WORKDIR /app
@@ -435,7 +434,7 @@ USER nodejs
 EXPOSE {port}
 
 CMD ["node", "dist/index.js"]
-'''
+"""
     else:
         dockerfile = f"# Dockerfile for {language} application\nEXPOSE {port}"
 
@@ -483,7 +482,7 @@ def create_kubernetes_config(
     """
     app_name = project_name.lower().replace("_", "-")
 
-    deployment = f'''apiVersion: apps/v1
+    deployment = f"""apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {app_name}
@@ -524,9 +523,9 @@ spec:
             port: {port}
           initialDelaySeconds: 5
           periodSeconds: 5
-'''
+"""
 
-    service = f'''apiVersion: v1
+    service = f"""apiVersion: v1
 kind: Service
 metadata:
   name: {app_name}
@@ -538,9 +537,9 @@ spec:
   - port: 80
     targetPort: {port}
   type: ClusterIP
-'''
+"""
 
-    ingress = f'''apiVersion: networking.k8s.io/v1
+    ingress = f"""apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: {app_name}
@@ -559,9 +558,9 @@ spec:
             name: {app_name}
             port:
               number: 80
-'''
+"""
 
-    hpa = f'''apiVersion: autoscaling/v2
+    hpa = f"""apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
   name: {app_name}
@@ -580,7 +579,7 @@ spec:
       target:
         type: Utilization
         averageUtilization: 70
-'''
+"""
 
     result = {
         "project": project_name,
@@ -620,7 +619,7 @@ def setup_monitoring(
     Returns:
         JSON string with monitoring configuration.
     """
-    prometheus_config = f'''# Prometheus configuration
+    prometheus_config = f"""# Prometheus configuration
 global:
   scrape_interval: 15s
   evaluation_interval: 15s
@@ -630,9 +629,9 @@ scrape_configs:
     static_configs:
       - targets: ['localhost:{metrics_port}']
     metrics_path: /metrics
-'''
+"""
 
-    alert_rules = f'''groups:
+    alert_rules = f"""groups:
 - name: {project_name}-alerts
   rules:
   - alert: HighErrorRate
@@ -658,9 +657,9 @@ scrape_configs:
       severity: critical
     annotations:
       summary: Service is down
-'''
+"""
 
-    logging_config = f'''# Structured logging configuration
+    logging_config = f"""# Structured logging configuration
 version: 1
 disable_existing_loggers: false
 
@@ -685,7 +684,7 @@ loggers:
 root:
   level: WARNING
   handlers: [console]
-'''
+"""
 
     result = {
         "project": project_name,

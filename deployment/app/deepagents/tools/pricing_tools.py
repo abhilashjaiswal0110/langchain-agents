@@ -173,9 +173,7 @@ def calculate_pricing(
         total_cost += cost
 
         margin_pct = ((revenue - cost) / revenue) * 100 if revenue > 0 else 0
-        breakdown.append(
-            f"• {matching_role} x{count}: ${revenue:,.0f} (cost: ${cost:,.0f}, margin: {margin_pct:.1f}%)"
-        )
+        breakdown.append(f"• {matching_role} x{count}: ${revenue:,.0f} (cost: ${cost:,.0f}, margin: {margin_pct:.1f}%)")
 
     actual_margin = ((total_revenue - total_cost) / total_revenue) * 100 if total_revenue > 0 else 0
     gross_profit = total_revenue - total_cost
@@ -187,7 +185,7 @@ def calculate_pricing(
         duration_text = f"{duration_days or 20} days"
 
     output = f"""
-**Pricing Estimate: {rate_card['name']}**
+**Pricing Estimate: {rate_card["name"]}**
 
 **Duration:** {duration_text}
 **Target Margin:** {margin_target}%
@@ -213,7 +211,7 @@ def calculate_pricing(
     else:
         gap = margin_target - actual_margin
         output += f"⚠️ Margin ({actual_margin:.1f}%) is {gap:.1f}% below target ({margin_target}%)"
-        output += f"\n*Consider: Rate increases, resource mix optimization, or scope reduction*"
+        output += "\n*Consider: Rate increases, resource mix optimization, or scope reduction*"
 
     return output
 
@@ -349,7 +347,13 @@ def generate_pricing_options(
         elif option == "premium":
             multiplier = 1.25
             scope_desc = "Extended scope, senior team, premium support, accelerated timeline"
-            features = ["Extended scope", "Premium SLAs", "24/7 dedicated support", "Senior team", "Accelerated delivery"]
+            features = [
+                "Extended scope",
+                "Premium SLAs",
+                "24/7 dedicated support",
+                "Senior team",
+                "Accelerated delivery",
+            ]
         else:
             continue
 
@@ -359,14 +363,16 @@ def generate_pricing_options(
         opt_cost = base_cost * cost_multiplier
         opt_margin = ((opt_revenue - opt_cost) / opt_revenue) * 100 if opt_revenue > 0 else 0
 
-        pricing_options.append({
-            "name": option.capitalize(),
-            "revenue": opt_revenue,
-            "cost": opt_cost,
-            "margin": opt_margin,
-            "description": scope_desc,
-            "features": features,
-        })
+        pricing_options.append(
+            {
+                "name": option.capitalize(),
+                "revenue": opt_revenue,
+                "cost": opt_cost,
+                "margin": opt_margin,
+                "description": scope_desc,
+                "features": features,
+            }
+        )
 
     output = ["**Pricing Options**\n"]
 
@@ -374,14 +380,14 @@ def generate_pricing_options(
         margin_indicator = "✅" if opt["margin"] >= 35 else ("⚠️" if opt["margin"] >= 25 else "🔴")
 
         output.append(f"""
-### Option: {opt['name']} {margin_indicator}
-**Price:** ${opt['revenue']:,.0f}
-**Gross Margin:** {opt['margin']:.1f}%
+### Option: {opt["name"]} {margin_indicator}
+**Price:** ${opt["revenue"]:,.0f}
+**Gross Margin:** {opt["margin"]:.1f}%
 
-*{opt['description']}*
+*{opt["description"]}*
 
 **Includes:**
-{chr(10).join('• ' + f for f in opt['features'])}
+{chr(10).join("• " + f for f in opt["features"])}
 """)
 
     output.append("""
@@ -421,47 +427,59 @@ def get_pricing_model_recommendation(
 
     # Analyze context and recommend
     if any(kw in desc_lower for kw in ["discovery", "assessment", "unclear", "exploratory"]):
-        recommendations.append({
-            "model": "time_and_materials",
-            "fit": "High",
-            "reason": "Scope is undefined - T&M provides flexibility to discover and adapt",
-        })
+        recommendations.append(
+            {
+                "model": "time_and_materials",
+                "fit": "High",
+                "reason": "Scope is undefined - T&M provides flexibility to discover and adapt",
+            }
+        )
 
     if any(kw in desc_lower for kw in ["migration", "implementation", "deploy", "fixed"]):
-        recommendations.append({
-            "model": "fixed_price",
-            "fit": "High",
-            "reason": "Well-defined deliverables suited for fixed price commitment",
-        })
+        recommendations.append(
+            {
+                "model": "fixed_price",
+                "fit": "High",
+                "reason": "Well-defined deliverables suited for fixed price commitment",
+            }
+        )
 
     if any(kw in desc_lower for kw in ["managed", "support", "ongoing", "operations"]):
-        recommendations.append({
-            "model": "managed_service",
-            "fit": "High",
-            "reason": "Ongoing services best delivered as managed service contract",
-        })
+        recommendations.append(
+            {
+                "model": "managed_service",
+                "fit": "High",
+                "reason": "Ongoing services best delivered as managed service contract",
+            }
+        )
 
     if any(kw in desc_lower for kw in ["transform", "outcome", "roi", "savings", "growth"]):
-        recommendations.append({
-            "model": "outcome_based",
-            "fit": "Medium",
-            "reason": "Outcome focus could align pricing with customer value realization",
-        })
+        recommendations.append(
+            {
+                "model": "outcome_based",
+                "fit": "Medium",
+                "reason": "Outcome focus could align pricing with customer value realization",
+            }
+        )
 
     # If no specific match, recommend based on deal size
     if not recommendations:
         if deal_value > 2000000:
-            recommendations.append({
-                "model": "fixed_price",
-                "fit": "Medium",
-                "reason": "Large deals typically benefit from fixed price certainty",
-            })
+            recommendations.append(
+                {
+                    "model": "fixed_price",
+                    "fit": "Medium",
+                    "reason": "Large deals typically benefit from fixed price certainty",
+                }
+            )
         else:
-            recommendations.append({
-                "model": "time_and_materials",
-                "fit": "Medium",
-                "reason": "Standard recommendation for typical engagements",
-            })
+            recommendations.append(
+                {
+                    "model": "time_and_materials",
+                    "fit": "Medium",
+                    "reason": "Standard recommendation for typical engagements",
+                }
+            )
 
     output = ["**Pricing Model Recommendation**\n"]
     output.append(f"*Deal Value: ${deal_value:,.0f}*\n")
@@ -469,17 +487,17 @@ def get_pricing_model_recommendation(
     for rec in recommendations:
         model = PRICING_MODELS.get(rec["model"], {})
         output.append(f"""
-### {model.get('name', rec['model'])} - Fit: {rec['fit']}
+### {model.get("name", rec["model"])} - Fit: {rec["fit"]}
 
-**Rationale:** {rec['reason']}
+**Rationale:** {rec["reason"]}
 
-**Description:** {model.get('description', 'N/A')}
+**Description:** {model.get("description", "N/A")}
 
 **Best For:**
-{chr(10).join('• ' + b for b in model.get('best_for', []))}
+{chr(10).join("• " + b for b in model.get("best_for", []))}
 
 **Risks to Consider:**
-{chr(10).join('• ' + r for r in model.get('risks', []))}
+{chr(10).join("• " + r for r in model.get("risks", []))}
 """)
 
     if customer_preference:

@@ -11,16 +11,16 @@ from langchain_core.messages import BaseMessage
 from langgraph.graph.message import add_messages
 from pydantic import BaseModel, Field
 
-from app.deepagents.core.types import Todo, FileEntry, SubAgentResult
 from app.deepagents.config.software_dev_config import (
-    SDLCPhase,
-    CodeLanguage,
-    SecuritySeverity,
-    RequirementType,
-    RequirementPriority,
     ArchitecturePattern,
+    CodeLanguage,
+    RequirementPriority,
+    RequirementType,
+    SDLCPhase,
+    SecuritySeverity,
     TestType,
 )
+from app.deepagents.core.types import FileEntry, SubAgentResult, Todo
 
 
 class Requirement(BaseModel):
@@ -254,6 +254,7 @@ class SoftwareDevState(BaseModel):
     def get_pending_todos(self) -> list[Todo]:
         """Get all pending todos."""
         from app.deepagents.core.types import TodoStatus
+
         return [t for t in self.todos if t.status == TodoStatus.PENDING]
 
     def get_phase_summary(self) -> str:

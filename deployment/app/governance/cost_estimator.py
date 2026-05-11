@@ -108,10 +108,7 @@ class CostEstimator:
         estimated_output_tokens = input_tokens * multiplier
 
         input_price, output_price = _PRICING.get(self._model, _DEFAULT_PRICING)
-        estimated_cost = (
-            (input_tokens / 1000) * input_price
-            + (estimated_output_tokens / 1000) * output_price
-        )
+        estimated_cost = (input_tokens / 1000) * input_price + (estimated_output_tokens / 1000) * output_price
 
         return {
             "input_tokens": input_tokens,
