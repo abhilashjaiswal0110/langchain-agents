@@ -680,6 +680,14 @@ try:
 except ImportError as e:
     print(f"[--] Analytics routes not loaded: {e}")
 
+# Mount Prometheus /metrics endpoint
+try:
+    from app.monitoring.prometheus import setup_metrics
+    setup_metrics(app)
+    print("[OK] Prometheus /metrics endpoint mounted")
+except Exception as e:  # noqa: BLE001
+    print(f"[--] Prometheus metrics not mounted: {e}")
+
 
 # ============================================================================
 # Response Models

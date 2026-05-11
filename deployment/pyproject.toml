@@ -56,6 +56,9 @@ dependencies = [
     "langgraph-cli[inmem]>=0.1.54",
     # Conversation export
     "fpdf2>=2.7.0",
+    # Observability
+    "prometheus-client>=0.20.0",
+    "prometheus-fastapi-instrumentator>=7.0.0",
 ]
 
 [project.optional-dependencies]
