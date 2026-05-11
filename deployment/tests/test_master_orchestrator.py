@@ -92,7 +92,8 @@ class TestRouteMethod:
     @pytest.mark.asyncio
     async def test_route_it_support_calls_cm(self) -> None:
         mock_cm = MagicMock()
-        mock_cm.start_conversation = AsyncMock(return_value={"session_id": "s1"})
+        # start_conversation is a synchronous method — use MagicMock, not AsyncMock
+        mock_cm.start_conversation = MagicMock(return_value={"session_id": "s1"})
         mock_cm.achat = AsyncMock(return_value={"response": "done"})
 
         orchestrator = MasterOrchestrator(conversation_manager=mock_cm)

@@ -345,6 +345,7 @@ class BaseSessionStore(ABC):
         agent_type: str | None = None,
         limit: int = 100,
         offset: int = 0,
+        tenant_id: str | None = None,
     ) -> list[Session]:
         """List sessions with optional filters.
 
@@ -353,6 +354,8 @@ class BaseSessionStore(ABC):
             agent_type: Filter by agent type.
             limit: Maximum number of sessions.
             offset: Offset for pagination.
+            tenant_id: Filter by tenant. When provided, only sessions for that
+                tenant are returned.
 
         Returns:
             List of sessions.

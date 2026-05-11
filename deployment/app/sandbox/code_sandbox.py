@@ -56,8 +56,12 @@ def _make_restricted_env() -> dict[str, str]:
     Returns:
         Restricted environment dict.
     """
-    safe_keys = {"PATH", "SYSTEMROOT", "TEMP", "TMP", "LANG", "LC_ALL", "HOME"}
-    return {k: v for k, v in os.environ.items() if k in safe_keys}
+    safe_keys = {"PATH", "SYSTEMROOT", "TEMP", "TMP", "LANG", "LC_ALL"}
+    env = {k: v for k, v in os.environ.items() if k in safe_keys}
+    # Override HOME to the system temp directory so sandboxed code cannot read
+    # the real user's home directory or sensitive dotfiles.
+    env["HOME"] = os.path.join(os.environ.get("TEMP", os.environ.get("TMP", "/tmp")))
+    return env
 
 
 class CodeSandbox:

@@ -169,5 +169,5 @@ class TestDLQManagement:
 
                 await handler.send_with_retry("https://x.com", {}, {})
 
-        asyncio.get_event_loop().run_until_complete(run())
+        asyncio.run(run())
         assert call_count == 1

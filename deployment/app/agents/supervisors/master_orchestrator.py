@@ -16,6 +16,8 @@ Usage:
 import logging
 from typing import Any
 
+from langchain_core.messages import HumanMessage
+
 logger = logging.getLogger(__name__)
 
 # Cluster constants — determines which pipeline handles the request.
@@ -147,7 +149,7 @@ class MasterOrchestrator:
 
         tenant_id = user_context.get("tenant_id", "default")
         if session_id is None:
-            response = await self._cm.start_conversation(
+            response = self._cm.start_conversation(
                 agent_type="it_helpdesk",
                 user_id=user_context.get("user_id"),
                 tenant_id=tenant_id,
@@ -173,12 +175,15 @@ class MasterOrchestrator:
 
         agent_key = domain if domain in DOMAIN_AGENT_REGISTRY else "data_ai"
         agent = _get_agent(agent_key)
-        response = await agent.ainvoke(message, session_id=session_id)
+        invoke_result = await agent.ainvoke(
+            [HumanMessage(content=message)],
+            thread_id=session_id,
+        )
         return {
             "cluster": _CLUSTER_DOMAIN,
             "agent_type": agent_key,
             "session_id": session_id,
-            "response": response,
+            "response": invoke_result.get("response", ""),
             "routing_confidence": result.confidence,
         }
 
@@ -210,7 +215,11 @@ class MasterOrchestrator:
 
             agent = ResearchAgent()
             result = agent.research(query=message, session_id=session_id)
-            response = result.get("messages", [{}])[-1] if isinstance(result, dict) else str(result)
+            if isinstance(result, dict):
+                last = result.get("messages", [None])[-1]
+                response = last.content if hasattr(last, "content") else str(last) if last is not None else ""
+            else:
+                response = str(result)
         except Exception as exc:
             logger.warning("Research agent unavailable: %s", exc)
             response = f"I couldn't process your request automatically. Please try a more specific agent endpoint."

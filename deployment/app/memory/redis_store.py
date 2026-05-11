@@ -293,7 +293,9 @@ class RedisSessionStore(BaseSessionStore):
             # Scan all sessions for this tenant (expensive, use with caution)
             cursor = 0
             tenant_prefix = f"{self._prefix}{effective_tenant}:"
-            pattern = f"{tenant_prefix}[0-9a-f]*"
+            # Use a wildcard pattern; filter out index keys afterwards.
+            # UUID v4 strings contain hyphens so a hex-only pattern would miss them.
+            pattern = f"{tenant_prefix}*"
             while True:
                 cursor, keys = self._client.scan(cursor, match=pattern, count=1000)
                 for key in keys:

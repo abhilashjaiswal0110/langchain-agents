@@ -389,9 +389,11 @@ class SQLiteSessionStore(BaseSessionStore):
         conditions = ["(expires_at IS NULL OR expires_at > ?)"]
         params: list[Any] = [datetime.now().isoformat()]
 
-        if tenant_id:
-            conditions.append("tenant_id = ?")
-            params.append(tenant_id)
+        # Always scope the SQL query by tenant so get_session is called with the
+        # correct tenant and non-default-tenant sessions are not silently dropped.
+        effective_tenant = tenant_id or "default"
+        conditions.append("tenant_id = ?")
+        params.append(effective_tenant)
 
         if user_id:
             conditions.append("user_id = ?")
@@ -402,8 +404,6 @@ class SQLiteSessionStore(BaseSessionStore):
             params.append(agent_type)
 
         where_clause = " AND ".join(conditions)
-
-        effective_tenant = tenant_id or "default"
 
         with self._get_connection() as conn:
             rows = conn.execute(
