@@ -1,8 +1,8 @@
 # Architecture Documentation
 
-> **Last Updated**: 2025-12-19
-> **Version**: 2.0.0
-> **Status**: Production-Ready
+> **Last Updated**: 2026-05-11
+> **Version**: 2.1.0 — Azure OpenAI primary, Deep Agents framework, LangSmith key verification
+> **Status**: Production-Certified
 
 ---
 
@@ -10,13 +10,15 @@
 
 1. [System Overview](#system-overview)
 2. [Architecture Diagrams](#architecture-diagrams)
-3. [Component Architecture](#component-architecture)
-4. [Data Flow](#data-flow)
-5. [Technology Stack](#technology-stack)
-6. [Design Patterns](#design-patterns)
-7. [Scalability Considerations](#scalability-considerations)
-8. [Security Architecture](#security-architecture)
-9. [Integration Architecture](#integration-architecture)
+3. [Agent Tiers](#agent-tiers)
+4. [Component Architecture](#component-architecture)
+5. [Data Flow](#data-flow)
+6. [Technology Stack](#technology-stack)
+7. [LangSmith Tracing](#langsmith-tracing)
+8. [Design Patterns](#design-patterns)
+9. [Scalability Considerations](#scalability-considerations)
+10. [Security Architecture](#security-architecture)
+11. [Integration Architecture](#integration-architecture)
 
 ---
 
@@ -24,24 +26,29 @@
 
 ### Purpose
 
-The LangChain Enterprise Agents Platform is a **production-ready deployment platform** that serves AI agents as REST APIs. It provides:
+The LangChain Enterprise Agents Platform serves **16 production AI agents** as REST APIs with a full Web UI, streaming, session memory, and Azure OpenAI as the primary LLM backend.
 
-- **7 Enterprise Agents** for IT operations, content creation, and development tasks
-- **Multi-provider LLM Support** (OpenAI, Anthropic)
-- **Human-in-the-Loop (HITL)** workflows for sensitive operations
-- **Full Observability** via LangSmith tracing
-- **3rd Party Integration** webhooks for Copilot Studio, Azure AI, AWS Lex
+### Agent Inventory (May 2026)
 
-### Key Design Decisions
+| Tier | Count | Description |
+|------|-------|-------------|
+| Deep Agents | 4 | Planning + subagent delegation + session-scoped file system |
+| IT Support | 4 | Conversation memory (MemorySaver), session-based |
+| Enterprise | 8 | Stateless invoke/stream, single-turn or multi-step |
+| Domain | 8 | Business-line agents (marcom, hr, lnd, presales, datacenter, cloud, cybersecurity, data_ai) |
+
+### Key Design Decisions (updated)
 
 | Decision | Rationale |
 |----------|-----------|
-| LangGraph over legacy agents | Stateful, multi-step workflows with checkpointing |
-| Pydantic state models | Type-safe state management, validation |
-| BaseAgent pattern | Consistent interface, code reuse |
-| Provider auto-detection | Flexibility without code changes |
-| API key middleware | Zero-trust security for external access |
-| Webhook-based integration | Loose coupling with 3rd party platforms |
+| Azure OpenAI `o4-mini` as primary | Reasoning model with strong tool-calling, low cost |
+| LangGraph `create_react_agent` | Replaces deprecated `create_tool_calling_agent`; stateful multi-step |
+| LangSmith key verification on startup | Prevents endless 403 background log flood; clear operator guidance |
+| Deep Agent subagent delegation | Specialized subagents keep context focused; parent orchestrates |
+| Lazy chain loading | Chains only initialise when their API key is present |
+| MemorySaver for IT Support | Per-session conversation continuity without external store |
+| Webhook-based external integration | Loose coupling with Copilot Studio, Azure AI, AWS Lex |
+| Prometheus metrics endpoint | Drop-in Grafana dashboards; no extra agents needed |
 
 ---
 
@@ -50,14 +57,17 @@ The LangChain Enterprise Agents Platform is a **production-ready deployment plat
 ### High-Level System Architecture
 
 ```
-                                    ┌─────────────────────────────────────┐
-                                    │         External Clients             │
-                                    │  ┌─────────┐ ┌─────────┐ ┌────────┐ │
-                                    │  │ Web UI  │ │ CLI     │ │ Mobile │ │
-                                    │  └────┬────┘ └────┬────┘ └───┬────┘ │
-                                    └───────┼──────────┼───────────┼──────┘
-                                            │          │           │
-                                            ▼          ▼           ▼
+                             ┌──────────────────────────────────────────┐
+                             │               External Clients            │
+                             │  ┌──────────┐ ┌────────┐ ┌────────────┐  │
+                             │  │  Web UI  │ │  CLI   │ │  Webhooks  │  │
+                             │  │ /chat    │ │        │ │ Copilot /  │  │
+                             │  │          │ │        │ │ Azure AI   │  │
+                             │  └────┬─────┘ └───┬────┘ └─────┬──────┘  │
+                             └───────┼────────────┼────────────┼─────────┘
+                                     │            │            │
+                                     ▼            ▼            ▼
+```
 ┌───────────────────────────────────────────────────────────────────────────────┐
 │                              API Gateway / ngrok                               │
 │                         (API Key Authentication)                               │

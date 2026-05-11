@@ -145,6 +145,14 @@ dmypy.json
 # macOS display setting files
 .DS_Store
 
+# Screenshots and images
+*.png
+*.jpg
+*.jpeg
+
+# Playwright MCP artifacts
+.playwright-mcp/
+
 # Wandb directory
 wandb/
 

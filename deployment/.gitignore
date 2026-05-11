@@ -58,3 +58,7 @@ logs/
 # OS
 .DS_Store
 Thumbs.db
+
+# Files
+PR26_*.md
+Documentation_*.md
