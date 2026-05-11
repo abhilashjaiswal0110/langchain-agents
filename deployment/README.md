@@ -1,17 +1,365 @@
-# LangChain Platform
+# Enterprise AI Agents Platform
 
-A production-ready deployment platform serving LangChain chains and LangGraph agents as REST APIs with full LangSmith tracing support.
+> **Version**: 2.0 — Production-certified May 2026
+> **LLM Backend**: Azure OpenAI (`o4-mini` reasoning model + `text-embedding-3-small`)
+> **Status**: All 16 agents live ✅
 
-## Features
+A production-ready platform serving 16 LangChain/LangGraph agents as REST APIs, with a full Web UI, streaming support, LangSmith tracing, and Azure OpenAI as the primary backend.
 
-- **LangChain Integration** - Chat, RAG, and Agent chains via LangServe
-- **LangGraph Agents** - Stateful agents with tool calling using LangGraph
-- **Multi-Provider Support** - Works with OpenAI and Anthropic models
-- **IT Support Agents** - IT Helpdesk and ServiceNow ITSM agents with conversation memory
-- **ServiceNow Integration** - Full ITSM operations: incidents, changes, service requests, CMDB
-- **LangSmith Tracing** - Full observability and debugging
-- **Health Checks** - Kubernetes-ready health and readiness endpoints
-- **Docker Support** - Multi-stage build for production deployment
+---
+
+## What's New (May 2026)
+
+- **Deep Agents Framework** — IT Operations, Sales Intelligence, and Recruitment agents with planning, subagent delegation, and session-scoped file system
+- **Software Development Deep Agent** — 54+ SDLC tools including secure bash execution, code generation, and Azure cloud integration
+- **Domain Agents** — 8 business-line agents (MarCom, HR, L&D, PreSales, Datacenter, Cloud, Cybersecurity, Data & AI)
+- **Azure OpenAI primary** — all agents default to `o4-mini` reasoning model; OpenAI/Anthropic remain as fallbacks
+- **LangSmith key verification on startup** — invalid/expired keys are detected immediately with a clear fix message; no more log flooding
+- **Response cache** — opt-in via `CACHE_ENABLED=true`
+- **Prometheus metrics** at `/metrics`
+
+---
+
+## Agent Inventory
+
+### Deep Agents (planning + subagents + session files)
+
+| Agent | Start Endpoint | Chat Endpoint | Subagents |
+|-------|---------------|---------------|-----------|
+| IT Operations | `POST /api/deepagent/start` | `POST /api/deepagent/chat/stream` | Incident, Change, Problem, Asset, SLA, Knowledge |
+| Sales Intelligence | `POST /api/sales-agent/start` | `POST /api/sales-agent/chat/stream` | Deal, RFP, Pricing, Competitive |
+| Recruitment | `POST /api/recruitment-agent/start` | `POST /api/recruitment-agent/chat/stream` | Resume (L1/L2/L3), Interview, Scoring |
+| Software Dev | `POST /api/software-dev-agent/start` | `POST /api/software-dev-agent/chat/stream` | CodeGen, Reviewer, Tester, Architect |
+
+### IT Support Agents (conversation memory, session-based)
+
+| Agent | Type | Start via |
+|-------|------|-----------|
+| IT Helpdesk | LangGraph + MemorySaver | `POST /api/conversation/start` (`agent_type: it_helpdesk`) |
+| ServiceNow ITSM | LangGraph + 10 ITSM tools | `POST /api/conversation/start` (`agent_type: servicenow`) |
+| Document Intelligence | LangGraph + OCR/PDF | `POST /api/conversation/start` (`agent_type: document_intelligence`) |
+| Employee Experience | LangGraph | `POST /api/conversation/start` (`agent_type: employee_experience`) |
+
+### Enterprise Agents (stateless invoke/stream)
+
+| Agent | Endpoint |
+|-------|----------|
+| AI Research | `POST /api/enterprise/research/invoke` |
+| Content Generation | `POST /api/enterprise/content/invoke` |
+| Data Analyst | `POST /api/enterprise/data-analyst/invoke` |
+| Document Generator | `POST /api/enterprise/documents/invoke` |
+| Multilingual RAG | `POST /api/enterprise/rag/invoke` |
+| HITL IT Support | `POST /api/enterprise/support/invoke` |
+| Code Assistant | `POST /api/enterprise/code/invoke` |
+| Document Intelligence | `POST /api/enterprise/document-intelligence/invoke` |
+
+### Domain Agents (business line)
+
+All exposed under `/api/domain/<domain>/invoke` — marcom, hr, lnd, presales, datacenter, cloud, cybersecurity, data_ai.
+
+---
+
+## Architecture
+
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│                    FastAPI Application (server.py)                    │
+│                                                                        │
+│  ┌──────────────┐  ┌────────────────┐  ┌──────────────────────────┐  │
+│  │ LangServe    │  │ Deep Agents    │  │ IT Support / Enterprise  │  │
+│  │ /chat /rag   │  │ IT Ops · Sales │  │ /api/conversation/       │  │
+│  │ /agent       │  │ Recruitment    │  │ /api/enterprise/         │  │
+│  │ /langgraph   │  │ Software Dev   │  │ /api/domain/             │  │
+│  └──────────────┘  └────────────────┘  └──────────────────────────┘  │
+│                              │                                         │
+│  ┌───────────────────────────┴───────────────────────────────────┐    │
+│  │                     LLM Factory                               │    │
+│  │  Azure OpenAI o4-mini (primary) · OpenAI · Anthropic         │    │
+│  └───────────────────────────────────────────────────────────────┘    │
+│                              │                                         │
+│  ┌───────────────────────────┴───────────────────────────────────┐    │
+│  │   Auth · Cache · Governance · Prometheus · LangSmith Tracing  │    │
+│  └───────────────────────────────────────────────────────────────┘    │
+└──────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Quick Start
+
+### Prerequisites
+
+- Python 3.10–3.12 (3.12 recommended; 3.13 has a known Windows Store restriction with uv)
+- `uv` package manager (`pip install uv`)
+- Azure OpenAI resource **or** OpenAI/Anthropic API key
+
+### 1. Environment setup
+
+```bash
+cd deployment
+cp .env.example .env
+# Edit .env — minimum required:
+#   AZURE_OPENAI_API_KEY=...
+#   AZURE_OPENAI_ENDPOINT=https://<resource>.openai.azure.com/
+#   AZURE_OPENAI_DEPLOYMENT_NAME=o4-mini   (or gpt-4o)
+```
+
+### 2. Start the server
+
+```bash
+# Linux / macOS
+python -m uvicorn app.server:app --host 0.0.0.0 --port 8000
+# or: .venv/bin/python -m uvicorn app.server:app --host 0.0.0.0 --port 8000
+
+# Windows (avoids uv/Python version conflicts)
+.venv\Scripts\python.exe -m uvicorn app.server:app --host 0.0.0.0 --port 8000
+# or: uv run --python "C:\Python312\python.exe" uvicorn app.server:app --host 0.0.0.0 --port 8000
+
+# Or with make
+make run-reload
+```
+
+### 3. Access the platform
+
+| URL | Description |
+|-----|-------------|
+| http://localhost:8000/chat | Web UI — all agents |
+| http://localhost:8000/docs | Swagger API reference |
+| http://localhost:8000/health | Health check (JSON) |
+| http://localhost:8000/metrics | Prometheus metrics |
+
+---
+
+## LangSmith Tracing
+
+On startup the server **verifies your API key** before enabling tracing. If the key is expired or invalid you'll see:
+
+```
+[LangSmith] ⚠  API key verification FAILED (403 Forbidden).
+  → Visit https://smith.langchain.com to generate a new key.
+  → Set LANGCHAIN_API_KEY in deployment/.env and restart.
+  → Tracing is now DISABLED to prevent log flooding.
+```
+
+To enable tracing with a valid key:
+
+```env
+LANGCHAIN_TRACING_V2=true
+LANGCHAIN_API_KEY=lsv2_sk_<your_valid_key>
+LANGSMITH_API_KEY=lsv2_sk_<your_valid_key>
+LANGCHAIN_PROJECT=langchain-platform
+LANGCHAIN_ENDPOINT=https://api.smith.langchain.com
+```
+
+Restart the server — a successful verification prints:
+
+```
+[LangSmith] ✓  Tracing enabled → project: 'langchain-platform' @ https://api.smith.langchain.com
+```
+
+---
+
+## API Reference (key endpoints)
+
+### Conversation (IT Support agents)
+
+```bash
+# Start a session
+curl -X POST http://localhost:8000/api/conversation/start \
+  -H "Content-Type: application/json" \
+  -d '{"agent_type": "it_helpdesk"}'
+# → {"session_id": "abc123", ...}
+
+# Chat in session
+curl -X POST http://localhost:8000/api/conversation/chat \
+  -H "Content-Type: application/json" \
+  -d '{"session_id": "abc123", "message": "I cannot connect to VPN"}'
+```
+
+### Deep Agent (IT Operations)
+
+```bash
+# Start
+curl -X POST http://localhost:8000/api/deepagent/start \
+  -d '{}'
+# → {"session_id": "..."}
+
+# Stream chat
+curl -X POST http://localhost:8000/api/deepagent/chat/stream \
+  -H "Content-Type: application/json" \
+  -d '{"session_id": "...", "message": "Check SLA breach risk for open P1 incidents"}'
+```
+
+### Enterprise agent (invoke)
+
+```bash
+curl -X POST http://localhost:8000/api/enterprise/research/invoke \
+  -H "Content-Type: application/json" \
+  -d '{"input": {"input": "Latest trends in agentic AI 2026"}}'
+```
+
+### Webhook (external integrations — Copilot Studio, Azure AI)
+
+```bash
+curl -X POST http://localhost:8000/api/webhook/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message": "Reset my password", "session_id": "optional-session"}'
+```
+
+---
+
+## Configuration Reference
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `AZURE_OPENAI_API_KEY` | Yes* | — | Azure OpenAI API key |
+| `AZURE_OPENAI_ENDPOINT` | Yes* | — | `https://<resource>.openai.azure.com/` |
+| `AZURE_OPENAI_DEPLOYMENT_NAME` | No | `o4-mini` | Chat model deployment name |
+| `AZURE_OPENAI_EMBEDDING_DEPLOYMENT` | No | `text-embedding-3-small` | Embedding deployment |
+| `OPENAI_API_KEY` | No | — | OpenAI fallback |
+| `ANTHROPIC_API_KEY` | No | — | Anthropic fallback |
+| `LANGCHAIN_TRACING_V2` | No | `false` | Enable LangSmith tracing |
+| `LANGCHAIN_API_KEY` | No | — | LangSmith API key (verified on startup) |
+| `LANGSMITH_API_KEY` | No | — | Alias for `LANGCHAIN_API_KEY`; either is accepted |
+| `LANGCHAIN_PROJECT` | No | `langchain-platform` | LangSmith project |
+| `API_KEY_ENABLED` | No | `true` | Enable API key auth (`X-API-Key` header) |
+| `API_KEY` | No | — | API key value when auth is enabled |
+| `CACHE_ENABLED` | No | `false` | Enable in-memory response cache |
+| `SERVICENOW_MODE` | No | `simulation` | `simulation` or `live` |
+| `SERVICENOW_INSTANCE` | No | — | ServiceNow instance (for live mode) |
+| `SERVICENOW_USERNAME` | No | — | ServiceNow username |
+| `SERVICENOW_PASSWORD` | No | — | ServiceNow password |
+
+*At least one LLM provider (Azure OpenAI **or** OpenAI) is required.
+
+---
+
+## Project Structure
+
+```
+deployment/
+├── app/
+│   ├── server.py               # FastAPI app, all routes, startup lifecycle
+│   ├── agents/                 # IT Support & Enterprise agents
+│   │   ├── it_helpdesk.py
+│   │   ├── servicenow_agent.py
+│   │   ├── enterprise_agents.py
+│   │   └── conversation_manager.py
+│   ├── deepagents/             # Deep Agents framework
+│   │   ├── core/               # Middleware, types, base classes
+│   │   ├── config/             # Agent configurations
+│   │   ├── it_operations_agent.py
+│   │   ├── sales_intelligence_agent.py
+│   │   ├── recruitment_agent.py
+│   │   └── software_dev/       # Software Dev Deep Agent
+│   │       └── tools/          # 54+ SDLC tools (bash, Azure, git...)
+│   ├── chains/                 # LangChain chains (chat, rag, agent)
+│   ├── auth/                   # API key middleware
+│   ├── cache/                  # Response cache
+│   ├── governance/             # Cost estimator, policy
+│   ├── integrations/           # Teams, Slack, Copilot Studio webhooks
+│   ├── memory/                 # MemorySaver session management
+│   ├── monitoring/             # Prometheus instrumentation
+│   └── static/                 # Web UI (HTML/JS/CSS)
+├── tests/                      # Full test suite (mirrors app/ structure)
+├── docs/                       # Architecture, deployment, API docs
+├── infrastructure/             # Azure Bicep IaC + Docker Compose prod
+├── data/                       # Deep agent context files
+├── .env.example                # Environment template
+├── pyproject.toml              # Dependencies (uv)
+├── Dockerfile                  # Multi-stage production build
+├── docker-compose.yml          # Local dev compose
+├── langgraph.json              # LangGraph Studio config
+├── KNOWLEDGE.md                # AI agent knowledge base (authoritative)
+└── README.md                   # This file
+```
+
+---
+
+## Docker Deployment
+
+```bash
+cp .env.example .env  # add API keys
+
+# Local dev
+docker-compose up -d
+
+# Production (with Prometheus + Grafana)
+docker-compose -f infrastructure/docker-compose.prod.yml up -d
+```
+
+## Kubernetes
+
+```yaml
+livenessProbe:
+  httpGet:
+    path: /health
+    port: 8000
+  initialDelaySeconds: 30
+  periodSeconds: 30
+
+readinessProbe:
+  httpGet:
+    path: /ready
+    port: 8000
+  initialDelaySeconds: 10
+  periodSeconds: 10
+```
+
+---
+
+## Development
+
+```bash
+make help          # All available commands
+make run-reload    # Dev server with auto-reload
+make test          # Run test suite
+make lint          # ruff check
+make format        # ruff format
+```
+
+### Adding a new agent
+
+1. Create agent file in `app/agents/` or `app/deepagents/`
+2. Register in `conversation_manager.py` (for session-based) or add routes in `server.py`
+3. Export in `app/agents/__init__.py`
+4. Add tests in `tests/`
+5. Update `KNOWLEDGE.md`
+
+---
+
+## Documentation
+
+| File | Purpose |
+|------|---------|
+| [KNOWLEDGE.md](KNOWLEDGE.md) | Authoritative AI-agent knowledge base — read before making changes |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | System design and patterns |
+| [docs/SETUP.md](docs/SETUP.md) | Detailed setup guide |
+| [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | Production deployment guide |
+| [docs/SECURITY.md](docs/SECURITY.md) | Security model and hardening |
+| [docs/OPERATIONS.md](docs/OPERATIONS.md) | Operations runbook |
+| [LANGGRAPH_SETUP.md](LANGGRAPH_SETUP.md) | LangGraph Studio visual development |
+
+---
+
+## Technology Stack
+
+| Component | Technology | Notes |
+|-----------|------------|-------|
+| Web Framework | FastAPI ≥ 0.115 | |
+| LLM Framework | LangChain ≥ 0.3 | |
+| Agent Framework | LangGraph ≥ 0.2 | `create_react_agent` pattern |
+| API Serving | LangServe ≥ 0.3 | |
+| Tracing | LangSmith | Verified on startup |
+| Primary LLM | Azure OpenAI `o4-mini` | Reasoning model |
+| Embedding | Azure OpenAI `text-embedding-3-small` | |
+| Fallback LLM | OpenAI GPT-4o-mini / Anthropic Claude | |
+| Python | 3.10–3.12 | 3.12 recommended |
+
+## License
+
+MIT
+
 
 ## Architecture
 

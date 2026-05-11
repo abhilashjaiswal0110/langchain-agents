@@ -112,29 +112,92 @@ def _serialize_sse(event: dict) -> str:
 # ============================================================================
 
 
+def _suppress_langsmith_noise() -> None:
+    """Suppress repetitive LangSmith 403/connection error log noise.
+
+    When LangSmith tracing is enabled but the API key is invalid/expired the
+    background trace-upload thread emits a noisy "Failed to send compressed
+    multipart ingest" error every few seconds.  This helper configures the
+    relevant loggers to ERROR level so only genuine new errors surface;
+    repeated failures from the same root cause are silenced.
+    """
+    import logging
+
+    # Suppress the background batch-ingest thread that spams on auth failure
+    logging.getLogger("langsmith.client").setLevel(logging.ERROR)
+    logging.getLogger("langsmith").setLevel(logging.ERROR)
+
+
+def _verify_langsmith_key(api_key: str, endpoint: str, project: str) -> bool:
+    """Verify a LangSmith API key is valid by probing the projects endpoint.
+
+    Args:
+        api_key: LangSmith API key to test.
+        endpoint: LangSmith API endpoint URL.
+        project: Project name to use if key is valid.
+
+    Returns:
+        True if the key is accepted (HTTP 200), False otherwise.
+    """
+    try:
+        import urllib.parse
+        import urllib.request
+
+        url = f"{endpoint.rstrip('/')}/projects?name={urllib.parse.quote_plus(project)}"
+        req = urllib.request.Request(url, headers={"x-api-key": api_key})
+        with urllib.request.urlopen(req, timeout=5) as resp:  # noqa: S310
+            return resp.status == 200
+    except Exception:
+        return False
+
+
 def setup_langsmith_tracing() -> bool:
     """Configure LangSmith tracing if enabled.
 
+    Probes the LangSmith API to verify the key is valid before enabling
+    tracing.  If the key returns 403 tracing is disabled automatically and
+    a clear diagnostic message is printed so the problem is obvious without
+    flooding the log with repeated background-upload failures.
+
     Returns:
-        True if tracing is enabled, False otherwise.
+        True if tracing is enabled and the key verified, False otherwise.
     """
     tracing_enabled = os.getenv("LANGCHAIN_TRACING_V2", "false").lower() == "true"
-    langsmith_api_key = os.getenv("LANGCHAIN_API_KEY")
+    langsmith_api_key = os.getenv("LANGCHAIN_API_KEY") or os.getenv("LANGSMITH_API_KEY")
+    endpoint = os.getenv("LANGCHAIN_ENDPOINT", "https://api.smith.langchain.com")
+    project = os.getenv("LANGCHAIN_PROJECT", "langchain-platform")
 
-    if tracing_enabled and langsmith_api_key:
-        # Ensure all required env vars are set
-        os.environ["LANGCHAIN_TRACING_V2"] = "true"
-        os.environ["LANGCHAIN_API_KEY"] = langsmith_api_key
-        os.environ.setdefault("LANGCHAIN_PROJECT", "langchain-platform")
-        os.environ.setdefault("LANGCHAIN_ENDPOINT", "https://api.smith.langchain.com")
-        print(f"LangSmith tracing enabled for project: {os.getenv('LANGCHAIN_PROJECT')}")
-        return True
+    if not tracing_enabled:
+        return False
 
-    if tracing_enabled and not langsmith_api_key:
-        print("Warning: LANGCHAIN_TRACING_V2=true but LANGCHAIN_API_KEY not set")
-        print("Tracing will not work. Get your API key from https://smith.langchain.com")
+    if not langsmith_api_key:
+        print("Warning: LANGCHAIN_TRACING_V2=true but LANGCHAIN_API_KEY / LANGSMITH_API_KEY not set")
+        print("  → Tracing disabled. Get your API key from https://smith.langchain.com")
+        os.environ["LANGCHAIN_TRACING_V2"] = "false"
+        return False
 
-    return False
+    # Verify the key before enabling — avoids endless 403 background noise
+    print(f"[LangSmith] Verifying API key for project '{project}'...")
+    key_valid = _verify_langsmith_key(langsmith_api_key, endpoint, project)
+
+    if not key_valid:
+        print("[LangSmith] ⚠  API key verification FAILED (invalid key, network error, or 403 Forbidden).")
+        print("  → The key may be expired, revoked, or the endpoint may be unreachable.")
+        print(f"  → Visit https://smith.langchain.com to generate a new key.")
+        print(f"  → Set LANGCHAIN_API_KEY in deployment/.env and restart.")
+        print("  → Tracing is now DISABLED to prevent log flooding.")
+        # Disable tracing in-process so the background uploader never starts
+        os.environ["LANGCHAIN_TRACING_V2"] = "false"
+        _suppress_langsmith_noise()
+        return False
+
+    # Key is valid — activate tracing
+    os.environ["LANGCHAIN_TRACING_V2"] = "true"
+    os.environ["LANGCHAIN_API_KEY"] = langsmith_api_key
+    os.environ["LANGCHAIN_PROJECT"] = project
+    os.environ.setdefault("LANGCHAIN_ENDPOINT", endpoint)
+    print(f"[LangSmith] ✓  Tracing enabled → project: '{project}' @ {endpoint}")
+    return True
 
 
 # Initialize tracing early

@@ -83,81 +83,77 @@ LangChain helps developers build applications powered by LLMs through a standard
 
 This repository includes a production-ready **Enterprise Agents Platform** in the [deployment/](deployment/) folder, built with LangChain and LangGraph for real-world AI agent applications.
 
-### 🚀 Key Features
+> **Status (May 2026)**: 16 agents live, Azure OpenAI `o4-mini` primary, LangSmith tracing with key verification.
 
-- **12 Production Agents**: Research, Content Generation (HITL), Data Analysis, Document Processing, Multilingual RAG, IT Support (HITL), ServiceNow ITSM, Code Assistant, Document Intelligence, Employee Experience, Recruitment, **Software Development**
-- **3 Deep Agents**: IT Operations (6 subagents), Sales Intelligence, Recruitment (5 subagents) — all with planning, streaming, and context persistence
-- **4 IT Support Agents**: IT Helpdesk, ServiceNow, Document Intelligence, Employee Experience — conversational agents with session memory
-- **🆕 Software Development Deep Agent**: AI-powered SDLC automation with 9 specialized subagents, 54 purpose-built tools, end-to-end workflow from requirements to deployment
-- **Sales Intelligence Deep Agent**: AI-powered sales analysis with CRM, competitor, pricing, and knowledge tools
-- **Recruitment Deep Agent**: AI-powered end-to-end hiring automation with SharePoint integration, 5 specialized subagents, L1/L2/L3 screening, technical assessments, and Excel reporting
-- **IT Operations Deep Agent**: Advanced planning agent with 6 specialized subagents, streaming responses, and reasoning model support
-- **⚡ Real-time Streaming**: Server-Sent Events (SSE) for live progress updates and tool execution visibility
-- **🧠 Reasoning Models**: Native support for OpenAI o1/o3/o4 series with automatic temperature bypass
-- **ServiceNow Integration**: Full ITSM operations with 10 tools - incidents, change requests, service requests, CMDB, SLA monitoring, knowledge base
-- **LangGraph Orchestration**: State-based agent workflows with human-in-the-loop capabilities
-- **REST API**: FastAPI server with LangServe endpoints for seamless integration
-- **Microsoft Copilot Studio**: Ready-to-use webhooks for enterprise chatbot integration
-- **Security**: API key authentication, CORS configuration, secrets management
-- **Observability**: LangSmith tracing for debugging and performance monitoring
-- **Evaluation Framework**: Automated agent testing with custom metrics
-- **Docker Deployment**: Production-ready containerization with multi-stage builds
+### Key Features
 
-### 📚 Quick Start
+- **16 Production Agents**: 4 Deep Agents · 4 IT Support · 8 Enterprise (+ 8 Domain agents)
+- **Deep Agents Framework**: IT Operations, Sales Intelligence, Recruitment, Software Development — each with planning, subagent delegation, session-scoped file system, and SSE streaming
+- **Software Development Deep Agent**: 54+ SDLC tools — bash execution, code generation, Azure deployment, git, security scanning
+- **Azure OpenAI primary**: `o4-mini` reasoning model with automatic temperature bypass; OpenAI/Anthropic as fallbacks
+- **LangSmith key verification on startup**: expired/invalid keys are detected immediately — no more 403 log flooding
+- **IT Support Agents**: 4 conversational agents with MemorySaver session memory (IT Helpdesk, ServiceNow ITSM, Document Intelligence, Employee Experience)
+- **ServiceNow ITSM**: 10 tools — incidents, change requests, service requests, CMDB, SLA, knowledge base
+- **Copilot Studio webhooks**: drop-in integration for Microsoft enterprise chatbot
+- **Prometheus metrics** at `/metrics` with Grafana dashboards
+- **Docker + Kubernetes ready**: multi-stage build, health/readiness probes
+
+### Quick Start
 
 ```bash
 cd deployment
 
-# Install dependencies
-pip install -e .
-
-# Configure environment
+# Configure environment (at least one LLM provider is required; Azure OpenAI is recommended)
 cp .env.example .env
-# Edit .env with your API keys (Azure OpenAI or OpenAI/Anthropic + LangSmith)
+# Edit .env:
+#   AZURE_OPENAI_API_KEY=...
+#   AZURE_OPENAI_ENDPOINT=https://<resource>.openai.azure.com/
+#   (or set OPENAI_API_KEY / ANTHROPIC_API_KEY as alternatives)
 
-# Run locally (Linux/macOS)
+# Start the server — Linux / macOS
 python -m uvicorn app.server:app --host 0.0.0.0 --port 8000
+# or: .venv/bin/python -m uvicorn app.server:app --host 0.0.0.0 --port 8000
 
-# Run locally (Windows — use deployment .venv directly to avoid uv conflicts)
-.venv\Scripts\uvicorn.exe app.server:app --host 0.0.0.0 --port 8000
+# Windows (avoids uv/Python version conflicts)
+.venv\Scripts\python.exe -m uvicorn app.server:app --host 0.0.0.0 --port 8000
+# or: uv run --python "C:\Python312\python.exe" uvicorn app.server:app --host 0.0.0.0 --port 8000
 
-# Or use Docker
+# Or with Docker
 docker-compose up --build
-
-# Or use LangGraph Studio UI for visual development
-cd deployment
-.\start_studio.ps1
-# Access at: https://smith.langchain.com/studio/?baseUrl=http://127.0.0.1:2024
 ```
 
-> **Windows tip**: If `uv run uvicorn` fails with `VIRTUAL_ENV` conflicts or `Access denied`
-> errors, use `.venv\Scripts\uvicorn.exe` directly. See [deployment/docs/SETUP.md](deployment/docs/SETUP.md#windows-startup-issues) for details.
+Access the platform:
 
-### 🎨 LangGraph Studio UI
+| URL | Description |
+|-----|-------------|
+| http://localhost:8000/chat | Web UI — all agents |
+| http://localhost:8000/docs | Swagger API reference |
+| http://localhost:8000/health | Health check |
+| http://localhost:8000/metrics | Prometheus metrics |
 
-**Visual development interface** for building and debugging agents without Docker:
+> **Windows / uv tip**: Python 3.13 from the Windows Store is sandboxed and blocks `uv` from copying the interpreter. Use Python 3.12 from python.org and pass `--python "C:/Python312/python.exe"` to `uv run`. See [deployment/docs/SETUP.md](deployment/docs/SETUP.md) for details.
+
+### LangSmith Tracing
+
+The server now **verifies the API key on startup**. If the key is expired you see a clear one-time warning and tracing is disabled — no more repeated 403 errors in the log. To re-enable tracing:
+
+1. Get a fresh key at https://smith.langchain.com → Settings → API Keys
+2. Update `LANGCHAIN_API_KEY` and `LANGSMITH_API_KEY` in `deployment/.env`
+3. Restart the server
+
+See [deployment/docs/SETUP.md](deployment/docs/SETUP.md#langsmith-tracing-setup) for full details.
+
+### LangGraph Studio
+
+Visual development interface (no Docker required):
 
 ```bash
+cd deployment
 .venv\Scripts\python.exe -m langgraph_cli dev --port 2024 --allow-blocking
+# Access: https://smith.langchain.com/studio/?baseUrl=http://127.0.0.1:2024
 ```
 
-**Features:**
-- 🔍 Visual graph editor with real-time workflow visualization
-- 🐛 Interactive debugging with step-by-step execution
-- 🔧 Tool call inspection and state management
-- ⚡ Hot reload for rapid iteration
-- 🚀 No Docker required - runs entirely in-memory
 
-**Access:**
-- Studio UI: https://smith.langchain.com/studio/?baseUrl=http://127.0.0.1:2024
-- API: http://127.0.0.1:2024
-- Docs: http://127.0.0.1:2024/docs
-
-**Available Agents:**
-- ServiceNow ITSM Agent
-- Document Processing Agent
-- IT Helpdesk Agent
-- IT Operations Deep Agent (with 6 subagents)
 - Sales Intelligence Deep Agent
 - Recruitment Deep Agent (with 5 subagents)
 - **Software Development Deep Agent** (with 9 subagents) - **NEW!**

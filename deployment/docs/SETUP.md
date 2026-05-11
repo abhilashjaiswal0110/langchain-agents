@@ -1,7 +1,7 @@
 # Development Setup Guide
 
-> **Last Updated**: 2026-02-20
-> **Version**: 2.1.0
+> **Last Updated**: 2026-05-11
+> **Version**: 2.2.0 — Azure OpenAI primary, Python 3.12 recommended, LangSmith key verification
 > **Audience**: Developers, Contributors
 
 ---
@@ -13,11 +13,12 @@
 3. [Development Environment](#development-environment)
 4. [Project Structure](#project-structure)
 5. [Running the Server](#running-the-server)
-6. [Testing](#testing)
-7. [Code Style](#code-style)
-8. [Adding New Agents](#adding-new-agents)
-9. [Troubleshooting](#troubleshooting)
-10. [Contributing](#contributing)
+6. [LangSmith Tracing Setup](#langsmith-tracing-setup)
+7. [Testing](#testing)
+8. [Code Style](#code-style)
+9. [Adding New Agents](#adding-new-agents)
+10. [Troubleshooting](#troubleshooting)
+11. [Contributing](#contributing)
 
 ---
 
@@ -25,57 +26,92 @@
 
 ### Required Software
 
-| Software | Version | Purpose |
-|----------|---------|---------|
-| Python | 3.10+ | Runtime |
+| Software | Version | Notes |
+|----------|---------|-------|
+| Python | **3.12** (3.10–3.12 supported) | 3.13 has a Windows Store restriction with `uv` — use 3.12 |
 | Git | Latest | Version control |
 | Docker | 24.0+ | Containerization (optional) |
-
-### Recommended Software
-
-| Software | Purpose |
-|----------|---------|
-| uv | Fast package manager |
-| VSCode | IDE with Python extension |
-| Postman/Thunder Client | API testing |
+| `uv` | Latest | `pip install uv` — fast package manager |
 
 ### Required API Keys
 
-| Service | Required | Get Key |
-|---------|----------|---------|
-| OpenAI | Yes* | https://platform.openai.com |
-| Anthropic | No | https://console.anthropic.com |
-| LangSmith | No | https://smith.langchain.com |
-| Tavily | No | https://tavily.com |
+| Service | Required | Description | Get Key |
+|---------|----------|-------------|---------|
+| Azure OpenAI | **Yes*** | Primary LLM backend (`o4-mini`) | Azure Portal |
+| OpenAI | No | Fallback if no Azure | https://platform.openai.com |
+| Anthropic | No | Fallback/alternative | https://console.anthropic.com |
+| LangSmith | No | Observability tracing (verified on startup) | https://smith.langchain.com |
+| Tavily | No | Web search tool | https://tavily.com |
 
-*At least one LLM provider required
+*At least one LLM provider (Azure OpenAI **or** OpenAI) is required.
 
 ---
 
 ## Quick Start
 
 ```bash
-# 1. Clone the repository
-git clone <repository-url>
-cd langchain-agents/deployment
+# 1. Navigate to the deployment folder
+cd deployment
 
 # 2. Copy environment template
 cp .env.example .env
+# Edit .env — minimum required:
+#   AZURE_OPENAI_API_KEY=...
+#   AZURE_OPENAI_ENDPOINT=https://<resource>.openai.azure.com/
 
-# 3. Edit .env with your API keys
-# Required: OPENAI_API_KEY or ANTHROPIC_API_KEY
+# 3. Start the server
+# Linux / macOS:
+python -m uvicorn app.server:app --host 0.0.0.0 --port 8000
+# or: .venv/bin/python -m uvicorn app.server:app --host 0.0.0.0 --port 8000
 
-# 4. Install dependencies
-pip install -e .
-# Or with uv: uv pip install -e .
+# Windows (avoids uv/Python version conflicts):
+.venv\Scripts\python.exe -m uvicorn app.server:app --host 0.0.0.0 --port 8000
+# or: uv run --python "C:\Python312\python.exe" uvicorn app.server:app --host 0.0.0.0 --port 8000
 
-# 5. Run the server
-python -m uvicorn app.server:app --reload
+# Or with make
+make run-reload
 
-# 6. Open browser
-# http://localhost:8000/docs - API documentation
+# 4. Open browser
+# http://localhost:8000/chat   - Web UI (all 16 agents)
+# http://localhost:8000/docs   - Swagger API reference
 # http://localhost:8000/health - Health check
 ```
+
+---
+
+## LangSmith Tracing Setup
+
+The server **verifies your LangSmith API key at startup** before enabling tracing. This prevents the endless 403 error flood that occurs with expired keys.
+
+### If you see the verification failure message
+
+```
+[LangSmith] ⚠  API key verification FAILED (403 Forbidden).
+  → Visit https://smith.langchain.com to generate a new key.
+  → Set LANGCHAIN_API_KEY in deployment/.env and restart.
+  → Tracing is now DISABLED to prevent log flooding.
+```
+
+**Fix**: Generate a fresh key at https://smith.langchain.com → Settings → API Keys → Create API Key.
+
+### Enabling tracing with a valid key
+
+```env
+# deployment/.env
+LANGCHAIN_TRACING_V2=true
+LANGCHAIN_API_KEY=lsv2_sk_<your_new_key>
+LANGSMITH_API_KEY=lsv2_sk_<your_new_key>
+LANGCHAIN_PROJECT=langchain-platform
+LANGCHAIN_ENDPOINT=https://api.smith.langchain.com
+```
+
+Restart the server. On success you'll see:
+
+```
+[LangSmith] ✓  Tracing enabled → project: 'langchain-platform' @ https://api.smith.langchain.com
+```
+
+All agent invocations will then appear in your LangSmith project dashboard.
 
 ---
 
